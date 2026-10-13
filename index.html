@@ -101,14 +101,25 @@ window.PBC_CONFIG = {
 
   /* ---------- tampilan gerbang ---------- */
   function el(id){ return document.getElementById(id); }
+  var FORM_ID = { masuk:'pbcGateForm', daftar:'pbcGateReg', lupa:'pbcGateForgot', baru:'pbcGateNew', tunggu:'pbcGateWait', muat:'pbcGateLoading' };
+  var ERR_ID  = { masuk:'pbcGateErr', daftar:'pbcRegErr', lupa:'pbcForgotErr', baru:'pbcNewErr' };
+  function info(id, teks, jenis){
+    var e = el(id); if(!e) return;
+    e.style.color = jenis === 'ok' ? '#1B7F4B' : (jenis === 'info' ? '#1E50B4' : '');
+    e.textContent = teks || '';
+  }
   function tampilGate(mode, pesan){
     var g = el('pbcGate'); if(!g) return;
     g.style.display = 'flex';
-    var f = el('pbcGateForm'), w = el('pbcGateWait'), s = el('pbcGateLoading');
-    if(s) s.style.display = 'none';
-    if(mode === 'tunggu'){ f.style.display = 'none'; w.style.display = 'block'; el('pbcGateWaitMsg').textContent = pesan || ''; }
-    else if(mode === 'muat'){ f.style.display = 'none'; w.style.display = 'none'; if(s) s.style.display = 'block'; }
-    else { f.style.display = 'block'; w.style.display = 'none'; if(pesan) el('pbcGateErr').textContent = pesan; }
+    var m = FORM_ID[mode] ? mode : 'masuk';
+    Object.keys(FORM_ID).forEach(function(k){ var n = el(FORM_ID[k]); if(n) n.style.display = 'none'; });
+    var t = el(FORM_ID[m]); if(t) t.style.display = 'block';
+    if(m === 'tunggu'){ el('pbcGateWaitMsg').textContent = pesan || ''; }
+    else if(ERR_ID[m]){ info(ERR_ID[m], pesan || ''); }
+    if(m === 'masuk'){
+      var gb = el('pbcGoogleBtn'), go = el('pbcGoogleOr'), on = !!(window.PBC_CONFIG && PBC_CONFIG.GOOGLE_LOGIN);
+      if(gb) gb.style.display = on ? 'block' : 'none'; if(go) go.style.display = on ? 'block' : 'none';
+    }
   }
   function sembunyiGate(){ var g = el('pbcGate'); if(g) g.style.display = 'none'; }
 
@@ -123,6 +134,10 @@ window.PBC_CONFIG = {
   async function mulai(){
     if(!aktif){ sembunyiGate(); return; }
     tampilGate('muat');
+    var cb = await olahCallback();
+    if(cb && cb.galat){ tampilGate('masuk', cb.galat); return; }
+    if(cb && cb.ok && cb.tipe === 'recovery'){ tampilGate('baru'); return; }
+    if(cb && cb.ok){ location.reload(); return; }
     bacaSesi();
     if(!sess){ tampilGate(); return; }
     if(perluSegarkan()){
@@ -176,6 +191,119 @@ window.PBC_CONFIG = {
       btn.disabled = false; btn.textContent = 'Masuk';
     }
   }
+  /* ---------- pendaftaran, lupa password, login Google, tautan email ---------- */
+  function kembali(){ return /^https?:$/.test(location.protocol) ? (location.origin + location.pathname) : ''; }
+  function qsRedirect(){ var k = kembali(); return k ? ('?redirect_to=' + encodeURIComponent(k)) : ''; }
+  function ambilPesan(j){ return (j && (j.msg || j.message || j.error_description || j.error)) || ''; }
+  function pesanErrorDaftar(j, status){
+    var m = ambilPesan(j).toLowerCase();
+    if(status === 429 || m.indexOf('rate limit') > -1 || m.indexOf('too many') > -1) return 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.';
+    if(m.indexOf('signups not allowed') > -1 || m.indexOf('signup is disabled') > -1 || m.indexOf('signups are disabled') > -1) return 'Pendaftaran sedang ditutup. Hubungi Direktur.';
+    if(m.indexOf('already') > -1) return 'Email ini sudah terdaftar. Silakan masuk.';
+    if(m.indexOf('password') > -1) return 'Password terlalu lemah. Pakai minimal 8 karakter, campur huruf dan angka.';
+    if(m.indexOf('email') > -1 && (m.indexOf('valid') > -1 || m.indexOf('invalid') > -1)) return 'Format email tidak valid.';
+    return ambilPesan(j) || ('Gagal mendaftar (kode ' + status + ').');
+  }
+  async function kirim(url, opsi){
+    var ac = new AbortController(), tm = setTimeout(function(){ ac.abort(); }, 20000);
+    opsi.signal = ac.signal;
+    try{ return await fetch(url, opsi); } finally { clearTimeout(tm); }
+  }
+  function galatJaringan(e){ return (e && e.name === 'AbortError') ? 'Server tidak menjawab (lebih dari 20 detik). Periksa internet lalu coba lagi.' : 'Tidak dapat terhubung ke server. Periksa internet Anda.'; }
+
+  async function daftar(nama, email, pw, pw2){
+    var E = 'pbcRegErr'; info(E, '');
+    nama = (nama || '').trim(); email = (email || '').trim();
+    if(!nama){ info(E, 'Isi nama lengkap.'); return; }
+    if(!email || email.indexOf('@') < 1){ info(E, 'Isi email yang benar.'); return; }
+    if((pw || '').length < 8){ info(E, 'Password minimal 8 karakter.'); return; }
+    if(pw !== pw2){ info(E, 'Ulangi password: kedua isian tidak sama.'); return; }
+    var btn = el('pbcRegBtn'); btn.disabled = true; btn.textContent = 'Mendaftar…'; info(E, 'Menghubungi server…', 'info');
+    try{
+      var r = await kirim(URL_ + '/auth/v1/signup' + qsRedirect(), { method:'POST',
+        headers:{ 'apikey': KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ email: email, password: pw, data: { nama: nama } }) });
+      var j = await r.json().catch(function(){ return {}; });
+      if(!r.ok){ info(E, pesanErrorDaftar(j, r.status)); return; }
+      if(j.access_token){
+        setSesi(j);
+        var p = await ambilProfil().catch(function(){ return null; });
+        if(p) masukDenganProfil(p); else tampilGate('tunggu', 'Pendaftaran berhasil. Akun Anda menunggu persetujuan Direktur.');
+        return;
+      }
+      var usr = j.user || j; if(usr && usr.identities && usr.identities.length === 0){ info(E, 'Email ini sudah terdaftar. Silakan masuk, atau pakai "Lupa password".'); return; }
+      tampilGate('tunggu', 'Pendaftaran terkirim. Buka email Anda dan ketuk tautan konfirmasi (cek juga folder Spam). Setelah itu Direktur akan memberi peran Anda.');
+    }catch(e){ info(E, galatJaringan(e)); }
+    finally{ btn.disabled = false; btn.textContent = 'Daftar'; }
+  }
+  async function lupa(email){
+    var E = 'pbcForgotErr'; info(E, '');
+    email = (email || '').trim();
+    if(!email || email.indexOf('@') < 1){ info(E, 'Isi email yang benar.'); return; }
+    var btn = el('pbcForgotBtn'); btn.disabled = true; btn.textContent = 'Mengirim…'; info(E, 'Menghubungi server…', 'info');
+    try{
+      var r = await kirim(URL_ + '/auth/v1/recover' + qsRedirect(), { method:'POST',
+        headers:{ 'apikey': KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ email: email }) });
+      var j = await r.json().catch(function(){ return {}; });
+      if(r.status === 429){ info(E, 'Terlalu banyak permintaan. Tunggu beberapa menit lalu coba lagi.'); return; }
+      if(!r.ok){ info(E, ambilPesan(j) || ('Gagal mengirim (kode ' + r.status + ').')); return; }
+      info(E, 'Jika email terdaftar, tautan untuk membuat password baru sudah dikirim. Cek email Anda (juga folder Spam).', 'ok');
+    }catch(e){ info(E, galatJaringan(e)); }
+    finally{ btn.disabled = false; btn.textContent = 'Kirim tautan'; }
+  }
+  async function sandiBaru(pw, pw2){
+    var E = 'pbcNewErr'; info(E, '');
+    if((pw || '').length < 8){ info(E, 'Password minimal 8 karakter.'); return; }
+    if(pw !== pw2){ info(E, 'Ulangi password: kedua isian tidak sama.'); return; }
+    if(!sess){ tampilGate('masuk', 'Tautan sudah kedaluwarsa. Minta tautan baru lewat "Lupa password".'); return; }
+    var btn = el('pbcNewBtn'); btn.disabled = true; btn.textContent = 'Menyimpan…'; info(E, 'Menghubungi server…', 'info');
+    try{
+      var r = await kirim(URL_ + '/auth/v1/user', { method:'PUT', headers: headers({ 'Content-Type':'application/json' }), body: JSON.stringify({ password: pw }) });
+      var j = await r.json().catch(function(){ return {}; });
+      if(!r.ok){
+        var m = ambilPesan(j).toLowerCase();
+        info(E, (r.status === 401 || m.indexOf('jwt') > -1) ? 'Tautan sudah kedaluwarsa. Minta tautan baru lewat "Lupa password".'
+              : (m.indexOf('different') > -1 || m.indexOf('same') > -1) ? 'Password baru harus berbeda dari yang lama.'
+              : (ambilPesan(j) || ('Gagal menyimpan (kode ' + r.status + ').')));
+        return;
+      }
+      info(E, 'Password berhasil diganti. Memuat…', 'ok');
+      simpanSesi(); setTimeout(function(){ location.reload(); }, 600);
+    }catch(e){ info(E, galatJaringan(e)); }
+    finally{ btn.disabled = false; btn.textContent = 'Simpan password'; }
+  }
+  function masukGoogle(){
+    var k = kembali();
+    if(!k){ info('pbcGateErr', 'Login Google hanya tersedia di alamat web aplikasi.'); return; }
+    location.href = URL_ + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(k);
+  }
+  /* Tautan dari email (konfirmasi/reset) dan dari Google kembali ke halaman ini dengan token di bagian # alamat. */
+  async function olahCallback(){
+    var h = location.hash || ''; if(h.length < 2) return null;
+    var p; try{ p = new URLSearchParams(h.slice(1)); }catch(e){ return null; }
+    var galat = p.get('error_description') || p.get('error'), tok = p.get('access_token');
+    if(!galat && !tok) return null;
+    try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+    if(galat) return { galat: (/expired|invalid/i.test(galat) ? 'Tautan tidak valid atau sudah kedaluwarsa. Coba lagi.' : galat.replace(/\+/g, ' ')) };
+    var exp = parseInt(p.get('expires_at') || '0', 10);
+    sess = { access_token: tok, refresh_token: p.get('refresh_token') || '',
+             expires_at: exp || (Math.floor(Date.now()/1000) + parseInt(p.get('expires_in') || '3600', 10)), user: null };
+    try{
+      var r = await fetch(URL_ + '/auth/v1/user', { headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + tok } });
+      if(r.ok){ var u = await r.json(); sess.user = { id: u.id, email: u.email }; }
+    }catch(e){}
+    if(!sess.user){ sess = null; return { galat: 'Tautan tidak valid atau sudah kedaluwarsa. Coba lagi.' }; }
+    simpanSesi(); jadwalkanRefresh();
+    return { ok: true, tipe: p.get('type') || '' };
+  }
+  async function periksaLagi(){
+    if(!sess){ tampilGate('masuk', 'Silakan masuk dengan akun Anda.'); return; }
+    var w = el('pbcGateWaitMsg'); var awal = w.textContent; w.textContent = 'Memeriksa…';
+    try{
+      var p = await ambilProfil();
+      if(p && BOLEH.indexOf(p.role) > -1){ simpanProfil(p); try{ sessionStorage.setItem('pbc_reload_once','1'); }catch(e){} location.reload(); return; }
+      w.textContent = awal + ' (Belum disetujui. Coba lagi nanti.)';
+    }catch(e){ w.textContent = awal + ' (Tidak dapat memeriksa. Periksa internet Anda.)'; }
+  }
   async function keluar(){
     try{ if(sess) await fetch(URL_ + '/auth/v1/logout', { method:'POST', headers: headers({ 'Content-Type':'application/json' }) }); }catch(e){}
     sess = null; simpanSesi(); simpanProfil(null);
@@ -185,7 +313,7 @@ window.PBC_CONFIG = {
 
   var api = {
     aktif: aktif, profil: null, offline: false, url: URL_,
-    headers: headers, masuk: masuk, keluar: keluar, refresh: refresh, perluSegarkan: perluSegarkan,
+    headers: headers, masuk: masuk, keluar: keluar, daftar: daftar, lupa: lupa, sandiBaru: sandiBaru, masukGoogle: masukGoogle, periksaLagi: periksaLagi, tampil: tampilGate, refresh: refresh, perluSegarkan: perluSegarkan,
     whenReady: function(cb){ if(profil) cb(profil); else queue.push(cb); },
     bolehRole: function(k){
       if(!aktif || !profil) return true;
@@ -677,6 +805,14 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
 .pbc-gate-err{min-height:18px;margin-top:12px;font-size:12px;font-weight:600;color:#C0392B;text-align:center}
 .pbc-gate-foot{margin-top:16px;font-size:10px;color:rgba(26,29,36,.55);text-align:center;line-height:1.5}
 .pbc-gate-wait{display:none;text-align:center;font-size:12px;color:#1A1D24;line-height:1.6}
+.pbc-gate-links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:12px}
+.pbc-gate-links a{color:#1E50B4;font-weight:600;cursor:pointer;text-decoration:none}
+.pbc-gate-sec{width:100%;margin-top:10px;padding:11px;border:1px solid rgba(30,80,180,.35);border-radius:10px;background:#fff;color:#1A1D24;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+.pbc-gate-or{display:none;text-align:center;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(26,29,36,.45);margin:14px 0 0}
+.pbc-gate-note{font-size:11px;color:rgba(26,29,36,.65);line-height:1.5;margin-top:10px;text-align:center}
+.pbc-gate-h2{font-size:14px;font-weight:700;color:#1A1D24;text-align:center;margin:0 0 4px}
+.pbc-pend{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;background:#C0392B;color:#fff;font-size:10px;font-weight:700}
+.usr-tbl tr.usr-pending{background:rgba(244,182,30,.18)}
 .pbc-pw{position:relative}.pbc-pw button{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:11px;color:#1E50B4;cursor:pointer;font-weight:600}
 .role-foot{border-top:1px solid rgba(30,80,180,.15);margin-top:6px;padding:10px 10px 4px}
 .role-foot .em{font-size:10px;color:var(--muted2);margin-bottom:8px;word-break:break-all}
@@ -695,7 +831,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     <h1>Pratama Build &amp; Construction</h1>
     <div class="sub">Sistem Manajemen Proyek Terpadu</div>
     <div id="pbcGateLoading" style="text-align:center;font-size:12px;color:rgba(26,29,36,.65);padding:24px 0">Memeriksa sesi…</div>
-    <form id="pbcGateForm" style="display:none" onsubmit="PBC_AUTH.masuk(document.getElementById('pbcEmail').value, document.getElementById('pbcPass').value);return false">
+    <form id="pbcGateForm" novalidate style="display:none" onsubmit="PBC_AUTH.masuk(document.getElementById('pbcEmail').value, document.getElementById('pbcPass').value);return false">
       <label for="pbcEmail">Email</label>
       <input id="pbcEmail" type="email" autocomplete="username" inputmode="email" autocapitalize="off">
       <label for="pbcPass">Password</label>
@@ -703,11 +839,48 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
         <button type="button" onclick="var i=document.getElementById('pbcPass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'Lihat':'Sembunyi'">Lihat</button></div>
       <button class="pbc-gate-btn" id="pbcGateBtn" type="submit">Masuk</button>
       <div class="pbc-gate-err" id="pbcGateErr"></div>
-      <div class="pbc-gate-foot">Gunakan email &amp; password akun Anda (bukan PIN Owner).<br>Belum punya akun? Hubungi Direktur.</div>
+      <div class="pbc-gate-or" id="pbcGoogleOr">atau</div>
+      <button type="button" class="pbc-gate-sec" id="pbcGoogleBtn" style="display:none" onclick="PBC_AUTH.masukGoogle()">Lanjutkan dengan Google</button>
+      <div class="pbc-gate-links"><a onclick="PBC_AUTH.tampil('lupa')">Lupa password?</a><a onclick="PBC_AUTH.tampil('daftar')">Belum punya akun? Daftar</a></div>
+      <div class="pbc-gate-foot">Gunakan email &amp; password akun Anda (bukan PIN Owner).</div>
+    </form>
+    <form id="pbcGateReg" novalidate style="display:none" onsubmit="PBC_AUTH.daftar(document.getElementById('pbcRegNama').value, document.getElementById('pbcRegEmail').value, document.getElementById('pbcRegPass').value, document.getElementById('pbcRegPass2').value);return false">
+      <div class="pbc-gate-h2">Daftar akun baru</div>
+      <label for="pbcRegNama">Nama lengkap</label>
+      <input id="pbcRegNama" type="text" autocomplete="name" autocapitalize="words">
+      <label for="pbcRegEmail">Email</label>
+      <input id="pbcRegEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="off">
+      <label for="pbcRegPass">Password (minimal 8 karakter)</label>
+      <input id="pbcRegPass" type="password" autocomplete="new-password">
+      <label for="pbcRegPass2">Ulangi password</label>
+      <input id="pbcRegPass2" type="password" autocomplete="new-password">
+      <button class="pbc-gate-btn" id="pbcRegBtn" type="submit">Daftar</button>
+      <div class="pbc-gate-err" id="pbcRegErr"></div>
+      <div class="pbc-gate-note">Akun baru perlu disetujui Direktur sebelum bisa dipakai.</div>
+      <div class="pbc-gate-links"><a onclick="PBC_AUTH.tampil('masuk')">&larr; Sudah punya akun? Masuk</a></div>
+    </form>
+    <form id="pbcGateForgot" novalidate style="display:none" onsubmit="PBC_AUTH.lupa(document.getElementById('pbcForgotEmail').value);return false">
+      <div class="pbc-gate-h2">Lupa password</div>
+      <div class="pbc-gate-note" style="margin-top:0">Masukkan email akun Anda. Kami kirim tautan untuk membuat password baru.</div>
+      <label for="pbcForgotEmail">Email</label>
+      <input id="pbcForgotEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="off">
+      <button class="pbc-gate-btn" id="pbcForgotBtn" type="submit">Kirim tautan</button>
+      <div class="pbc-gate-err" id="pbcForgotErr"></div>
+      <div class="pbc-gate-links"><a onclick="PBC_AUTH.tampil('masuk')">&larr; Kembali masuk</a></div>
+    </form>
+    <form id="pbcGateNew" novalidate style="display:none" onsubmit="PBC_AUTH.sandiBaru(document.getElementById('pbcNewPass').value, document.getElementById('pbcNewPass2').value);return false">
+      <div class="pbc-gate-h2">Buat password baru</div>
+      <label for="pbcNewPass">Password baru (minimal 8 karakter)</label>
+      <input id="pbcNewPass" type="password" autocomplete="new-password">
+      <label for="pbcNewPass2">Ulangi password baru</label>
+      <input id="pbcNewPass2" type="password" autocomplete="new-password">
+      <button class="pbc-gate-btn" id="pbcNewBtn" type="submit">Simpan password</button>
+      <div class="pbc-gate-err" id="pbcNewErr"></div>
     </form>
     <div class="pbc-gate-wait" id="pbcGateWait">
       <div id="pbcGateWaitMsg" style="margin-bottom:16px"></div>
-      <button class="pbc-gate-btn" style="margin-top:0" onclick="PBC_AUTH.keluar()">Keluar</button>
+      <button class="pbc-gate-btn" style="margin-top:0" onclick="PBC_AUTH.periksaLagi()">Periksa lagi</button>
+      <button class="pbc-gate-sec" onclick="PBC_AUTH.keluar()">Keluar</button>
     </div>
   </div>
 </div>
@@ -9534,7 +9707,7 @@ function pbcRoleFooter(){
   if(!PBC_AUTH.aktif || !PBC_AUTH.profil) return '';
   const p = PBC_AUTH.profil;
   return '<div class="role-foot"><div class="em">'+escapeHtmlPbc(p.nama||'')+' · '+escapeHtmlPbc(p.email||'')+(PBC_AUTH.offline?' · <b>offline</b>':'')+'</div>'
-    + (p.role==='direktur' ? '<button onclick="bukaKelolaPengguna()">👥 Kelola Pengguna</button>' : '')
+    + (p.role==='direktur' ? '<button onclick="bukaKelolaPengguna()">👥 Kelola Pengguna'+(window.PBC_PENDING>0?'<span class="pbc-pend">'+window.PBC_PENDING+' menunggu</span>':'')+'</button>' : '')
     + '<button onclick="PBC_AUTH.keluar()">⎋ Keluar</button></div>';
 }
 function escapeHtmlPbc(t){ return String(t).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -9946,9 +10119,22 @@ async function cetakBeritaAcaraOpname(){
 
 
 /* ===== LOGIN: terapkan peran dari database & kelola pengguna ===== */
+async function pbcCekPending(){
+  try{
+    if(!PBC_AUTH.profil || PBC_AUTH.profil.role!=='direktur') return;
+    const r = await fetch(PBC_AUTH.url+'/rest/v1/profiles?role=eq.pending&select=id', { headers: PBC_AUTH.headers() });
+    if(!r.ok) return;
+    const n = (await r.json()).length;
+    const awal = window.PBC_PENDING;
+    window.PBC_PENDING = n;
+    try{ renderRolePanel(); }catch(e){}
+    if(n>0 && awal===undefined) notif(n+' akun baru menunggu persetujuan Anda (menu profil › Kelola Pengguna)','var(--gold)');
+  }catch(e){}
+}
 function pbcApplyAuth(p){
   if(!p || !ROLE_TABS[p.role]) return;
   currentRole = p.role;
+  if(p.role==='direktur') setTimeout(pbcCekPending, 800);
   applyRoleVisibility();
   syncRoleUI();
   const act = document.querySelector('.nav-tab.active');
@@ -9966,12 +10152,12 @@ async function bukaKelolaPengguna(){
   try{
     const r = await fetch(PBC_AUTH.url+'/rest/v1/profiles?select=id,email,nama,role,created_at&order=created_at.asc', { headers: PBC_AUTH.headers() });
     if(!r.ok) throw new Error('HTTP '+r.status);
-    const rows = await r.json();
+    const rows = (await r.json()).sort(function(a,b){ return (a.role==='pending'?0:1) - (b.role==='pending'?0:1); });
     const me = PBC_AUTH.profil.id;
     body.innerHTML = '<table class="usr-tbl"><thead><tr><th>Nama</th><th>Email</th><th>Peran</th></tr></thead><tbody>'
       + rows.map(function(u){
         const isMe = u.id===me;
-        return '<tr><td><input class="form-input" value="'+escapeHtmlPbc(u.nama||'')+'" onchange="simpanPengguna(\''+u.id+'\',{nama:this.value})"></td>'
+        return '<tr'+(u.role==='pending'?' class="usr-pending"':'')+'><td><input class="form-input" value="'+escapeHtmlPbc(u.nama||'')+'" onchange="simpanPengguna(\''+u.id+'\',{nama:this.value})"></td>'
           + '<td>'+escapeHtmlPbc(u.email||'')+'</td><td>'
           + '<select class="form-select"'+(isMe?' disabled title="Peran Anda sendiri tidak dapat diubah dari sini"':'')+' onchange="simpanPengguna(\''+u.id+'\',{role:this.value})">'
           + ['pending','direktur','internal','lapangan','nonaktif'].map(function(o){ return '<option value="'+o+'"'+(u.role===o?' selected':'')+'>'+o+'</option>'; }).join('')
@@ -9988,6 +10174,7 @@ async function simpanPengguna(id, patch){
     const j = r.ok ? await r.json() : null;
     if(!r.ok || !j || !j.length) throw new Error('ditolak server');
     notif('Pengguna diperbarui');
+    if(patch && patch.role) pbcCekPending();
   }catch(e){ notif('Gagal menyimpan: '+(e.message||e),'var(--red)'); bukaKelolaPengguna(); }
 }
 PBC_AUTH.whenReady(pbcApplyAuth);
