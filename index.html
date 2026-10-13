@@ -2068,6 +2068,11 @@ const fmtRp = n => {
    BERBAHAYA dipakai untuk nominal gaji/upah: Rp 1.150.000 akan tampil "Rp 1 Jt" (selisih
    Rp150.000 hilang dari pandangan, padahal itu uang sungguhan). fmtRpPenuh() SELALU menampilkan
    rupiah utuh tanpa pembulatan — wajib dipakai di seluruh modul Tenaga Kerja/Penggajian. */
+/* Biaya yang dibayar PBC ke tukang/subkontraktor/supplier (upah, gaji, material): boleh dilihat tim. */
+const fmtRpTim = n => {
+  if(n==null || isNaN(n)) return 'Rp 0';
+  return 'Rp ' + Math.round(n).toLocaleString('id');
+};
 const fmtRpPenuh = n => {
   if(!PBC_UANG_TERBUKA()) return 'Rp ••••';
   if(n==null || isNaN(n)) return 'Rp 0';
@@ -3903,7 +3908,7 @@ function renderPekerjaList(){
   if(!el) return;
   if(!state.pekerja.length){ el.innerHTML = '<tr><td colspan="5" class="empty">Belum ada pekerja terdaftar</td></tr>'; return; }
   el.innerHTML = state.pekerja.map(function(p){
-    return '<tr><td class="item-cell">'+p.nama+'</td><td>'+p.peran+'</td><td class="readonly">'+fmtRpPenuh(p.tarifHarian)+'</td>'
+    return '<tr><td class="item-cell">'+p.nama+'</td><td>'+p.peran+'</td><td class="readonly">'+fmtRpTim(p.tarifHarian)+'</td>'
       + '<td>'+(p.aktif!==false?'<span class="badge badge-done">Aktif</span>':'<span class="badge">Non-aktif</span>')+'</td>'
       + '<td><button class="btn btn-gold btn-sm" onclick="bukaModalPekerja(\''+p.id+'\')">✎</button> '
       + '<button class="btn btn-red btn-sm" onclick="hapusPekerja(\''+p.id+'\')">x</button></td></tr>';
@@ -3973,9 +3978,9 @@ function renderRekapGaji(){
   var total = rekap.reduce(function(s,r){return s+r.totalUpah;},0);
   var html = '<div class="tbl-wrap"><table><thead><tr><th class="item-cell">Pekerja</th><th>Peran</th><th>Hari Hadir</th><th>Hari Lembur</th><th>Total Upah</th></tr></thead><tbody>';
   rekap.forEach(function(r){
-    html += '<tr><td class="item-cell">'+r.nama+'</td><td>'+r.peran+'</td><td>'+r.hariHadir+'</td><td>'+r.hariLembur+'</td><td class="readonly">'+fmtRpPenuh(r.totalUpah)+'</td></tr>';
+    html += '<tr><td class="item-cell">'+r.nama+'</td><td>'+r.peran+'</td><td>'+r.hariHadir+'</td><td>'+r.hariLembur+'</td><td class="readonly">'+fmtRpTim(r.totalUpah)+'</td></tr>';
   });
-  html += '<tr style="font-weight:700;border-top:2px solid var(--border)"><td colspan="4">TOTAL GAJI PERIODE INI</td><td style="color:var(--gold)">'+fmtRpPenuh(total)+'</td></tr>';
+  html += '<tr style="font-weight:700;border-top:2px solid var(--border)"><td colspan="4">TOTAL GAJI PERIODE INI</td><td style="color:var(--gold)">'+fmtRpTim(total)+'</td></tr>';
   html += '</tbody></table></div>';
   el.innerHTML = html;
 }
@@ -3985,7 +3990,7 @@ function bayarGaji(){
   var rekap = hitungRekapPeriode(mulai, selesai);
   if(!rekap.length){ notif('Tidak ada absensi yang perlu dibayar pada periode ini','var(--orange)'); return; }
   var total = rekap.reduce(function(s,r){return s+r.totalUpah;},0);
-  if(!confirm('Bayar gaji periode '+mulai+' s/d '+selesai+' sejumlah '+fmtRpPenuh(total)+'?\n\nIni akan tercatat sebagai pengeluaran aktual di Dashboard Keuangan dan tidak bisa dibatalkan.')) return;
+  if(!confirm('Bayar gaji periode '+mulai+' s/d '+selesai+' sejumlah '+fmtRpTim(total)+'?\n\nIni akan tercatat sebagai pengeluaran aktual di Dashboard Keuangan dan tidak bisa dibatalkan.')) return;
 
   var semuaAbsensiId = [];
   rekap.forEach(function(r){ semuaAbsensiId = semuaAbsensiId.concat(r.absensiIds); });
@@ -4002,7 +4007,7 @@ function bayarGaji(){
   renderRekapGaji(); renderRiwayatGaji(); renderAbsensiHarian();
   if(typeof refreshDashboard==='function') refreshDashboard(); /* Pengeluaran Upah di Keuangan otomatis ikut update — lihat getKeuangan() */
   debounceSave();
-  notif('Gaji sejumlah '+fmtRpPenuh(total)+' berhasil dibayar — tercatat sebagai pengeluaran aktual proyek');
+  notif('Gaji sejumlah '+fmtRpTim(total)+' berhasil dibayar — tercatat sebagai pengeluaran aktual proyek');
 }
 function renderRiwayatGaji(){
   var el = document.getElementById('riwayatGajiBody');
@@ -4012,7 +4017,7 @@ function renderRiwayatGaji(){
     var rincianTxt = pl.rincian.map(function(r){ return r.nama+' ('+r.hariHadir+'H'+(r.hariLembur?('+'+r.hariLembur+'L'):'')+')'; }).join(', ');
     return '<div style="padding:8px 0;border-bottom:1px solid rgba(30,80,180,0.08);font-size:10px">'
       + '<div style="display:flex;justify-content:space-between"><span style="color:var(--white)">Periode '+pl.periodeMulai+' s/d '+pl.periodeSelesai+'</span>'
-      + '<strong style="color:var(--gold)">'+fmtRpPenuh(pl.totalDibayar)+'</strong></div>'
+      + '<strong style="color:var(--gold)">'+fmtRpTim(pl.totalDibayar)+'</strong></div>'
       + '<div style="font-size:9px;color:var(--muted2);margin-top:2px">Dibayar '+pl.tanggal+' · '+rincianTxt+'</div></div>';
   }).join('');
 }
@@ -7716,12 +7721,15 @@ const DOK_KATEGORI = [
   {key:'bast', label:'BAST'}, {key:'dokumen_owner', label:'Dokumen Owner'}, {key:'dokumen_lainnya', label:'Dokumen Lainnya'}
 ];
 let dokFilterAktif = 'semua';
+/* Dokumen yang memuat nominal harga ke owner: hanya Direktur yang boleh melihat/mengunduh. */
+const DOK_TERBATAS = ['kontrak','addendum','invoice','dokumen_owner'];
+function dokBoleh(kat){ return PBC_UANG_TERBUKA() || DOK_TERBATAS.indexOf(kat) === -1; }
 function openDokumenPage(e){ switchToPage('page-dokumen', e, renderDokumen); }
 function setDokFilter(key){ dokFilterAktif = key; renderDokumen(); }
 function renderDokumen(){
   document.getElementById('dokKategoriFilter').innerHTML = '<button class="btn btn-sm '+(dokFilterAktif==='semua'?'btn-blue':'btn-gold')+'" onclick="setDokFilter(\'semua\')">Semua</button>'
-    + DOK_KATEGORI.map(function(k){ return '<button class="btn btn-sm '+(dokFilterAktif===k.key?'btn-blue':'btn-gold')+'" onclick="setDokFilter(\''+k.key+'\')">'+k.label+'</button>'; }).join('');
-  const list = state.dokumen.filter(function(d){ return dokFilterAktif==='semua' || d.kategori===dokFilterAktif; }).sort(function(a,b){ return b.uploadedAt-a.uploadedAt; });
+    + DOK_KATEGORI.filter(function(k){ return dokBoleh(k.key); }).map(function(k){ return '<button class="btn btn-sm '+(dokFilterAktif===k.key?'btn-blue':'btn-gold')+'" onclick="setDokFilter(\''+k.key+'\')">'+k.label+'</button>'; }).join('');
+  const list = state.dokumen.filter(function(d){ return dokBoleh(d.kategori) && (dokFilterAktif==='semua' || d.kategori===dokFilterAktif); }).sort(function(a,b){ return b.uploadedAt-a.uploadedAt; });
   const grid = document.getElementById('dokumenGrid');
   if(!list.length){ grid.innerHTML = '<div class="empty"><div class="empty-icon">📁</div>Belum ada dokumen'+(dokFilterAktif!=='semua'?' di kategori ini':'')+'</div>'; return; }
   grid.innerHTML = '<div class="foto-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">'
@@ -7804,6 +7812,7 @@ async function getDokumenContent(d){
   } catch(e){ console.error('Gagal ambil isi dokumen', e); return null; }
 }
 async function previewDokumen(id){
+  { const _d = (state.dokumen||[]).find(function(x){return x.id===id;}); if(_d && !dokBoleh(_d.kategori)){ notif('Dokumen ini hanya untuk Direktur','var(--red)'); return; } }
   const d = state.dokumen.find(function(x){return x.id===id;});
   if(!d) return;
   notif('Membuka dokumen...','var(--blue)');
@@ -7814,6 +7823,7 @@ async function previewDokumen(id){
   else { w.location.href = content; }
 }
 async function downloadDokumen(id){
+  { const _d = (state.dokumen||[]).find(function(x){return x.id===id;}); if(_d && !dokBoleh(_d.kategori)){ notif('Dokumen ini hanya untuk Direktur','var(--red)'); return; } }
   const d = state.dokumen.find(function(x){return x.id===id;});
   if(!d) return;
   const content = await getDokumenContent(d);
@@ -7890,7 +7900,7 @@ function renderMaterialList(){
               ? ' · 1 '+m.satuan+' = '+m.faktorKonversi+' '+m.satuanAnalisa : '';
             return '<div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid rgba(30,80,180,0.08);font-size:11px">'
               + '<div><strong style="color:var(--white)">'+m.nama+'</strong>'+(merkSpek?(' <span style="color:var(--muted2);font-size:9px">('+merkSpek+')</span>'):'')
-              + '<div style="font-size:9px;color:var(--muted2)">'+m.satuan+' · '+fmtRp(m.harga)+konversiHint+'</div></div>'
+              + '<div style="font-size:9px;color:var(--muted2)">'+m.satuan+' · '+fmtRpTim(m.harga)+konversiHint+'</div></div>'
               + '<button class="btn btn-red btn-sm" onclick="hapusMaterial(\''+m.id+'\')">x</button></div>';
           }).join('');
         }
@@ -10229,11 +10239,14 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
     if(KUNCI_HANDLER.test(h) && !/vol|durasi|pct/i.test(h.replace(/harga|tarif|nilai|upah|gaji|nominal|biaya/gi,''))) return true;
     return false;
   }
+  var ZONA = '#page-tenagakerja,#modalPekerja,#modalMaterial,#modalAnalisa,#materialList,#analisaList,.pbc-tim';
+  function zonaTim(n){ var e = n.nodeType===1 ? n : n.parentNode; return !!(e && e.closest && e.closest(ZONA)); }
   function tutupInput(root){
     var list = root.querySelectorAll('input[type=number],input[type=text],input:not([type])');
     for(var i=0;i<list.length;i++){
       var el = list[i];
       if(el.dataset.uangTutup) continue;
+      if(zonaTim(el)) continue;
       if(!inputUang(el)) continue;
       el.dataset.uangTutup = '1';
       el.dataset.uangAsli = el.type;
@@ -10246,6 +10259,7 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
       acceptNode:function(n){
         var p = n.parentNode && n.parentNode.nodeName;
         if(p==='SCRIPT'||p==='STYLE'||p==='TEXTAREA'||p==='OPTION') return NodeFilter.FILTER_REJECT;
+        if(zonaTim(n)) return NodeFilter.FILTER_REJECT;
         return /Rp\s?-?\d/.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       }
     });
