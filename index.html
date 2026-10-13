@@ -2047,7 +2047,18 @@ let state = {
   kurva: { mulai: null, durasi: 24, weeks: [] }
 };
 
+/* Nominal uang hanya tampil untuk Direktur (peran asli di database = direktur, dan sedang dalam
+   tampilan Direktur/Owner). Peran Internal & Lapangan melihat 'Rp ••••'. */
+function PBC_UANG_TERBUKA(){
+  try{
+    var pf = window.PBC_AUTH && PBC_AUTH.profil;
+    if(pf && pf.role !== 'direktur') return false;
+    if(typeof currentRole !== 'undefined' && (currentRole === 'internal' || currentRole === 'lapangan')) return false;
+  }catch(e){ return false; }
+  return true;
+}
 const fmtRp = n => {
+  if(!PBC_UANG_TERBUKA()) return 'Rp ••••';
   if(!n || isNaN(n)) return 'Rp 0';
   if(n >= 1e9) return 'Rp ' + (n/1e9).toFixed(2).replace(/\.?0+$/,'') + ' M';
   if(n >= 1e6) return 'Rp ' + Math.round(n/1e6).toLocaleString('id') + ' Jt';
@@ -2058,6 +2069,7 @@ const fmtRp = n => {
    Rp150.000 hilang dari pandangan, padahal itu uang sungguhan). fmtRpPenuh() SELALU menampilkan
    rupiah utuh tanpa pembulatan — wajib dipakai di seluruh modul Tenaga Kerja/Penggajian. */
 const fmtRpPenuh = n => {
+  if(!PBC_UANG_TERBUKA()) return 'Rp ••••';
   if(n==null || isNaN(n)) return 'Rp 0';
   return 'Rp ' + Math.round(n).toLocaleString('id');
 };
@@ -3654,6 +3666,7 @@ async function convertProposalToProject(){
    satu file .json, termasuk isi dokumen (foto/file) yang ter-upload — bukan cuma metadata.
    =========================================================================== */
 async function exportBackupJSON(){
+  if(!PBC_UANG_TERBUKA()){ notif('Backup data memuat harga — hanya untuk Direktur','var(--red)'); return; }
   if(!state.proyek){ notif('Buat/pilih proyek terlebih dahulu sebelum backup','var(--red)'); return; }
   notif('Menyiapkan file backup, mohon tunggu...','var(--gold)');
   try {
@@ -3697,6 +3710,7 @@ async function exportBackupJSON(){
    muncul sebagai entri proyek baru di "Proyek Saya", data proyek lama (jika ada) tidak tersentuh. */
 async function importBackupJSON(file){
   if(!file) return;
+  if(!PBC_UANG_TERBUKA()){ notif('Restore data hanya untuk Direktur','var(--red)'); return; }
   if(!confirm('Restore dari file ini akan membuka data sebagai PROYEK BARU (proyek yang sedang aktif sekarang tidak akan tertimpa). Lanjutkan?')) {
     document.getElementById('importBackupInput').value = '';
     return;
@@ -5283,6 +5297,7 @@ function refreshItemDivisiSelect() {
 }
 
 function exportBoqCsv() {
+  if(!PBC_UANG_TERBUKA()){ notif('Ekspor BOQ memuat harga — hanya untuk Direktur','var(--red)'); return; }
   let csv = 'No,Uraian,Satuan,Volume,Harga Satuan,Jumlah Harga,Bobot (%)\n';
   const gt = grandTotal();
   let no=0;
@@ -6845,7 +6860,7 @@ function boqTableHtml(ringkas){
     rows += '<tr style="background:#f5f7fb"><td colspan="'+(ringkas?3:4)+'"><strong>'+div.nama+'</strong></td><td><strong>'+fmtRp(sub)+'</strong></td></tr>';
     if(!ringkas){
       dItems.forEach(function(it){
-        rows += '<tr><td>'+it.nama+'</td><td>'+it.sat+'</td><td>'+it.vol+'</td><td>Rp '+Math.round(it.harga).toLocaleString('id')+'</td><td>Rp '+Math.round(itemTotal(it)).toLocaleString('id')+'</td></tr>';
+        rows += '<tr><td>'+it.nama+'</td><td>'+it.sat+'</td><td>'+it.vol+'</td><td>'+fmtRpPenuh(it.harga)+'</td><td>'+fmtRpPenuh(itemTotal(it))+'</td></tr>';
       });
     }
   });
@@ -7966,7 +7981,9 @@ function onRoleChange(newRole){
       syncRoleUI(); return;
     }
   }
+  var _uangSebelum = PBC_UANG_TERBUKA();
   currentRole = newRole;
+  if(!_uangSebelum && PBC_UANG_TERBUKA()){ setTimeout(function(){ location.reload(); }, 900); }
   applyRoleVisibility();
   syncRoleUI(); closeRolePanel();
   const act = document.querySelector('.nav-tab.active');
@@ -10188,6 +10205,66 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
     navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('[PBC] SW gagal:', e); });
   });
 }
+</script>
+
+<script>
+/* ===== TIRAI UANG: sembunyikan nominal untuk Internal & Lapangan (hanya Direktur yang boleh melihat) ===== */
+(function(){
+  var RE_RP = /Rp\s?-?\d[\d.,]*(?:\s?(?:Jt|jt|M|rb))?(?:\s?\/\s?(?:hari|bulan|satuan))?/g;
+  var KUNCI_ID = /harga|tarif|upah|gaji|nominal|estimasi|revisi|kesepakatan|nilai|dp|addendum|operasional|anggaran|biaya|tagihan|retensi/i;
+  var KUNCI_HANDLER = /harga|tarif|upah|gaji|nominal|nilai|biaya/i;
+  var jadwal = null;
+  function labelInput(el){
+    var g = el.closest ? el.closest('.form-group') : null;
+    var l = g ? g.querySelector('label') : null;
+    return l ? l.textContent : '';
+  }
+  function inputUang(el){
+    var lab = labelInput(el);
+    if(/\(Rp|Rp\//i.test(lab)) return true;
+    if(/volume|vol\b|durasi|persen|%|hari hadir|jumlah orang/i.test(lab) && !/Rp|harga|tarif|nilai/i.test(lab)) return false;
+    var id = el.id || '';
+    if(KUNCI_ID.test(id) && !/vol|durasi|pct|persen|progress/i.test(id)) return true;
+    var h = (el.getAttribute('oninput')||'') + ' ' + (el.getAttribute('onchange')||'');
+    if(KUNCI_HANDLER.test(h) && !/vol|durasi|pct/i.test(h.replace(/harga|tarif|nilai|upah|gaji|nominal|biaya/gi,''))) return true;
+    return false;
+  }
+  function tutupInput(root){
+    var list = root.querySelectorAll('input[type=number],input[type=text],input:not([type])');
+    for(var i=0;i<list.length;i++){
+      var el = list[i];
+      if(el.dataset.uangTutup) continue;
+      if(!inputUang(el)) continue;
+      el.dataset.uangTutup = '1';
+      el.dataset.uangAsli = el.type;
+      el.readOnly = true; el.value = ''; el.type = 'password'; el.placeholder = '••••';
+      el.title = 'Hanya Direktur yang dapat melihat/mengubah nominal';
+    }
+  }
+  function tutupTeks(root){
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode:function(n){
+        var p = n.parentNode && n.parentNode.nodeName;
+        if(p==='SCRIPT'||p==='STYLE'||p==='TEXTAREA'||p==='OPTION') return NodeFilter.FILTER_REJECT;
+        return /Rp\s?-?\d/.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    var ns=[], n; while((n=w.nextNode())) ns.push(n);
+    ns.forEach(function(t){ t.nodeValue = t.nodeValue.replace(RE_RP,'Rp ••••'); });
+  }
+  function tirai(){
+    jadwal = null;
+    if(PBC_UANG_TERBUKA()) return;
+    try{ tutupInput(document.body); tutupTeks(document.body); }catch(e){ console.warn('[PBC] tirai uang:', e); }
+  }
+  function tunda(){ if(jadwal) return; jadwal = setTimeout(tirai, 80); }
+  window.PBC_TIRAI = tirai;
+  function pasang(){
+    new MutationObserver(tunda).observe(document.body, {childList:true, subtree:true, characterData:true});
+    tirai();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', pasang); else pasang();
+})();
 </script>
 </body>
 </html>
