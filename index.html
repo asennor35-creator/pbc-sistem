@@ -1064,6 +1064,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     <button class="btn btn-green" onclick="recalcAllDurasi()">🤖 Hitung Ulang Durasi Otomatis</button>
     <button class="btn btn-gold" onclick="saranRelasiParalel()">💡 Saran Relasi Paralel</button>
     <button class="btn btn-gold btn-sm" onclick="openFaktorModal()">⚙ Faktor Lapangan</button>
+    <button class="btn btn-blue" onclick="cetakPenawaranBoq()">📑 PDF Penawaran (Format PBC)</button>
     <button class="btn btn-gold" onclick="exportBoqCsv()">⬇ Export CSV</button>
     <div style="margin-left:auto;font-size:10px;color:var(--muted)">Total BOQ: <strong style="color:var(--gold)" id="boqTotalDisplay">Rp 0</strong></div>
   </div>
@@ -3304,7 +3305,7 @@ async function cetakRingkasanNegosiasi(negoId){
   }
 }
 
-async function exportProposalPdf(){
+async function exportProposalPdfLama(){
   if(!proposalState){ notif('Buka/buat proposal terlebih dahulu','var(--red)'); return; }
   if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
   try {
@@ -3343,6 +3344,378 @@ async function exportProposalPdf(){
     notif('Gagal membuat PDF Proposal: '+e.message,'var(--red)');
   }
 }
+
+/* ===========================================================================
+   FORMAT DOKUMEN RESMI PBC (paten) — Penawaran / RAB & Addendum
+   Tata letak ditiru PERSIS dari contoh "Project Addendum No. 3" (ukuran, jarak, warna, font).
+   Satu mesin untuk semua dokumen: isi boleh beda, tampilan tidak pernah berubah.
+   =========================================================================== */
+const PBC_DOK_DEFAULT = { alamat:'Jl. Penarukan No.7, Kab. Tabanan', email:'pratama.buildconstruction@gmail.com', telp:'+62 857-3733-2566',
+  bank:'BCA - 6485708441 a/n Norasen', ttdNama:'Norasen', ttdJabatan:'Managing Director' };
+function pbcDokPref(){ try{ return JSON.parse(localStorage.getItem('pbc_dok_pref')||'{}')||{}; }catch(e){ return {}; } }
+function pbcDokSimpanPref(o){ try{ localStorage.setItem('pbc_dok_pref', JSON.stringify(Object.assign(pbcDokPref(), o))); }catch(e){} }
+function pbcDokProfil(){ return Object.assign({}, PBC_DOK_DEFAULT, pbcDokPref().profil||{}); }
+function pbcRp(n){ return (n<0?'-':'')+'Rp'+String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+function pbcQty(n){ return String(+(+n).toFixed(2)); }
+function pbcTerbilangEn(n){
+  n = Math.round(Math.abs(n)); if(n===0) return 'Zero';
+  const ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function chunk(x){ let s=''; if(x>=100){ s+=ones[Math.floor(x/100)]+' Hundred'; x%=100; if(x) s+=' '; }
+    if(x>=20){ s+=tens[Math.floor(x/10)]; if(x%10) s+='-'+ones[x%10]; } else if(x>0) s+=ones[x]; return s; }
+  const sc=['','Thousand','Million','Billion','Trillion']; const parts=[]; let i=0;
+  while(n>0){ const c=n%1000; if(c) parts.unshift(chunk(c)+(sc[i]?' '+sc[i]:'')); n=Math.floor(n/1000); i++; }
+  return parts.join(' ');
+}
+function pbcTerbilangId(n){
+  n = Math.round(Math.abs(n)); if(n===0) return 'Nol';
+  const sat=['','Satu','Dua','Tiga','Empat','Lima','Enam','Tujuh','Delapan','Sembilan','Sepuluh','Sebelas'];
+  function f(x){
+    if(x<12) return sat[x];
+    if(x<20) return f(x-10)+' Belas';
+    if(x<100) return sat[Math.floor(x/10)]+' Puluh'+(x%10?' '+sat[x%10]:'');
+    if(x<200) return 'Seratus'+(x%100?' '+f(x%100):'');
+    if(x<1000) return sat[Math.floor(x/100)]+' Ratus'+(x%100?' '+f(x%100):'');
+    if(x<2000) return 'Seribu'+(x%1000?' '+f(x%1000):'');
+    if(x<1e6) return f(Math.floor(x/1000))+' Ribu'+(x%1000?' '+f(x%1000):'');
+    if(x<1e9) return f(Math.floor(x/1e6))+' Juta'+(x%1e6?' '+f(x%1e6):'');
+    if(x<1e12) return f(Math.floor(x/1e9))+' Miliar'+(x%1e9?' '+f(x%1e9):'');
+    return f(Math.floor(x/1e12))+' Triliun'+(x%1e12?' '+f(x%1e12):'');
+  }
+  return f(n);
+}
+
+/* ---- Mesin gambar PDF ---- */
+function pbcDokBuatPdf(cfg){
+  const doc = new window.jspdf.jsPDF({unit:'pt', format:'a4', orientation:'p'});
+  const H = 841.89, W = 595.28, L = cfg.L, P = cfg.profil;
+  const C = { ink:[26,26,26], g5:[85,85,85], tx:[34,34,34], n4:[68,68,68], grid:[207,202,192], head:[244,242,238], alt:[251,250,248], brown:[138,109,59] };
+  const X0 = 53.858, TW = 487.559, FX = 42.85, FW = 509.575, RIGHT = X0+TW-6;
+  const EDG = [22.677, 255.118, 294.803, 328.819, 402.520];
+  const T = function(yrl){ return H-yrl; };
+  function font(st,sz){ doc.setFont('helvetica',st); doc.setFontSize(sz); }
+  function col(c){ doc.setTextColor(c[0],c[1],c[2]); }
+  function fill(c){ doc.setFillColor(c[0],c[1],c[2]); }
+  function ln(c,w){ doc.setDrawColor(c[0],c[1],c[2]); doc.setLineWidth(w); }
+  doc.setLineCap('round');
+  const LIMIT = 800;
+
+  /* kop surat */
+  font('bold',14); col(C.ink); doc.text(P.nama||'PRATAMA BUILD & CONSTRUCTION', 59.858, T(796.2126));
+  font('bold',8.5); col(C.g5); doc.text(cfg.tagline||'General Contractor - Interior Design - Renovation', 59.858, T(779.2126));
+  font('bold',12.5); col(C.ink); doc.text(cfg.judulKanan, RIGHT, T(797.7126), {align:'right'});
+  font('bold',8.5); col(C.g5); if(cfg.subKanan) doc.text(cfg.subKanan, RIGHT, T(782.7126), {align:'right'});
+  font('normal',8.5); col(C.g5);
+  doc.text(P.alamat+'  |  Email: '+P.email+'  |  Telp: '+P.telp, FX, T(759.0433));
+  ln(C.ink,1.2); doc.line(FX, T(750.0913), FX+FW, T(750.0913));
+
+  /* info surat */
+  function infoCol(rows, x, y0){
+    let y = y0, extra = 0;
+    rows.forEach(function(r){
+      if(!r) { y += 12; return; }
+      font('bold',9); col(C.tx); const lw = doc.getTextWidth(r[0]);
+      doc.text(r[0], x, y);
+      font('normal',9);
+      const lines = doc.splitTextToSize(' : '+r[1], (x<200?240:236) - lw);
+      lines.forEach(function(t,i){ doc.text(i===0?t:t.replace(/^\s+/,''), i===0?x+lw+(r[0]==='To'?0.7:0):x+lw+doc.getTextWidth(' : '), y + i*12); });
+      y += 12*lines.length; extra += lines.length-1;
+    });
+    return extra;
+  }
+  const dyInfo = Math.max(infoCol(cfg.infoKiri, 59.858, T(730.0047)), infoCol(cfg.infoKanan, 303.638, T(730.0047)));
+  let dy = dyInfo*12;
+  font('normal',9); col(C.tx);
+  const introLines = doc.splitTextToSize(cfg.intro, 497.5);
+  introLines.forEach(function(t,i){ doc.text(t, FX, T(683.9181)+dy+i*12); });
+  dy += Math.max(0, introLines.length-2)*12;
+
+  /* tabel */
+  let y = T(661.8315)+dy;            /* bawah-atas bar judul tabel */
+  let page = 1;
+  function barHitam(title, top){
+    fill(C.ink); doc.rect(X0, top, TW, 20, 'F');
+    font('bold',10); doc.setTextColor(255,255,255); doc.text(title, X0+7, top+14);
+  }
+  function barKomplit(title, top){ doc.setFillColor(0,0,0); fill(C.ink); doc.rect(X0, top, TW, 20, 'F'); font('bold',10); doc.setTextColor(255,255,255); doc.text(title, X0+7, top+14); }
+  function halamanBaru(){ doc.addPage(); page++; return 50; }
+  function drawSegmen(top, rows){
+    const hs = 16, total = hs + rows.reduce(function(s,r){ return s+r.h; },0);
+    fill(C.head); doc.rect(X0, top, TW, hs, 'F');
+    let yy = top + hs;
+    rows.forEach(function(r){ fill(r.idx%2===1 ? [255,255,255] : C.alt); doc.rect(X0, yy, TW, r.h, 'F'); yy += r.h; });
+    font('bold',7.8); doc.setTextColor(0,0,0);
+    const hb = top+9.8;
+    doc.text(L.no, X0+EDG[0]/2, hb, {align:'center'}); doc.text(L.desc, X0+28.677, hb);
+    doc.text(L.qty, X0+(EDG[1]+EDG[2])/2, hb, {align:'center'}); doc.text(L.unit, X0+(EDG[2]+EDG[3])/2, hb, {align:'center'});
+    doc.text(L.rate, X0+EDG[4]-6.3, hb, {align:'right'}); doc.text(L.amount, X0+TW-6.3, hb, {align:'right'});
+    yy = top + hs;
+    rows.forEach(function(r){
+      const nb = yy + r.h/2 + 1.8;
+      font('normal',7.8); doc.setTextColor(0,0,0);
+      doc.text(String(r.idx), X0+EDG[0]/2, nb, {align:'center'});
+      doc.text(r.qty, X0+(EDG[1]+EDG[2])/2, nb, {align:'center'});
+      doc.text(r.sat, X0+(EDG[2]+EDG[3])/2, nb, {align:'center'});
+      doc.text(r.rate, X0+EDG[4]-6.3, nb, {align:'right'});
+      doc.text(r.amt, X0+TW-6.3, nb, {align:'right'});
+      col(C.tx);
+      const first = r.lines.length===1 ? yy+11.05 : yy+9.8;
+      r.lines.forEach(function(t,i){ doc.text(t, X0+28.677, first+i*9.5); });
+      yy += r.h;
+    });
+    ln(C.grid,0.5);
+    doc.rect(X0, top, TW, total);
+    let gy = top + hs; doc.line(X0, gy, X0+TW, gy);
+    rows.forEach(function(r){ gy += r.h; doc.line(X0, gy, X0+TW, gy); });
+    EDG.forEach(function(e){ doc.line(X0+e, top, X0+e, top+total); });
+    return top + total;
+  }
+  function blokTotal(label, val, top, garis){
+    font('bold',10); col([0,0,0]);
+    const wv = doc.getTextWidth(val), xv = RIGHT-wv;
+    doc.text(val, xv, top+14); doc.text(label, xv-27.7, top+14, {align:'right'});
+    if(garis){ ln(C.ink,0.8); doc.line(X0+272.126, top, X0+TW, top); }
+  }
+
+  cfg.sections.forEach(function(sec, si){
+    let rows = sec.rows.map(function(r,i){
+      font('normal',7.8);
+      const lines = doc.splitTextToSize(r.desc, 220.4);
+      const h = lines.length===1 ? 16 : 23 + 9.5*(lines.length-2);
+      return { idx:i+1, lines:lines, h:h, qty:pbcQty(r.qty), sat:r.sat||'', rate:pbcRp(r.rate), amt:pbcRp(r.amt) };
+    });
+    let k = 0, segTop, bottom = y;
+    let judul = sec.judul;
+    if(si>0 && y+20+16+(rows[0]?rows[0].h:16)+25 > LIMIT){ y = halamanBaru(); }
+    while(k < rows.length || (rows.length===0 && k===0)){
+      barKomplit(judul, y); segTop = y+20;
+      let seg = [], used = 16;
+      while(k < rows.length){
+        const r = rows[k];
+        if(segTop+used+r.h+25 > LIMIT && seg.length>0) break;
+        seg.push(r); used += r.h; k++;
+      }
+      bottom = drawSegmen(segTop, seg);
+      if(rows.length===0) break;
+      if(k < rows.length){ y = halamanBaru(); judul = sec.judul+' '+L.cont; }
+    }
+    const isLast = si===cfg.sections.length-1, multi = cfg.sections.length>1;
+    if(!multi){ blokTotal(L.grand, pbcRp(cfg.total), bottom, true); y = bottom + 24.67; }
+    else {
+      blokTotal(L.sub, pbcRp(sec.subtotal), bottom, true);
+      if(isLast){ blokTotal(L.grand, pbcRp(cfg.total), bottom+17, false); y = bottom + 17 + 24.67; } else { y = bottom + 24.67; }
+    }
+  });
+
+  /* ringkasan total + terbilang + catatan + tanda tangan */
+  const butuh = 212;
+  if(y + butuh > LIMIT+30){ y = halamanBaru(); }
+  fill(C.brown); doc.rect(X0, y, TW, 20, 'F');
+  font('bold',10); doc.setTextColor(255,255,255); doc.text(cfg.totalBar, X0+7, y+14);
+  const by = y+20;
+  fill(C.head); doc.rect(X0, by, TW, 22, 'F');
+  ln(C.grid,0.5); doc.rect(X0, by, TW, 22); doc.line(X0+345.827, by, X0+345.827, by+22);
+  font('bold',11); doc.setTextColor(0,0,0);
+  doc.text(cfg.totalLabel, X0+8, by+16); doc.text(pbcRp(cfg.total), X0+TW-8, by+16, {align:'right'});
+  let wy = by+22+13.25;
+  font('bolditalic',9); col(C.tx); const lw = doc.getTextWidth(L.words+' ');
+  doc.text(L.words, FX, wy); const wOff = 0.8;
+  font('italic',9);
+  const wl = doc.splitTextToSize(cfg.terbilang, FW-lw);
+  wl.forEach(function(t,i){ doc.text(t, i===0?FX+lw+wOff:FX, wy+i*12); });
+  wy += (wl.length-1)*12;
+  let ny = wy + 19.09;
+  font('bold',9); col(C.tx); doc.text(L.notes, FX, ny);
+  ny += 11; font('normal',8); col(C.n4);
+  let lastNote = ny - 10.5;
+  cfg.notes.forEach(function(n,i){
+    const nl = doc.splitTextToSize((i+1)+'. '+n, FW);
+    nl.forEach(function(t,j){ lastNote = ny; doc.text(t, FX, ny); ny += 10.5; });
+  });
+  let sy = lastNote + 23;
+  font('normal',9); col(C.tx);
+  doc.text(L.submitted, 59.858, sy); doc.text(L.approved, 303.638, sy);
+  doc.text(P.nama ? 'Pratama Build & Construction' : '', 59.858, sy+12);
+  doc.text(cfg.pihak2||'', 303.638, sy+12);
+  const ny2 = sy + 58.68;
+  font('bold',9); doc.text(P.ttdNama, 59.858, ny2);
+  font('normal',9); doc.text(P.ttdJabatan, 59.858, ny2+12);
+  doc.text(L.dateLine+' '+cfg.tahun, 303.638, ny2);
+
+  const np = doc.getNumberOfPages();
+  if(np>1){ for(let i=1;i<=np;i++){ doc.setPage(i); font('normal',7); col(C.g5); doc.text('Page '+i+' / '+np, W/2, 820, {align:'center'}); } }
+  return doc;
+}
+
+/* ---- Teks dua bahasa ---- */
+const PBC_DOK_L = {
+  en:{ no:'No', qty:'Qty', unit:'Unit', rate:'Unit Rate', amount:'Amount', grand:'GRAND TOTAL:', sub:'SUBTOTAL:', words:'Amount in Words:', notes:'NOTES & TERMS',
+       submitted:'Submitted by,', approved:'Approved by,', dateLine:'Date: ____ / ____ /', cont:'(cont.)',
+       date:'Date', ref:'Ref. No.', attach:'Attachment', to:'To', subject:'Subject' },
+  id:{ no:'No', qty:'Vol', unit:'Sat', rate:'Harga Satuan', amount:'Jumlah', grand:'TOTAL KESELURUHAN:', sub:'SUBTOTAL:', words:'Terbilang:', notes:'CATATAN & KETENTUAN',
+       submitted:'Diajukan oleh,', approved:'Disetujui oleh,', dateLine:'Tanggal: ____ / ____ /', cont:'(lanjutan)',
+       date:'Tanggal', ref:'No. Ref.', attach:'Lampiran', to:'Kepada', subject:'Perihal' }
+};
+function pbcDokTglFmt(v, bhs){
+  const d = v ? new Date(v+'T00:00:00') : new Date();
+  return d.toLocaleDateString(bhs==='id'?'id-ID':'en-US', bhs==='id' ? {day:'numeric',month:'long',year:'numeric'} : {month:'long',day:'numeric',year:'numeric'});
+}
+function pbcDokData(kind){
+  const bhsPref = pbcDokPref().bahasa || 'en';
+  const prof = pbcDokProfil();
+  if(kind==='vo'){
+    const vo = getCurrentVo(); if(!vo) return null;
+    const jenisEn = {tambah_pekerjaan:'Additional Works', kurang_pekerjaan:'Omitted Works', ubah_spesifikasi:'Specification Changes'}[vo.jenisPerubahan]||'Changes';
+    const jenisId = labelJenisVo(vo.jenisPerubahan);
+    const n = parseInt(String(vo.nomorVo).replace(/\D/g,''),10);
+    return { kind:kind, vo:vo, nomor: isNaN(n)?vo.nomorVo:String(n), ref:vo.nomorVo, tgl:vo.tanggal, kepada:(state.proyek&&state.proyek.owner)||'', jenisEn:jenisEn, jenisId:jenisId, prof:prof, bhs:bhsPref };
+  }
+  if(kind==='proposal'){
+    if(!proposalState) return null;
+    return { kind:kind, ref:'', tgl:proposalState.tanggalDibuat||today(), kepada:proposalState.namaProspek||'', proyekNama:(proposalState.namaProspek||'')+(proposalState.lokasi?' - '+proposalState.lokasi:''), prof:prof, bhs:bhsPref };
+  }
+  if(!state.proyek) return null;
+  return { kind:'boq', ref:'', tgl:today(), kepada:state.proyek.owner||'', proyekNama:state.proyek.nama+(state.proyek.lokasi?' - '+state.proyek.lokasi:''), prof:prof, bhs:bhsPref };
+}
+function pbcDokTeks(d, bhs){
+  const en = bhs==='en', prof = d.prof;
+  const bank = en ? 'Bank Transfer Account: '+prof.bank+'.' : 'Rekening Transfer: '+prof.bank+'.';
+  if(d.kind==='vo'){
+    const vo = d.vo, pendek = String(vo.deskripsiPerubahan||'').replace(/\s+/g,' ').trim().slice(0,60);
+    const tambah = vo.jenisPerubahan==='tambah_pekerjaan';
+    return {
+      judul: (en?'PROJECT ADDENDUM NO. ':'ADENDUM PROYEK NO. ')+d.nomor,
+      sub: en ? d.jenisEn : d.jenisId,
+      perihal: (en?'Addendum No. ':'Adendum No. ')+d.nomor+(pendek?' - '+pendek:''),
+      intro: en ? ('Dear Sir/Madam, please find below our addendum for '+(tambah?'additional works identified beyond the original scope of the agreed contract':'changes to the scope of the agreed contract')+', with details as follows:')
+                : ('Dengan hormat, bersama ini kami sampaikan addendum untuk '+(tambah?'pekerjaan tambahan di luar lingkup kontrak yang telah disepakati':'perubahan lingkup kontrak yang telah disepakati')+', dengan rincian sebagai berikut:'),
+      judulTabel: (en?(tambah?'ADDITIONAL WORKS':'CHANGES TO SCOPE OF WORKS'):(tambah?'PEKERJAAN TAMBAH':'PERUBAHAN LINGKUP PEKERJAAN'))+(pendek?' - '+pendek.toUpperCase():''),
+      desc: en?'Description of Additional Works':'Uraian Pekerjaan Tambahan',
+      notes: (en ? [ (tambah?'The above additional works are outside the original scope of the agreed contract and are billed in full (100%) upon completion.':'The above changes adjust the scope and value of the agreed contract.'),
+                     'Quantities are based on actual site conditions and completed works; subject to joint verification prior to invoicing.', bank ]
+                 : [ (tambah?'Pekerjaan tambahan di atas berada di luar lingkup kontrak awal dan ditagihkan penuh (100%) setelah pekerjaan selesai.':'Perubahan di atas menyesuaikan lingkup dan nilai kontrak yang telah disepakati.'),
+                     'Volume berdasarkan kondisi aktual lapangan dan pekerjaan yang telah selesai; diverifikasi bersama sebelum penagihan.', bank ]),
+      totalBar: en?'TOTAL ADDENDUM VALUE':'TOTAL NILAI ADENDUM', totalLabel: en?'Total Addendum Value:':'Total Nilai Adendum:'
+    };
+  }
+  const skema = (d.kind==='proposal' && proposalState && (proposalState.skemaPembayaran||[]).length)
+    ? (en?'Payment scheme: ':'Skema pembayaran: ')+proposalState.skemaPembayaran.map(function(k){ return k.tahap+' '+k.persen+'%'; }).join(' | ')+'.' : null;
+  const valid = (d.kind==='proposal' && proposalState && proposalState.validUntil) ? (en?'This quotation is valid until '+pbcDokTglFmt(proposalState.validUntil,'en')+'.':'Penawaran ini berlaku sampai '+pbcDokTglFmt(proposalState.validUntil,'id')+'.') : null;
+  const notes = (en ? ['Prices are quoted in Indonesian Rupiah (IDR).','Quantities are based on the agreed scope of works and subject to joint verification on site.']
+                    : ['Harga dalam Rupiah (IDR).','Volume berdasarkan lingkup pekerjaan yang disepakati dan diverifikasi bersama di lokasi.']);
+  if(skema) notes.push(skema); if(valid) notes.push(valid); notes.push(bank);
+  return {
+    judul: en?'PROJECT QUOTATION':'PENAWARAN PEKERJAAN', sub: d.proyekNama||'',
+    perihal: (en?'Quotation - ':'Penawaran - ')+(d.proyekNama||''),
+    intro: en ? 'Dear Sir/Madam, we are pleased to submit our quotation for the works below, with details as follows:' : 'Dengan hormat, bersama ini kami sampaikan penawaran pekerjaan dengan rincian sebagai berikut:',
+    judulTabel: '', desc: en?'Description of Works':'Uraian Pekerjaan', notes: notes,
+    totalBar: en?'TOTAL QUOTATION VALUE':'TOTAL NILAI PENAWARAN', totalLabel: en?'Total Quotation Value:':'Total Nilai Penawaran:'
+  };
+}
+function pbcDokBagian(d){
+  /* kumpulkan baris tabel per bagian */
+  if(d.kind==='vo'){
+    const vo = d.vo, aksiHapus = function(r){ return r.aksi==='hapus'; };
+    const rows = (vo.itemPerubahan||[]).map(function(r){
+      const harga = r.aksi==='hapus' ? r.hargaLama : r.harga;
+      let qty = r.aksi==='hapus' ? r.volumeLama : r.volumeBaru;
+      if(r.aksi==='ubah' && harga){ qty = r.nilai/harga; }
+      return { desc:(r.aksi==='hapus'?'(Omitted) ':'')+r.nama, qty:qty||0, sat:r.sat, rate:harga||0, amt:r.nilai||0 };
+    });
+    return [{ rows:rows, subtotal: rows.reduce(function(s,r){ return s+r.amt; },0) }];
+  }
+  const divs = d.kind==='proposal' ? proposalState.divisi : state.divisi;
+  const items = d.kind==='proposal' ? proposalState.items : state.items;
+  const out = [];
+  divs.forEach(function(div){
+    const its = items.filter(function(i){ return i.divisiId===div.id; });
+    if(!its.length) return;
+    const rows = its.map(function(i){ return { desc:i.nama, qty:i.vol||0, sat:i.sat, rate:i.harga||0, amt:(i.vol||0)*(i.harga||0) }; });
+    out.push({ judul:String(div.nama).toUpperCase(), rows:rows, subtotal:rows.reduce(function(s,r){ return s+r.amt; },0) });
+  });
+  const lain = items.filter(function(i){ return !divs.some(function(dv){ return dv.id===i.divisiId; }); });
+  if(lain.length){ const rows = lain.map(function(i){ return { desc:i.nama, qty:i.vol||0, sat:i.sat, rate:i.harga||0, amt:(i.vol||0)*(i.harga||0) }; });
+    out.push({ judul:'OTHER WORKS', rows:rows, subtotal:rows.reduce(function(s,r){ return s+r.amt; },0) }); }
+  return out;
+}
+
+/* ---- Formulir singkat sebelum cetak ---- */
+function pbcDokEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+let _pbcDokKind = null, _pbcDokD = null;
+function pbcDokBukaForm(kind){
+  if(!PBC_UANG_TERBUKA()){ notif('Dokumen penawaran/addendum berisi harga — hanya bisa dicetak oleh Direktur','var(--red)'); return; }
+  if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
+  const d = pbcDokData(kind);
+  if(!d){ notif(kind==='proposal'?'Buka/buat proposal terlebih dahulu':(kind==='vo'?'Pilih Variation Order terlebih dahulu':'Buat / pilih proyek terlebih dahulu'),'var(--red)'); return; }
+  const sec = pbcDokBagian(d);
+  if(!sec.length || !sec.some(function(s){ return s.rows.length; })){ notif('Belum ada item pekerjaan untuk dicetak','var(--red)'); return; }
+  _pbcDokKind = kind; _pbcDokD = d;
+  let el = document.getElementById('modalDokPbc');
+  if(!el){ el = document.createElement('div'); el.className='modal-overlay'; el.id='modalDokPbc'; document.body.appendChild(el); }
+  const t = pbcDokTeks(d, d.bhs), pr = d.prof;
+  function f(id,label,val,type){ return '<div class="form-group"><label class="form-label">'+label+'</label><input class="form-input" id="'+id+'" type="'+(type||'text')+'" value="'+pbcDokEsc(val)+'"></div>'; }
+  function ta(id,label,val,rows){ return '<div class="form-group"><label class="form-label">'+label+'</label><textarea class="form-input" id="'+id+'" rows="'+rows+'" style="resize:vertical">'+pbcDokEsc(val)+'</textarea></div>'; }
+  el.innerHTML = '<div class="modal" style="max-width:560px;max-height:90vh;overflow:auto">'
+    + '<div class="modal-title">📑 Dokumen Resmi PBC — '+(kind==='vo'?'Addendum':'Penawaran / RAB')+'</div>'
+    + '<div style="font-size:10px;color:var(--muted2);margin-bottom:10px">Tampilan dokumen sudah dikunci (format paten PBC). Di sini hanya isi nomor, tujuan, dan catatan.</div>'
+    + '<div class="form-group"><label class="form-label">Bahasa dokumen</label><select class="form-select" id="dokBhs" onchange="pbcDokGantiBahasa()"><option value="en"'+(d.bhs==='en'?' selected':'')+'>English (seperti contoh Addendum)</option><option value="id"'+(d.bhs==='id'?' selected':'')+'>Bahasa Indonesia</option></select></div>'
+    + '<div class="form-row">'+f('dokRef','Nomor Referensi',d.ref)+f('dokTgl','Tanggal',d.tgl,'date')+'</div>'
+    + f('dokKepada','Kepada (nama klien / perusahaan)',d.kepada)
+    + f('dokPerihal','Perihal / Subject',t.perihal)
+    + f('dokLampiran','Lampiran / Attachment (boleh kosong)','')
+    + f('dokSub','Sub-judul di kanan atas',t.sub)
+    + (kind==='vo' ? f('dokJudulTabel','Judul tabel',t.judulTabel) : '')
+    + ta('dokIntro','Kalimat pembuka',t.intro,3)
+    + ta('dokCatatan','Catatan &amp; Ketentuan (satu baris = satu poin, nomor otomatis)',t.notes.join('\n'),5)
+    + '<details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:11px;color:var(--gold)">Data perusahaan &amp; penandatangan</summary>'
+    + f('dokAlamat','Alamat',pr.alamat)+f('dokEmail','Email',pr.email)+f('dokTelp','Telepon',pr.telp)+f('dokBank','Rekening bank',pr.bank)
+    + '<div class="form-row">'+f('dokTtdNama','Nama penandatangan',pr.ttdNama)+f('dokTtdJab','Jabatan',pr.ttdJabatan)+'</div></details>'
+    + '<div class="modal-footer"><button class="btn btn-gold" onclick="hideModal(\'modalDokPbc\')">Batal</button><button class="btn btn-blue" onclick="pbcDokCetak()">📄 Buat PDF</button></div></div>';
+  showModal('modalDokPbc');
+}
+function pbcDokGantiBahasa(){
+  const d = _pbcDokD; if(!d) return;
+  const bhs = document.getElementById('dokBhs').value;
+  const pr = Object.assign({}, d.prof, { bank: document.getElementById('dokBank').value });
+  const t = pbcDokTeks(Object.assign({}, d, {prof:pr}), bhs);
+  document.getElementById('dokPerihal').value = t.perihal; document.getElementById('dokSub').value = t.sub;
+  document.getElementById('dokIntro').value = t.intro; document.getElementById('dokCatatan').value = t.notes.join('\n');
+  const jt = document.getElementById('dokJudulTabel'); if(jt) jt.value = t.judulTabel;
+}
+function pbcDokCetak(){
+  const d = _pbcDokD; if(!d) return;
+  const v = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  const bhs = v('dokBhs') || 'en', L = PBC_DOK_L[bhs];
+  const prof = { nama:'PRATAMA BUILD & CONSTRUCTION', alamat:v('dokAlamat')||PBC_DOK_DEFAULT.alamat, email:v('dokEmail')||PBC_DOK_DEFAULT.email, telp:v('dokTelp')||PBC_DOK_DEFAULT.telp,
+                 bank:v('dokBank')||PBC_DOK_DEFAULT.bank, ttdNama:v('dokTtdNama')||PBC_DOK_DEFAULT.ttdNama, ttdJabatan:v('dokTtdJab')||PBC_DOK_DEFAULT.ttdJabatan };
+  pbcDokSimpanPref({ bahasa:bhs, profil:{ alamat:prof.alamat, email:prof.email, telp:prof.telp, bank:prof.bank, ttdNama:prof.ttdNama, ttdJabatan:prof.ttdJabatan } });
+  try{
+    const t = pbcDokTeks(Object.assign({}, d, {prof:prof}), bhs);
+    const secs = pbcDokBagian(d).filter(function(s){ return s.rows.length; });
+    if(d.kind==='vo'){ secs[0].judul = v('dokJudulTabel') || t.judulTabel; }
+    const total = secs.reduce(function(s,x){ return s+x.subtotal; },0);
+    const kiri = [[L.date, pbcDokTglFmt(v('dokTgl'),bhs)], [L.ref, v('dokRef')||'-']];
+    if(v('dokLampiran')) kiri.push([L.attach, v('dokLampiran')]);
+    const kanan = [[L.to, v('dokKepada')||'-'], [L.subject, v('dokPerihal')||t.perihal]];
+    const notes = v('dokCatatan').split('\n').map(function(s){ return s.replace(/^\s*\d+[.)]\s*/,'').trim(); }).filter(Boolean);
+    const tgl = v('dokTgl') ? new Date(v('dokTgl')+'T00:00:00') : new Date();
+    const Lx = Object.assign({}, L, { desc:t.desc });
+    const doc = pbcDokBuatPdf({ L:Lx, profil:prof, judulKanan:t.judul, subKanan:v('dokSub'), infoKiri:kiri, infoKanan:kanan, intro:v('dokIntro')||t.intro,
+      sections:secs, total:total, totalBar:t.totalBar, totalLabel:t.totalLabel,
+      terbilang: (total<0?(bhs==='en'?'Minus ':'Minus '):'')+(bhs==='en' ? pbcTerbilangEn(total)+' Indonesian Rupiah.' : pbcTerbilangId(total)+' Rupiah.'),
+      notes:notes, pihak2:v('dokKepada'), tahun:String(tgl.getFullYear()) });
+    const nm = d.kind==='vo' ? 'Addendum_'+d.ref : (d.kind==='proposal' ? 'Penawaran_'+(proposalState.namaProspek||'Tanpa_Nama') : 'Penawaran_'+(state.proyek?state.proyek.nama:'Proyek'));
+    doc.save(fileNameFor(nm.replace(/[^A-Za-z0-9_-]+/g,'_')));
+    hideModal('modalDokPbc');
+    if(d.kind==='vo'){ catatDokumenPdfLog('Variation Order', d.ref+' (format PBC)'); }
+    else if(d.kind==='proposal'){ try{ catatProposalPdfLog('Proposal','Penawaran format PBC — '+(proposalState.namaProspek||'Tanpa Nama')); }catch(e){} }
+    else { try{ catatDokumenPdfLog('Penawaran', 'Penawaran/RAB format PBC — '+today()); }catch(e){} }
+    notif('PDF berhasil dibuat — format resmi PBC');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+function exportProposalPdf(){ pbcDokBukaForm('proposal'); }
+function cetakVoPdf(){ pbcDokBukaForm('vo'); }
+function cetakPenawaranBoq(){ pbcDokBukaForm('boq'); }
 
 /* ===========================================================================
    GERBANG KONTRAK -> DP -> SPK -> PROYEK AKTIF
@@ -4374,7 +4747,7 @@ function catatDokumenPdfLog(kategori, judul){
   });
 }
 
-async function cetakVoPdf(){
+async function cetakVoPdfLama(){
   if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
   const vo = getCurrentVo();
   if(!vo) return;
