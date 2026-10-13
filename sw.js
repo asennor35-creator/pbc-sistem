@@ -2,7 +2,7 @@
    - Halaman utama: ambil dari internet dulu (supaya pembaruan langsung terlihat), cadangan dari cache saat offline.
    - Pustaka grafik/PDF (cdnjs): cache pertama, diperbarui di belakang layar.
    - Supabase (data & login) TIDAK PERNAH di-cache oleh service worker. */
-const VER = 'pbc-v8';
+const VER = 'pbc-v9';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-v2-192.png', 'icon-v2-512.png', 'icon-v2-maskable-512.png'];
 
 self.addEventListener('install', e => {

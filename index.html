@@ -8999,55 +8999,108 @@ function renderOwnerPortal(){
   }).join('') : '<div class="empty">Belum ada laporan progres</div>';
 }
 
+function pdfHexRgb(h){ h = String(h||''); if(h.charAt(0)!=='#'||h.length!==7) return [90,98,115]; return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]; }
+function kurvaChartImage(periode, dataChart, aktualPct){
+  const built = kurvaMainConfig(periode, dataChart, aktualPct, true);
+  const holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:1500px;height:600px;background:#fff';
+  const cvs = document.createElement('canvas'); cvs.width = 1500; cvs.height = 600; holder.appendChild(cvs); document.body.appendChild(holder);
+  try { const ch = new Chart(cvs.getContext('2d'), built.config); const img = ch.toBase64Image('image/png', 1); ch.destroy(); return img; }
+  finally { holder.remove(); }
+}
 async function exportOwnerPortalPdf(){
   if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!','var(--red)'); return; }
   if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
   notif('Menyiapkan Owner Portal PDF...','var(--blue)');
-  renderKurva();
-  await new Promise(function(r){ setTimeout(r,120); });
+  await new Promise(function(r){ setTimeout(r,60); });
   try{
-    const doc = new window.jspdf.jsPDF('p','mm','a4');
-    let y = 32;
-    pdfHeader(doc, 'Owner Portal'); pdfFooter(doc);
-    y = pdfSectionTitle(doc, y, 'Informasi Proyek');
-    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, PDF.dark);
-    [['Nama Proyek', state.proyek.nama],['Lokasi', state.proyek.lokasi||'-'],['Tanggal Mulai', state.proyek.mulai||'-'],['Target Selesai', endDateFromWeeks(state.proyek.mulai, state.kurva.durasi)]]
-      .forEach(function(r){ doc.text(r[0]+':',12,y); doc.setFont('helvetica','bold'); doc.text(String(r[1]),55,y); doc.setFont('helvetica','normal'); y+=7; });
-    y += 6;
-    const gt = grandTotal();
+    const p = state.proyek, gt = grandTotal();
     const aktualPct = gt ? state.items.reduce(function(s,i){ return s+(itemTotal(i)/gt*100)*(itemPct(i)/100); },0) : 0;
     const opname = getOpname();
+    const adaKurva = !!(gt && state.kurva.mulai);
+    const kd = adaKurva ? kurvaKpiData(aktualPct) : null;
+    let img = null;
+    if(adaKurva && typeof Chart!=='undefined'){
+      const periode = agregasiMingguan();
+      const dataChart = periode.map(function(row){ return { label:row.label, bobot:row.bobot, rencana:row.kumulatif, realisasi:cariRealisasiPadaHari(row.akhirHari) }; });
+      try{ img = kurvaChartImage(periode, dataChart, aktualPct); }catch(e){ console.error(e); }
+    }
+    const doc = new window.jspdf.jsPDF('p','mm','a4');
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const NAV = PDF.navy, JUDUL = 'Laporan untuk Owner';
+    function baru(){ doc.addPage(); pdfHeader(doc, JUDUL); return 32; }
+    function perlu(y, h){ return (y+h > H-18) ? baru() : y; }
+    pdfHeader(doc, JUDUL);
+    let y = 33;
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor.apply(doc, NAV);
+    doc.text('RINGKASAN KEMAJUAN PROYEK', 12, y);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, PDF.gray);
+    doc.text('Per '+new Date(today()).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}), 12, y+5.5);
+    y += 13;
+    const info = [['Proyek', p.nama||'-'], ['Lokasi', p.lokasi||'-'], ['Tanggal Mulai', p.mulai||'-'], ['Target Selesai', endDateFromWeeks(p.mulai, state.kurva.durasi)]];
+    info.forEach(function(r,i){
+      const cx = 12 + (i%2)*95, cy = y + Math.floor(i/2)*6.5;
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, PDF.gray); doc.text(r[0]+':', cx, cy);
+      doc.setFont('helvetica','bold'); doc.setTextColor.apply(doc, PDF.dark); doc.text(String(r[1]), cx+27, cy, {maxWidth:62});
+    });
+    y += 17;
+    if(kd){
+      const cards = [
+        ['Progress Aktual', aktualPct.toFixed(1)+'%', null],
+        ['Target Hari Ini', kd.plan===null?'-':kd.plan.toFixed(1)+'%', null],
+        ['Deviasi', kd.dev===null?'-':((kd.dev>=0?'+':'')+kd.dev.toFixed(1)+' poin'), kd.dev===null?null:(kd.dev>=0?[26,140,122]:[192,57,43])],
+        ['Status Jadwal', kd.status.t, pdfHexRgb(kd.status.fg)]
+      ];
+      const cw = (W-24-3*3)/4;
+      cards.forEach(function(c,i){
+        const x = 12 + i*(cw+3);
+        doc.setFillColor(246,248,252); doc.roundedRect(x,y,cw,17,2,2,'F');
+        doc.setFillColor.apply(doc, c[2] || PDF.gold); doc.rect(x,y+2,1.2,13,'F');
+        doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor.apply(doc, PDF.gray); doc.text(c[0].toUpperCase(), x+4, y+5.5);
+        let fs = 11; doc.setFont('helvetica','bold');
+        while(fs>6.5){ doc.setFontSize(fs); if(doc.getTextWidth(String(c[1])) <= cw-7) break; fs -= 0.5; }
+        doc.setTextColor.apply(doc, c[2] || NAV); doc.text(String(c[1]), x+4, y+13);
+      });
+      y += 25;
+    }
     y = pdfSectionTitle(doc, y, 'Progress & Opname');
-    pdfBarRow(doc, 12, y, 186, 'Progress Aktual', aktualPct, PDF.teal, aktualPct.toFixed(1)+'%'); y+=10;
-    pdfBarRow(doc, 12, y, 186, 'Progress Opname', opname.pct||0, PDF.gold, (opname.pct||0).toFixed(1)+'%'); y+=18;
+    pdfBarRow(doc, 12, y, 186, 'Progress Aktual', aktualPct, PDF.teal, aktualPct.toFixed(1)+'%'); y += 10;
+    pdfBarRow(doc, 12, y, 186, 'Progress Opname'+(opname.tgl?(' ('+opname.tgl+')'):''), opname.pct||0, PDF.gold, (opname.pct||0).toFixed(1)+'%'); y += 14;
 
-    y = pdfSectionTitle(doc, y, 'Kurva S — Rencana vs Aktual');
-    pdfKurvaChart(doc, 12, y, 186, 55); y+=65;
-
-    if(y>230){ doc.addPage(); pdfHeader(doc,'Owner Portal'); pdfFooter(doc); y=32; }
-    y = pdfSectionTitle(doc, y, 'Termin Pembayaran');
+    if(img){
+      const ih = 186*600/1500;
+      y = perlu(y, ih+14);
+      y = pdfSectionTitle(doc, y, 'Kurva S — Rencana vs Realisasi');
+      doc.addImage(img, 'PNG', 12, y-2, 186, ih);
+      y += ih + 8;
+    }
     const terminRows = state.termin.map(function(t){ return [t.nama, t.milestone||'-', t.status]; });
-    pdfTable(doc, y, [{label:'Termin',w:2},{label:'Milestone',w:3},{label:'Status',w:1.2}], terminRows, {onNewPage:function(d){ pdfHeader(d,'Owner Portal'); pdfFooter(d); }});
-    y += 8;
-
-    /* Riwayat VO & Status Kualitas — sama persis dengan yang ditampilkan di layar Owner Portal,
-       supaya PDF yang dikirim ke klien tidak pernah berbeda informasi dengan yang mereka lihat
-       saat login langsung. */
-    const voUntukOwnerPdf = (state.variationOrders||[]).filter(function(v){ return v.status==='disetujui'||v.status==='selesai'; });
-    if(voUntukOwnerPdf.length){
-      if(y>240){ doc.addPage(); pdfHeader(doc,'Owner Portal'); pdfFooter(doc); y=32; }
-      y = pdfSectionTitle(doc, y, 'Riwayat Variation Order');
-      const voRows = voUntukOwnerPdf.map(function(v){ return [v.nomorVo, v.tanggal, v.deskripsiPerubahan, (v.nilaiPerubahan>=0?'+':'')+fmtRpPenuh(v.nilaiPerubahan)]; });
-      y = pdfTable(doc, y, [{label:'No. VO',w:1},{label:'Tanggal',w:1},{label:'Deskripsi',w:2.5},{label:'Nilai',w:1.5}], voRows, {onNewPage:function(d){ pdfHeader(d,'Owner Portal'); pdfFooter(d); }});
+    if(terminRows.length){
+      y = perlu(y, 30);
+      y = pdfSectionTitle(doc, y, 'Termin Pembayaran');
+      y = pdfTable(doc, y, [{label:'Termin',w:2},{label:'Milestone',w:3},{label:'Status',w:1.2}], terminRows, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32});
       y += 8;
     }
-    if(y>250){ doc.addPage(); pdfHeader(doc,'Owner Portal'); pdfFooter(doc); y=32; }
+    const voPdf = (state.variationOrders||[]).filter(function(v){ return v.status==='disetujui'||v.status==='selesai'; });
+    if(voPdf.length){
+      y = perlu(y, 30);
+      y = pdfSectionTitle(doc, y, 'Riwayat Variation Order');
+      const voRows = voPdf.map(function(v){ return [v.nomorVo, v.tanggal, v.deskripsiPerubahan, (v.nilaiPerubahan>=0?'+':'')+fmtRpPenuh(v.nilaiPerubahan)]; });
+      y = pdfTable(doc, y, [{label:'No. VO',w:1},{label:'Tanggal',w:1},{label:'Deskripsi',w:2.5},{label:'Nilai',w:1.5}], voRows, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32});
+      y += 8;
+    }
+    y = perlu(y, 24);
     y = pdfSectionTitle(doc, y, 'Status Kualitas Pekerjaan');
-    const punchTerbukaPdf = (state.punchList||[]).filter(function(p){ return p.status==='terbuka'||p.status==='dikerjakan'; });
+    const punch = (state.punchList||[]).filter(function(q){ return q.status==='terbuka'||q.status==='dikerjakan'; });
     doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, PDF.dark);
-    doc.text(punchTerbukaPdf.length ? ('Ada '+punchTerbukaPdf.length+' temuan kualitas yang masih dalam penyelesaian.') : 'Tidak ada temuan kualitas terbuka saat ini.', 12, y);
-    y += 10;
+    doc.text(punch.length ? ('Ada '+punch.length+' temuan kualitas yang masih dalam penyelesaian.') : 'Tidak ada temuan kualitas terbuka saat ini.', 12, y);
 
+    const np = doc.getNumberOfPages();
+    for(let i=1;i<=np;i++){
+      doc.setPage(i); doc.setDrawColor.apply(doc, PDF.lightGray); doc.setLineWidth(0.3); doc.line(12,H-12,W-12,H-12);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor.apply(doc, PDF.gray);
+      doc.text('PT Pratama Build & Construction — Laporan Kemajuan Proyek', 12, H-8);
+      doc.text('Halaman '+i+' dari '+np, W-12, H-8, {align:'right'});
+    }
     doc.save(fileNameFor('OwnerPortal'));
     catatDokumenPdfLog('Owner Portal', 'Ringkasan Owner Portal — '+today());
     notif('Owner Portal PDF berhasil dibuat — aman dikirim ke Owner (tanpa data internal)');
@@ -9645,7 +9698,7 @@ const kurvaTodayPlugin = { id:'todayLine', afterDatasetsDraw:function(chart){
   const x = chart.scales.x.getPixelForValue(pos), a = chart.chartArea, c = chart.ctx;
   c.save(); c.setLineDash([5,4]); c.strokeStyle='rgba(192,57,43,0.8)'; c.lineWidth=big?2:1.4;
   c.beginPath(); c.moveTo(x,a.top); c.lineTo(x,a.bottom); c.stroke(); c.setLineDash([]);
-  const t='Hari ini'; c.font='600 '+(big?14:10)+'px Segoe UI, Arial, sans-serif'; const w=c.measureText(t).width+(big?20:14), hh=big?24:17;
+  const t='Hari ini'; c.font='600 '+(big?20:10)+'px Segoe UI, Arial, sans-serif'; const w=c.measureText(t).width+(big?26:14), hh=big?32:17;
   c.fillStyle='#C0392B'; c.beginPath();
   if(c.roundRect){ c.roundRect(x-w/2,a.top-2,w,hh,hh/2); } else { c.rect(x-w/2,a.top-2,w,hh); }
   c.fill(); c.fillStyle='#fff'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(t,x,a.top-2+hh/2); c.restore();
@@ -9678,7 +9731,7 @@ const kurvaWhiteBg = { id:'whiteBg', beforeDraw:function(chart){ const c=chart.c
 function kurvaMainConfig(periode, dataChart, aktualPct, print){
   const hari = kurvaHariIni();
   const mulai = state.kurva.mulai ? new Date(state.kurva.mulai) : null;
-  const FS = print?15:11, TK = print?13:10;
+  const FS = print?21:11, TK = print?19:10;
   const n = dataChart.length;
   const aktual = kurvaAktualSeries(periode, dataChart);
   const labels = dataChart.map(function(d){ return String(d.label).replace('Minggu ','M').replace('Bulan ','B'); });
@@ -9745,7 +9798,7 @@ function kurvaMainConfig(periode, dataChart, aktualPct, print){
       { key:'ba', type:'bar', label:'Progres aktual / periode', data:pad(bobotAct), backgroundColor:'rgba(201,142,18,0.50)', borderRadius:3, yAxisID:'y2', order:5, categoryPercentage:0.9, barPercentage:0.9 }
     ]},
     options:{ responsive:!print, maintainAspectRatio:false, animation: print?false:undefined, devicePixelRatio: print?1.5:undefined,
-      interaction:{ mode:'index', intersect:false }, layout:{ padding:{ top:print?30:18, right:print?10:4 } },
+      interaction:{ mode:'index', intersect:false }, layout:{ padding:{ top:print?48:18, right:print?10:4 } },
       scales:{
         y:{ position:'left', min:0, max:100, ticks:{ stepSize:20, color:txt, font:{size:TK}, callback:function(v){ return v+'%'; } }, grid:{ color:grid }, border:{ display:false } },
         y2:{ position:'right', min:0, max:Math.ceil(maxB*3.4*10)/10, display:false, grid:{ drawOnChartArea:false } },
