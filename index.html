@@ -467,7 +467,11 @@ window.PBC_CONFIG = {
     for(var i=0;i<biner.length;i++) bytes[i]=biner.charCodeAt(i);
     return {mime:mime,bytes:bytes};
   }
+  /* Content-Type dari Storage = data TIDAK TEPERCAYA: hanya jenis yang dikenal yang dipakai, sisanya jadi octet-stream. */
+  var MIME_BOLEH=['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','application/pdf','text/plain','application/zip','application/msword','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/octet-stream'];
+  function mimeAman(m){ m=String(m||'').split(';')[0].trim().toLowerCase(); return MIME_BOLEH.indexOf(m)>-1?m:'application/octet-stream'; }
   function binerKeDataUrl(bytes,mime){
+    mime=mimeAman(mime);
     var biner='',CHUNK=8192;
     for(var i=0;i<bytes.length;i+=CHUNK) biner+=String.fromCharCode.apply(null,bytes.subarray(i,i+CHUNK));
     return 'data:'+mime+';base64,'+btoa(biner);
@@ -476,18 +480,70 @@ window.PBC_CONFIG = {
     var parsed=dataUrlKeBiner(dataUrl);
     try{
       var r=await fetch(STORAGE_BASE+'/'+STORAGE_BUCKET+'/'+encodeURIComponent(id),{method:'POST',headers:PBC_AUTH.headers({'Content-Type':parsed.mime,'x-upsert':'true'}),body:parsed.bytes});
-      if(r.ok){tampilkanStatusKoneksi(true);return{key:'pbc_doc:'+id,value:dataUrl,shared:false};}
+      if(r.ok){tampilkanStatusKoneksi(true);return{key:'pbc_doc:'+id,value:dataUrl,shared:false,tersimpanServer:true};}
     }catch(e){}
     tampilkanStatusKoneksi(false); await lsSet('pbc_doc:'+id,dataUrl);
-    return{key:'pbc_doc:'+id,value:dataUrl,shared:false};
+    return{key:'pbc_doc:'+id,value:dataUrl,shared:false,tersimpanServer:false}; /* hanya di HP ini, BELUM di server */
   }
+  /* hanyaLokal:true = isi ini dibaca dari salinan di perangkat (belum terbukti ada di server). Server 404 TIDAK lagi membuat
+     salinan lokal yang belum terunggah jadi tak terbaca. */
   async function downloadFile(id){
+    var key='pbc_doc:'+id;
     try{
       var r=await fetch(STORAGE_BASE+(PBC_AUTH.sesi()?'/authenticated/':'/public/')+STORAGE_BUCKET+'/'+encodeURIComponent(id),{headers:PBC_AUTH.headers()});
-      if(r.status===404||r.status===400){tampilkanStatusKoneksi(true);return null;}
-      if(r.ok){tampilkanStatusKoneksi(true);var mime=r.headers.get('content-type')||'application/octet-stream',buf=await r.arrayBuffer();return{key:'pbc_doc:'+id,value:binerKeDataUrl(new Uint8Array(buf),mime),shared:false};}
+      if(r.status===404||r.status===400){tampilkanStatusKoneksi(true);var lokal=await lsGet(key);return lokal?{key:key,value:lokal,shared:false,hanyaLokal:true}:null;}
+      if(r.ok){tampilkanStatusKoneksi(true);var mime=r.headers.get('content-type')||'application/octet-stream',buf=await r.arrayBuffer();return{key:key,value:binerKeDataUrl(new Uint8Array(buf),mime),shared:false,hanyaLokal:false};}
     }catch(e){}
-    tampilkanStatusKoneksi(false);var v=await lsGet('pbc_doc:'+id);return v?{key:'pbc_doc:'+id,value:v,shared:false}:null;
+    tampilkanStatusKoneksi(false);var v=await lsGet(key);return v?{key:key,value:v,shared:false,hanyaLokal:true}:null;
+  }
+  /* ---- Pengiriman ulang file yang gagal terunggah (salinan lokal 'pbc_doc:*') ----
+     Aman & tanpa duplikasi: id objek tetap (upsert), cek dulu apakah sudah ada di server, unggah, UNDUH LAGI dan bandingkan hash;
+     salinan lokal baru dihapus setelah server terverifikasi sama persis. Objek di server yang isinya BERBEDA tidak pernah ditimpa. */
+  async function hashBiner(bytes){
+    try{ if(window.crypto&&crypto.subtle){ var h=await crypto.subtle.digest('SHA-256',bytes); return 'sha256:'+Array.prototype.map.call(new Uint8Array(h),function(b){return ('0'+b.toString(16)).slice(-2);}).join(''); } }catch(e){}
+    var x=2166136261; for(var i=0;i<bytes.length;i++){ x^=bytes[i]; x=Math.imul(x,16777619)>>>0; } return 'fnv:'+bytes.length+':'+x.toString(16);
+  }
+  async function ambilDiServer(id){
+    try{
+      var r=await fetch(STORAGE_BASE+'/authenticated/'+STORAGE_BUCKET+'/'+encodeURIComponent(id),{headers:PBC_AUTH.headers()});
+      if(r.status===404||r.status===400) return {status:'tidakada'};
+      if(r.ok) return {status:'ok',bytes:new Uint8Array(await r.arrayBuffer())};
+    }catch(e){}
+    return {status:'galat'};
+  }
+  async function hapusLokalBilaSama(key,nilai){ var skrg=await lsGet(key); if(skrg===nilai) await lsDel(key); }
+  async function tertunda(){ var ks=await lsList('pbc_doc:'); return ks.map(idDariKeyDokumen); }
+  var _kirimUlangJalan=false;
+  async function kirimUlangTertunda(maks){
+    var hasil={dicoba:0,berhasil:[],gagal:[],konflik:[],sedangJalan:false,tanpaSesi:false};
+    if(_kirimUlangJalan){hasil.sedangJalan=true;return hasil;}
+    if(!PBC_AUTH.sesi()){hasil.tanpaSesi=true;return hasil;}
+    _kirimUlangJalan=true;
+    try{
+      var ids=await tertunda(); maks=maks||25;
+      for(var n=0;n<ids.length&&hasil.dicoba<maks;n++){
+        var id=ids[n],key='pbc_doc:'+id,lokal=await lsGet(key); if(!lokal) continue;
+        var parsed; try{parsed=dataUrlKeBiner(lokal);}catch(e){hasil.gagal.push(id);continue;}
+        hasil.dicoba++;
+        try{
+          var hLokal=await hashBiner(parsed.bytes);
+          var ada=await ambilDiServer(id);
+          if(ada.status==='ok'){
+            if((await hashBiner(ada.bytes))===hLokal){await hapusLokalBilaSama(key,lokal);hasil.berhasil.push(id);}
+            else hasil.konflik.push(id);            /* server punya isi lain: JANGAN menimpa, salinan lokal dipertahankan */
+            continue;
+          }
+          if(ada.status!=='tidakada'){hasil.gagal.push(id);continue;}
+          var r=await fetch(STORAGE_BASE+'/'+STORAGE_BUCKET+'/'+encodeURIComponent(id),{method:'POST',headers:PBC_AUTH.headers({'Content-Type':parsed.mime,'x-upsert':'true'}),body:parsed.bytes});
+          if(!r.ok){hasil.gagal.push(id);continue;}
+          var v=await ambilDiServer(id);
+          if(v.status!=='ok'||(await hashBiner(v.bytes))!==hLokal){hasil.gagal.push(id);continue;}   /* belum terbukti sama: salinan lokal TETAP */
+          if(!(await lsGet(key))){ try{await fetch(STORAGE_BASE+'/'+STORAGE_BUCKET+'/'+encodeURIComponent(id),{method:'DELETE',headers:PBC_AUTH.headers()});}catch(e){} continue; } /* dihapus pengguna saat berjalan: jangan hidupkan lagi */
+          await hapusLokalBilaSama(key,lokal); hasil.berhasil.push(id);
+        }catch(e){hasil.gagal.push(id);}
+      }
+    }finally{_kirimUlangJalan=false;}
+    return hasil;
   }
   async function deleteFile(id){
     try{await fetch(STORAGE_BASE+'/'+STORAGE_BUCKET+'/'+encodeURIComponent(id),{method:'DELETE',headers:PBC_AUTH.headers()});}catch(e){}
@@ -527,7 +583,7 @@ window.PBC_CONFIG = {
     tampilkanStatusKoneksi(false);return{keys:await lsList(prefix),prefix:prefix,shared:!!shared};
   }
 
-  window.storage = { get: get, set: set, delete: del, list: list };
+  window.storage = { get: get, set: set, delete: del, list: list, tertunda: tertunda, kirimUlangTertunda: kirimUlangTertunda };
   window.addEventListener('load', function(){
     setTimeout(function(){
       fetch(REST_BASE+'?select=key&limit=1',{headers:AH()}).then(function(r){tampilkanStatusKoneksi(r.ok);}).catch(function(){tampilkanStatusKoneksi(false);});
@@ -2210,38 +2266,149 @@ async function sbRequest(path, options){
   return text ? JSON.parse(text) : null;
 }
 
+/* ===========================================================================
+   T2/T3/T4 -- PENGAMAN KONSISTENSI DATA PROYEK (cabang dev; belum deploy)
+   Yang ditutup di sini:
+   - ID divisi & item adalah primary key GLOBAL di tabel. Restore backup memakai ID lama -> bentrok dengan
+     proyek asal -> penulisan tabel ditolak -> tabel kosong padahal blob lengkap.
+   - Loader dulu mengutamakan tabel (kosong / tidak lengkap) dan membuang blob yang lengkap, lalu menyimpannya
+     kembali sebagai blob yang sudah miskin (item kosong, relasi Kurva S dan data keuangan hilang).
+   - Sinkronisasi "hapus semua lalu tulis ulang" bisa meninggalkan tabel kosong bila gagal di tengah.
+   Aturan baru: blob proyek (pbc_project:ID) adalah catatan LENGKAP dan selalu ditulis lebih dulu; tabel hanya
+   salinan untuk daftar/laporan. Tabel tidak pernah dipakai untuk menimpa blob yang masih berisi.
+   =========================================================================== */
+const KUNCI_DATA_PROYEK = ['divisi','items','laporan','termin','kurva','analisaPekerjaan','materialRequests','approvalLog',
+  'purchaseOrders','progressLog','opnameList','pekerja','payrollLog','namaEn','variationOrders','dokumenPdfLog',
+  'inspections','punchList','mrpDraft','materialReceiving','materialUsageLog','absensi'];
+const _idSudahDicek = {};
+
+/* Ganti ID lama -> ID baru di seluruh objek (nilai teks DAN nama kunci); selain itu tidak diubah. */
+function gantiIdDalam(nilai, peta){
+  if(typeof nilai === 'string') return Object.prototype.hasOwnProperty.call(peta, nilai) ? peta[nilai] : nilai;
+  if(Array.isArray(nilai)) return nilai.map(function(v){ return gantiIdDalam(v, peta); });
+  if(nilai && typeof nilai === 'object'){
+    const o = {};
+    Object.keys(nilai).forEach(function(k){
+      const kb = Object.prototype.hasOwnProperty.call(peta, k) ? peta[k] : k;
+      o[kb] = gantiIdDalam(nilai[k], peta);
+    });
+    return o;
+  }
+  return nilai;
+}
+function buatPetaIdBaru(daftarId){
+  const peta = {}, dipakai = {};
+  daftarId.forEach(function(id){ dipakai[id] = true; });
+  daftarId.forEach(function(id){
+    let n; do { n = uid(); } while(dipakai[n]);
+    dipakai[n] = true; peta[id] = n;
+  });
+  return peta;
+}
+function terapkanPetaIdKeState(peta){
+  KUNCI_DATA_PROYEK.forEach(function(k){ if(state[k] !== undefined) state[k] = gantiIdDalam(state[k], peta); });
+}
+/* Dipakai saat restore backup: SEMUA id divisi & item diberi nomor baru, referensinya ikut diganti di semua modul. */
+function ubahSemuaIdDivisiItem(){
+  const ids = (state.divisi||[]).map(function(d){ return d.id; }).concat((state.items||[]).map(function(i){ return i.id; }));
+  terapkanPetaIdKeState(buatPetaIdBaru(ids));
+}
+/* Gabungkan blob (catatan lengkap) dengan salinan tabel. Blob menang; tabel hanya mengisi yang kosong. */
+function rekonsiliasiProyek(blob, tabel){
+  const adaBlob = !!(blob && blob.proyek);
+  if(!adaBlob && !tabel) return null;
+  if(!adaBlob) return { proyek: tabel.proyek, divisi: tabel.divisi||[], items: tabel.items||[], sumber:'tabel', tidakSinkron:false };
+  const bItems = Array.isArray(blob.items) ? blob.items : [], bDiv = Array.isArray(blob.divisi) ? blob.divisi : [];
+  if(!tabel) return { proyek: blob.proyek, divisi: bDiv, items: bItems, sumber:'blob', tidakSinkron:false };
+  const tItems = tabel.items||[], tDiv = tabel.divisi||[];
+  const proyek = Object.assign({}, tabel.proyek, blob.proyek);
+  if(proyek.status === undefined || proyek.status === null) proyek.status = tabel.proyek.status;
+  proyek.voCounterTerakhir = Math.max(Number(blob.proyek.voCounterTerakhir)||0, Number(tabel.proyek.voCounterTerakhir)||0);
+  return {
+    proyek: proyek,
+    divisi: bDiv.length ? bDiv : tDiv,
+    items: bItems.length ? bItems : tItems,
+    sumber: 'blob+tabel',
+    tidakSinkron: (bItems.length !== tItems.length) || (bDiv.length !== tDiv.length)
+  };
+}
+/* ID divisi/item yang SUDAH dimiliki proyek lain (menolak menimpa/ merebut baris proyek lain). */
+async function ambilIdBentrok(tabel, ids, pid){
+  const hasil = [];
+  for(let i=0; i<ids.length; i+=80){
+    const bagian = ids.slice(i, i+80).map(encodeURIComponent).join(',');
+    const rows = await sbRequest(tabel+'?select=id,project_id&id=in.('+bagian+')', { method:'GET' });
+    (rows||[]).forEach(function(r){ if(r.project_id !== pid) hasil.push(r.id); });
+  }
+  return hasil;
+}
+async function temukanBentrokId(pid, divisiList, items){
+  return {
+    divisi: await ambilIdBentrok('divisi', (divisiList||[]).map(function(d){ return d.id; }), pid),
+    items:  await ambilIdBentrok('boq_items', (items||[]).map(function(i){ return i.id; }), pid)
+  };
+}
+async function upsertBertahap(tabel, baris){
+  for(let i=0; i<baris.length; i+=100){
+    await sbRequest(tabel+'?on_conflict=id', { method:'POST',
+      headers:{'Prefer':'resolution=merge-duplicates,return=minimal'}, body: JSON.stringify(baris.slice(i, i+100)) });
+  }
+}
+/* Buang baris tabel milik proyek ini yang sudah tidak ada di data. Hanya SETELAH semua penulisan berhasil. */
+async function hapusBarisBasi(tabel, pid, idsSekarang){
+  const ada = await sbRequest(tabel+'?select=id&project_id=eq.'+encodeURIComponent(pid), { method:'GET' });
+  const set = {}; idsSekarang.forEach(function(i){ set[i] = true; });
+  const basi = (ada||[]).map(function(r){ return r.id; }).filter(function(i){ return !set[i]; });
+  for(let i=0; i<basi.length; i+=80){
+    const bagian = basi.slice(i, i+80).map(encodeURIComponent).join(',');
+    await sbRequest(tabel+'?project_id=eq.'+encodeURIComponent(pid)+'&id=in.('+bagian+')', { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+  }
+}
+
 async function syncProjectCoreToSupabase(){
   if(!state.proyek || !state.proyek.id) return;
+  const pid = state.proyek.id, proyek = state.proyek, divisiList = state.divisi||[], items = state.items||[];
   try {
+    /* 0) Pastikan ID divisi/item tidak milik proyek lain. Kalau bentrok: beri ID baru di data (lalu simpan ulang)
+          dan JANGAN menulis apa pun ke tabel pada putaran ini -- supaya baris proyek lain tidak pernah direbut. */
+    if(!_idSudahDicek[pid]){
+      const b = await temukanBentrokId(pid, divisiList, items);
+      if(!state.proyek || state.proyek.id !== pid) return;
+      if(b.divisi.length || b.items.length){
+        console.warn('[PBC] ID divisi/item bentrok dengan proyek lain; diberi ID baru:', b.divisi.length, 'divisi,', b.items.length, 'item');
+        terapkanPetaIdKeState(buatPetaIdBaru(b.divisi.concat(b.items)));
+        _idSudahDicek[pid] = true;
+        debounceSave();
+        return;
+      }
+      _idSudahDicek[pid] = true;
+    }
+    /* 1) proyek */
     await sbRequest('projects?on_conflict=id', {
       method: 'POST', headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify([{
-        id: state.proyek.id, nama: state.proyek.nama, lokasi: state.proyek.lokasi||null,
-        owner: state.proyek.owner||null, tanggal_mulai: state.proyek.mulai||null,
-        durasi_minggu: state.proyek.durasi||24, status: state.proyek.status||'aktif',
-        kontrak_id: state.proyek.kontrakId||null, spk_id: state.proyek.spkId||null,
-        vo_counter_terakhir: state.proyek.voCounterTerakhir||0, updated_at: new Date().toISOString()
+        id: pid, nama: proyek.nama, lokasi: proyek.lokasi||null,
+        owner: proyek.owner||null, tanggal_mulai: proyek.mulai||null,
+        durasi_minggu: proyek.durasi||24, status: proyek.status||'aktif',
+        kontrak_id: proyek.kontrakId||null, spk_id: proyek.spkId||null,
+        vo_counter_terakhir: proyek.voCounterTerakhir||0, updated_at: new Date().toISOString()
       }])
     });
-    /* divisi & item: hapus semua punya proyek ini lalu tulis ulang penuh — sederhana & aman
-       untuk skala sekarang, tidak perlu logika "bandingkan mana yang berubah" yang rumit */
-    await sbRequest('divisi?project_id=eq.'+encodeURIComponent(state.proyek.id), { method:'DELETE', headers:{'Prefer':'return=minimal'} });
-    if(state.divisi && state.divisi.length){
-      await sbRequest('divisi', { method:'POST', headers:{'Prefer':'return=minimal'},
-        body: JSON.stringify(state.divisi.map(function(d,idx){ return { id:d.id, project_id: state.proyek.id, nama:d.nama, urutan: idx }; })) });
-    }
-    await sbRequest('boq_items?project_id=eq.'+encodeURIComponent(state.proyek.id), { method:'DELETE', headers:{'Prefer':'return=minimal'} });
-    if(state.items && state.items.length){
-      await sbRequest('boq_items', { method:'POST', headers:{'Prefer':'return=minimal'},
-        body: JSON.stringify(state.items.map(function(it){
-          return { id: it.id, project_id: state.proyek.id, divisi_id: it.divisiId||null, nama: it.nama,
-                    satuan: it.sat, volume: it.vol||0, harga_satuan: it.harga||0, durasi_hari: it.durasi||7, terpasang: it.terpasang||0 };
-        })) });
-    }
+    /* 2) divisi & item: TULIS (upsert) dulu, baru buang yang sudah tidak ada. Kalau gagal di tengah, tabel
+          tidak pernah lebih kosong daripada sebelumnya (dulu: hapus semua dulu -> bisa kosong). */
+    const barisDivisi = divisiList.map(function(d,idx){ return { id:d.id, project_id: pid, nama:d.nama, urutan: idx }; });
+    await upsertBertahap('divisi', barisDivisi);
+    const barisItem = items.map(function(it){
+      return { id: it.id, project_id: pid, divisi_id: it.divisiId||null, nama: it.nama,
+               satuan: it.sat, volume: it.vol||0, harga_satuan: it.harga||0, durasi_hari: it.durasi||7, terpasang: it.terpasang||0 };
+    });
+    await upsertBertahap('boq_items', barisItem);
+    await hapusBarisBasi('boq_items', pid, barisItem.map(function(r){ return r.id; }));
+    await hapusBarisBasi('divisi', pid, barisDivisi.map(function(r){ return r.id; }));
     supabaseTersedia = true;
     setSupabaseBadge(true);
   } catch(e){
-    console.warn('[PBC] Gagal sync Proyek/BOQ ke Supabase (data tetap aman di penyimpanan cadangan):', e);
+    console.warn('[PBC] Gagal sync Proyek/BOQ ke Supabase (data lengkap tetap aman di penyimpanan proyek):', e);
     supabaseTersedia = false;
     setSupabaseBadge(false);
   }
@@ -2279,8 +2446,12 @@ async function fetchProjectCoreFromSupabase(id){
   }
 }
 async function deleteProjectFromSupabase(id){
-  try { await sbRequest('projects?id=eq.'+encodeURIComponent(id), { method:'DELETE', headers:{'Prefer':'return=minimal'} }); }
-  catch(e){ console.warn('[PBC] Gagal hapus proyek dari Supabase:', e); }
+  /* true HANYA bila barisnya benar-benar sudah tidak ada (izin RLS yang menolak DELETE tidak menimbulkan error, jadi dicek) */
+  try {
+    await sbRequest('projects?id=eq.'+encodeURIComponent(id), { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+    const sisa = await sbRequest('projects?select=id&id=eq.'+encodeURIComponent(id), { method:'GET' });
+    return !(sisa && sisa.length);
+  } catch(e){ console.warn('[PBC] Gagal hapus proyek dari Supabase:', e); return false; }
 }
 function setSupabaseBadge(ok){
   const el = document.getElementById('supabaseBadge');
@@ -2304,7 +2475,8 @@ async function saveProjectNow() {
     pekerja: state.pekerja, payrollLog: state.payrollLog, payrollSettings: state.payrollSettings,
     namaEn: state.namaEn||{}, variationOrders: state.variationOrders, dokumenPdfLog: state.dokumenPdfLog,
     masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan,
-    inspections: state.inspections, punchList: state.punchList
+    inspections: state.inspections, punchList: state.punchList,
+    fotoHarian: fotoHarianRingkas() /* hanya referensi {docId,uploadedAt,label}; gambar tetap di pbc_doc:ID */
   });
   /* Data utama proyek — paling kritis. Dicoba 2x (dengan jeda sebentar) sebelum benar-benar
      mengalah & memberi tahu user, supaya kegagalan sesaat/transient tidak langsung jadi alarm. */
@@ -2346,18 +2518,44 @@ async function saveProjectNow() {
   syncProjectCoreToSupabase(); /* tidak ditunggu (await) supaya tidak memperlambat tampilan -- kalau gagal, cuma badge status yang berubah, data lokal sudah aman duluan */
 }
 
-async function getIndex() {
+/* T3: bedakan "indeks memang kosong" dari "indeks gagal dibaca/rusak". Penulisan indeks DILARANG bila gagal dibaca. */
+async function getIndexAman() {
   try {
     const r = await window.storage.get('pbc_index', false);
-    return r && r.value ? JSON.parse(r.value) : [];
-  } catch(e) { return []; }
+    if(!r || !r.value) return { ok:true, list:[] };
+    const idx = JSON.parse(r.value);
+    if(!Array.isArray(idx)) return { ok:false, list:[] };
+    return { ok:true, list: idx };
+  } catch(e) { return { ok:false, list:[] }; }
 }
+async function getIndex() { return (await getIndexAman()).list; }
 
 async function updateIndex(id, nama) {
-  let idx = await getIndex();
-  idx = idx.filter(function(p){ return p.id!==id; });
+  const g = await getIndexAman();
+  if(!g.ok) throw new Error('indeks proyek tidak terbaca; tidak ditimpa');
+  const idx = g.list.filter(function(p){ return p.id!==id; });
   idx.unshift({id:id, nama:nama, updatedAt:Date.now()});
   await window.storage.set('pbc_index', JSON.stringify(idx), false);
+}
+/* Daftar proyek yang aman: tabel + indeks, tanpa entri yatim (indeks yang datanya tidak ada). Entri yatim TIDAK dihapus. */
+async function daftarProyekAman(){
+  const dariTabel = await fetchProjectListFromSupabase();
+  const g = await getIndexAman();
+  let kunciAda = null;
+  try {
+    const l = await window.storage.list('pbc_project:', false); kunciAda = {};
+    (l.keys||[]).forEach(function(k){ kunciAda[k.slice('pbc_project:'.length)] = true; });
+  } catch(e){}
+  const daftar = [], terlihat = {}, yatim = [];
+  (dariTabel||[]).forEach(function(p){ daftar.push(p); terlihat[p.id] = true; });
+  g.list.forEach(function(e){
+    if(!e || !e.id || terlihat[e.id]) return;
+    if(kunciAda && !kunciAda[e.id]){ yatim.push(e.id); return; }
+    daftar.push({ id:e.id, nama:e.nama, updatedAt:e.updatedAt }); terlihat[e.id] = true;
+  });
+  daftar.sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); });
+  if(yatim.length) console.warn('[PBC] Entri indeks tanpa data proyek (tidak dihapus):', yatim);
+  return { daftar: daftar, yatim: yatim, indeksOk: g.ok, dariTabel: dariTabel !== null };
 }
 
 async function loadProjectById(id) {
@@ -2373,12 +2571,14 @@ async function loadProjectById(id) {
     /* Proyek + Divisi + BOQ Item: UTAMAKAN Supabase (data sungguhan, sama di semua perangkat).
        Kalau Supabase tidak punya/gagal, baru pakai data cadangan lokal di atas. */
     const dariSupabase = await fetchProjectCoreFromSupabase(id);
-    if(dariSupabase){
-      state.proyek = dariSupabase.proyek; state.divisi = dariSupabase.divisi; state.items = dariSupabase.items;
-    } else if(data.proyek){
-      state.proyek = data.proyek; state.divisi = data.divisi||[]; state.items = data.items||[];
-    } else {
-      notif('Data proyek tidak ditemukan','var(--red)'); return;
+    delete _idSudahDicek[id];
+    /* T2: blob proyek = catatan lengkap (item+relasi Kurva S+keuangan). Tabel tidak boleh menimpanya bila kosong/kurang. */
+    const gabungan = rekonsiliasiProyek(data, dariSupabase);
+    if(!gabungan){ notif('Data proyek tidak ditemukan','var(--red)'); return; }
+    state.proyek = gabungan.proyek; state.divisi = gabungan.divisi; state.items = gabungan.items;
+    if(gabungan.tidakSinkron){
+      console.warn('[PBC] Tabel BOQ di server tidak sama dengan data proyek; memakai data proyek yang lengkap.', id);
+      setTimeout(function(){ notif('Tabel BOQ di server belum sinkron — data lengkap dipakai dari penyimpanan proyek, akan disinkronkan saat disimpan','var(--orange)'); }, 600);
     }
     state.items = (state.items||[]).map(function(it){
       if(it.terpasang===undefined){ it.terpasang = ((it.progres||0)/100)*(it.vol||0); }
@@ -2390,6 +2590,7 @@ async function loadProjectById(id) {
     state.termin = data.termin||[]; state.kurva = data.kurva||{mulai:null,durasi:24,weeks:[]};
     state.estimasiFaktor = data.estimasiFaktor || {cuaca:1.15, material:1.10, tenagaKerja:1.0};
     state.dokumen = data.dokumen || [];
+    state.fotoHarian = pulihkanFotoHarian(data.fotoHarian, state.dokumen); /* T5: foto harian kembali per tanggal; foto lama dipetakan dari state.dokumen */
     state.suppliers = data.suppliers || [];
     state.materials = data.materials || [];
     state.materialKategori = data.materialKategori || [];
@@ -2429,6 +2630,7 @@ async function loadProjectById(id) {
     try { await window.storage.set('pbc_last', id, false); } catch(e){ /* abaikan kalau tidak tersedia */ }
     renderBoq(); renderKurva(); renderProgress(); renderTermin(); refreshDashboard();
     setSaveStatus('✓ Dimuat');
+    setTimeout(function(){ if(typeof jalankanKirimUlangFoto==='function') jalankanKirimUlangFoto(); }, 1500);
     hideModal('modalProyekList');
     notif('Proyek "'+state.proyek.nama+'" dimuat!'+(dariSupabase?' (dari Supabase)':' (dari cadangan lokal)'));
   } catch(e) {
@@ -2449,18 +2651,13 @@ async function ambilRingkasSatuProyek(idxEntry){
   const id = idxEntry.id;
   let proyek=null, items=[], termin=[];
   const dariSupabase = await fetchProjectCoreFromSupabase(id);
-  if(dariSupabase){
-    proyek = dariSupabase.proyek; items = dariSupabase.items;
-  }
+  let dataBlob = null;
   try {
     const r = await window.storage.get('pbc_project:'+id, false);
-    if(r && r.value){
-      const data = JSON.parse(r.value);
-      if(!proyek) proyek = data.proyek;
-      if(!items.length) items = data.items||[];
-      termin = data.termin||[];
-    }
+    if(r && r.value){ dataBlob = JSON.parse(r.value); termin = dataBlob.termin||[]; }
   } catch(err){ /* cadangan lokal tidak tersedia, lanjut pakai apa yang ada dari Supabase saja */ }
+  const gab = rekonsiliasiProyek(dataBlob, dariSupabase);
+  if(gab){ proyek = gab.proyek; items = gab.items; }
   if(!proyek) return null;
 
   const nilaiKontrak = items.reduce(function(s,it){ return s+((it.vol||0)*(it.harga||0)); },0);
@@ -2483,7 +2680,7 @@ async function renderSemuaProyek(){
   const kpiEl = document.getElementById('semuaProyekKpi');
   listEl.innerHTML = '<div class="empty">⏳ Memuat ringkasan seluruh proyek, mohon tunggu...</div>';
   try {
-    const idx = await getIndex();
+    const idx = (await daftarProyekAman()).daftar;
     if(!idx.length){
       listEl.innerHTML = '<div class="empty"><div class="empty-icon">🏗</div>Belum ada proyek. Buat proyek baru dulu dari tombol "+ Proyek Baru".</div>';
       return;
@@ -2533,7 +2730,9 @@ async function renderSemuaProyek(){
 
 async function deleteProject(id) {
   try {
-    await deleteProjectFromSupabase(id); /* hapus juga dari Supabase, supaya tidak tetap muncul di perangkat lain */
+    /* 1) Tabel dulu, dan diverifikasi. Kalau server menolak (izin/koneksi), proyek TIDAK dihapus sebagian. */
+    const okServer = await deleteProjectFromSupabase(id);
+    if(!okServer){ notif('Gagal menghapus proyek di server (izin atau koneksi) — proyek TIDAK dihapus','var(--red)'); return; }
     /* Hapus juga file dokumen terkait (tersimpan di key terpisah) agar tidak menyisakan data sampah di storage */
     try {
       const rDoc = await window.storage.get('pbc_project:'+id, false);
@@ -2545,18 +2744,25 @@ async function deleteProject(id) {
         }
       }
     } catch(e){ /* tetap lanjutkan hapus proyek meski gagal membaca daftar dokumen */ }
+    /* 2) Indeks DULU (kalau terbaca), baru blob: kegagalan di tengah meninggalkan blob tanpa indeks (data tetap ada),
+          bukan indeks tanpa data (entri yatim). */
+    const g = await getIndexAman();
+    if(g.ok){
+      await window.storage.set('pbc_index', JSON.stringify(g.list.filter(function(p){ return p.id!==id; })), false);
+    } else {
+      console.warn('[PBC] Indeks proyek tidak terbaca saat hapus; indeks tidak diubah');
+    }
     await window.storage.delete('pbc_project:'+id, false);
+    const sisaBlob = await window.storage.get('pbc_project:'+id, false);
+    if(sisaBlob && sisaBlob.value){ notif('Proyek terhapus dari daftar, tetapi data utamanya masih ada di server (izin?) — hubungi Direktur','var(--red)'); return; }
     try { await window.storage.delete('pbc_mrp:'+id, false); } catch(e){ /* abaikan jika tidak ada */ }
     try { await window.storage.delete('pbc_receiving:'+id, false); } catch(e){ /* abaikan jika tidak ada */ }
     try { await window.storage.delete('pbc_usage:'+id, false); } catch(e){ /* abaikan jika tidak ada */ }
     try { await window.storage.delete('pbc_absensi:'+id, false); } catch(e){ /* abaikan jika tidak ada */ }
-    let idx = await getIndex();
-    idx = idx.filter(function(p){ return p.id!==id; });
-    await window.storage.set('pbc_index', JSON.stringify(idx), false);
     if(state.proyek && state.proyek.id===id) {
       state.proyek=null; state.divisi=[]; state.items=[]; state.laporan=[]; state.termin=[];
       state.kurva={mulai:null,durasi:24,weeks:[]};
-      state.dokumen=[]; state.suppliers=[]; state.materials=[]; state.materialKategori=[]; state.materialSubkategori=[]; state.analisaPekerjaan=[]; state.mrpDraft=[]; state.materialRequests=[]; state.approvalLog=[]; state.materialReceiving=[]; state.materialUsageLog=[]; state.progressLog=[]; state.opnameList=[]; state.purchaseOrders=[]; state.pekerja=[]; state.absensi=[]; state.payrollLog=[]; state.payrollSettings={siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders=[]; state.dokumenPdfLog=[]; state.masaGaransi=null; state.retensiPencairan=[]; state.inspections=[]; state.punchList=[];
+      state.dokumen=[]; state.fotoHarian={}; state.suppliers=[]; state.materials=[]; state.materialKategori=[]; state.materialSubkategori=[]; state.analisaPekerjaan=[]; state.mrpDraft=[]; state.materialRequests=[]; state.approvalLog=[]; state.materialReceiving=[]; state.materialUsageLog=[]; state.progressLog=[]; state.opnameList=[]; state.purchaseOrders=[]; state.pekerja=[]; state.absensi=[]; state.payrollLog=[]; state.payrollSettings={siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders=[]; state.dokumenPdfLog=[]; state.masaGaransi=null; state.retensiPencairan=[]; state.inspections=[]; state.punchList=[];
       document.getElementById('topProject').textContent='— Pilih Proyek —';
       renderBoq(); renderKurva(); renderProgress(); renderTermin(); refreshDashboard();
     }
@@ -2566,8 +2772,7 @@ async function deleteProject(id) {
 }
 
 async function openProjectList() {
-  const dariSupabase = await fetchProjectListFromSupabase();
-  const idx = dariSupabase!==null ? dariSupabase : await getIndex();
+  const idx = (await daftarProyekAman()).daftar;
   const body = document.getElementById('projectListBody');
   if(!idx.length){ body.innerHTML = '<div class="empty"><div class="empty-icon">📂</div>Belum ada proyek tersimpan</div>'; }
   else {
@@ -4779,7 +4984,7 @@ async function convertProposalToProject(){
   state.divisi = newDivisi;
   state.items = newItems;
   state.laporan = []; state.termin = []; state.kurva = { mulai:null, durasi:24, weeks:[] }; state.estimasiFaktor = 1;
-  state.dokumen = []; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = [];
+  state.dokumen = []; state.fotoHarian = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = [];
   state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = [];
   state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
 
@@ -4801,18 +5006,26 @@ async function exportBackupJSON(){
   if(!state.proyek){ notif('Buat/pilih proyek terlebih dahulu sebelum backup','var(--red)'); return; }
   notif('Menyiapkan file backup, mohon tunggu...','var(--gold)');
   try {
-    const dokumenBlobs = [];
-    for(const d of (state.dokumen||[])){
-      try {
-        const r = await window.storage.get('pbc_doc:'+d.id, false);
-        if(r && r.value) dokumenBlobs.push({ id: d.id, content: r.value });
-      } catch(e){ console.warn('[PBC] Gagal ambil isi dokumen untuk backup:', d.id, e); }
+    /* Semua file yang dirujuk proyek: dokumen, foto harian, foto punch list, foto penerimaan material.
+       Yang tidak bisa diambil isinya DICATAT dan membuat backup dinyatakan TIDAK lengkap (tidak diam-diam dilewati). */
+    const dokumenBlobs = [], tidakTerekspor = [], hanyaDiPerangkat = [];
+    for(const it of kumpulkanIdFotoDokumen()){
+      let berhasil = false, alasan = 'isi file tidak ditemukan (tidak ada di server maupun di perangkat ini)';
+      if(!idDokAman(it.id)) alasan = 'id file tidak valid';
+      else {
+        try {
+          const r = await window.storage.get('pbc_doc:'+it.id, false);
+          if(r && r.value){ dokumenBlobs.push({ id: it.id, content: r.value }); berhasil = true; if(r.hanyaLokal) hanyaDiPerangkat.push(it.id); }
+        } catch(e){ alasan = 'gagal membaca: '+((e && e.message) || e); console.warn('[PBC] Gagal ambil isi dokumen untuk backup:', it.id, e); }
+      }
+      if(!berhasil) tidakTerekspor.push({ id: it.id, namaFile: it.namaFile || null, sumber: it.sumber, alasan: alasan });
     }
     const payload = {
       _backupVersion: 1, _appName: 'PBC Sistem Terpadu', _exportedAt: new Date().toISOString(), _proyekNama: state.proyek.nama,
       proyek: state.proyek, divisi: state.divisi, items: state.items,
       laporan: state.laporan, termin: state.termin, kurva: state.kurva, estimasiFaktor: state.estimasiFaktor,
-      dokumen: state.dokumen, dokumenBlobs: dokumenBlobs,
+      dokumen: state.dokumen, dokumenBlobs: dokumenBlobs, fotoHarian: fotoHarianRingkas(),
+      _lengkap: tidakTerekspor.length===0, _dokumenTidakTerekspor: tidakTerekspor, _fotoBelumDiServer: hanyaDiPerangkat,
       suppliers: state.suppliers, materials: state.materials, materialKategori: state.materialKategori, materialSubkategori: state.materialSubkategori,
       analisaPekerjaan: state.analisaPekerjaan, materialRequests: state.materialRequests, approvalLog: state.approvalLog,
       purchaseOrders: state.purchaseOrders, progressLog: state.progressLog, opnameList: state.opnameList || [],
@@ -4830,7 +5043,9 @@ async function exportBackupJSON(){
     a.href = url; a.download = 'PBC_Backup_'+safeName+'_'+today()+'.json';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    notif('Backup berhasil diunduh — '+dokumenBlobs.length+' dokumen ikut tersimpan di dalamnya');
+    if(tidakTerekspor.length) notif('Backup TIDAK lengkap: '+tidakTerekspor.length+' foto/dokumen tidak bisa diambil isinya (daftarnya ada di dalam file backup). '+dokumenBlobs.length+' lainnya tersimpan.','var(--red)');
+    else if(hanyaDiPerangkat.length) notif('Backup berhasil — '+dokumenBlobs.length+' dokumen ikut tersimpan. '+hanyaDiPerangkat.length+' foto baru ada di perangkat ini (belum di server) dan ikut tersimpan di backup.','var(--orange)');
+    else notif('Backup berhasil diunduh — '+dokumenBlobs.length+' dokumen ikut tersimpan di dalamnya');
   } catch(e){
     console.error('[PBC] Gagal export backup', e);
     notif('Gagal membuat backup: '+e.message,'var(--red)');
@@ -4854,6 +5069,20 @@ async function importBackupJSON(file){
       document.getElementById('importBackupInput').value = '';
       return;
     }
+    /* ID BARU untuk semua file hasil pemulihan, agar proyek hasil pemulihan tidak berbagi file dengan proyek sumber
+       (menghapus/mengubah foto di salah satunya tidak boleh memengaruhi yang lain). Semua rujukan id diperbarui. */
+    const petaIdFoto = new Map(), idDipakai = new Set();
+    const blobsAsli = Array.isArray(data.dokumenBlobs) ? data.dokumenBlobs : [];
+    blobsAsli.forEach(function(b){
+      if(b && idDokAman(b.id) && typeof b.content==='string' && !petaIdFoto.has(b.id)){
+        let n; do { n = uid(); } while(idDipakai.has(n)); idDipakai.add(n); petaIdFoto.set(b.id, n);
+      }
+    });
+    delete data.dokumenBlobs;
+    (function ganti(x){
+      if(Array.isArray(x)){ for(let i=0;i<x.length;i++){ if(typeof x[i]==='string'){ if(petaIdFoto.has(x[i])) x[i] = petaIdFoto.get(x[i]); } else ganti(x[i]); } }
+      else if(x && typeof x==='object'){ Object.keys(x).forEach(function(k){ if(typeof x[k]==='string'){ if(petaIdFoto.has(x[k])) x[k] = petaIdFoto.get(x[k]); } else ganti(x[k]); }); }
+    })(data);
     clearTimeout(saveTimer); /* jangan sampai save proyek lama yang masih tertunda menimpa hasil restore */
     creatingNewProject = true;
     state.proyek = Object.assign({}, data.proyek, { id: uid() });
@@ -4864,6 +5093,7 @@ async function importBackupJSON(file){
     state.kurva = data.kurva || { mulai:null, durasi:24, weeks:[] };
     state.estimasiFaktor = data.estimasiFaktor || 1;
     state.dokumen = data.dokumen || [];
+    state.fotoHarian = pulihkanFotoHarian(data.fotoHarian, state.dokumen);
     state.suppliers = data.suppliers || [];
     state.materials = data.materials || [];
     state.materialKategori = data.materialKategori || [];
@@ -4886,12 +5116,22 @@ async function importBackupJSON(file){
     state.retensiPencairan = data.retensiPencairan || [];
     state.inspections = data.inspections || [];
     state.punchList = data.punchList || [];
+    ubahSemuaIdDivisiItem(); /* T2: ID divisi & item adalah kunci global di tabel; restore = proyek baru, jadi nomornya HARUS baru juga */
 
-    if(data.dokumenBlobs && data.dokumenBlobs.length){
-      for(const b of data.dokumenBlobs){
-        try { await window.storage.set('pbc_doc:'+b.id, b.content, false); }
-        catch(e){ console.warn('[PBC] Gagal restore isi dokumen:', b.id, e); }
+    if(blobsAsli.length){
+      const belumDiServer = {}, adaBlob = {};
+      for(const b of blobsAsli){
+        const idBaru = petaIdFoto.get(b && b.id); if(!idBaru) continue;
+        adaBlob[idBaru] = true;
+        try { const hs = await window.storage.set('pbc_doc:'+idBaru, b.content, false); if(hs && hs.tersimpanServer===false) belumDiServer[idBaru] = true; }
+        catch(e){ console.warn('[PBC] Gagal restore isi dokumen:', b.id, e); belumDiServer[idBaru] = true; }
       }
+      /* tandai foto yang isinya baru ada di perangkat ini (belum di server); yang sampai ke server tidak ditandai */
+      Object.keys(state.fotoHarian).forEach(function(tgl){ Object.keys(state.fotoHarian[tgl]).forEach(function(i){
+        const e = state.fotoHarian[tgl][i];
+        if(belumDiServer[e.docId]) e.belumUpload = true; else if(adaBlob[e.docId]) delete e.belumUpload;
+      }); });
+      if(Object.keys(belumDiServer).length) jadwalkanKirimUlangFoto();
     }
 
     await saveProjectNow();
@@ -5775,7 +6015,7 @@ async function simpanProyek() {
     state.proyek = null;
     state.divisi = []; state.items = []; state.laporan = []; state.termin = [];
     state.kurva = { mulai:null, durasi:24, weeks:[] };
-    state.dokumen = []; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
+    state.dokumen = []; state.fotoHarian = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
   }
   state.proyek = {
     id: state.proyek && state.proyek.id ? state.proyek.id : uid(),
@@ -7164,6 +7404,137 @@ const FOTO_HARIAN_SLOTS = [
   'Tampak Belakang','Akses Masuk','Area Kerja Utama','K3 & Safety','Material di Lokasi'
 ];
 let fotoHarianSlotAktif = null;
+/* T5 — Foto harian disimpan sebagai REFERENSI saja: fotoHarian[tanggal][slot] = {docId, uploadedAt, label[, belumUpload]}.
+   Gambarnya tetap di pbc_doc:ID (Storage); thumbnail dimuat malas ke cache memori, TIDAK ikut ke data proyek.
+   KEAMANAN: isi Storage, Content-Type, dan semua metadata dari data proyek diperlakukan TIDAK TEPERCAYA:
+   gambar hanya dipasang lewat properti DOM setelah dibangun ulang dari tipe yang dikenali dari ISI file (magic bytes). */
+const fotoHarianCache = {};      /* docId -> dataUrl gambar yang sudah tervalidasi */
+const fotoHarianMemuat = {};     /* docId -> true selama sedang dimuat */
+const fotoHarianGagal = {};      /* docId -> waktu gagal terakhir; dicoba lagi setelah 30 detik */
+function idDokAman(id){ return typeof id==='string' && /^[A-Za-z0-9_-]{1,64}$/.test(id); }
+function sanitasiFoto(u){
+  if(typeof u!=='string' || u.length<16 || u.length>14*1024*1024) return null;
+  let b64 = u;
+  if(u.slice(0,5)==='data:'){ const k = u.indexOf(','); if(k<0 || u.slice(k-7,k)!==';base64') return null; b64 = u.slice(k+1); }
+  if(!/^[A-Za-z0-9+\/]+={0,2}$/.test(b64)) return null;
+  let tipe = null;
+  if(b64.indexOf('/9j/')===0) tipe='jpeg'; else if(b64.indexOf('iVBORw0KGgo')===0) tipe='png'; else if(b64.indexOf('UklGR')===0) tipe='webp'; else if(b64.indexOf('R0lGOD')===0) tipe='gif';
+  if(!tipe) return null;      /* bukan gambar sungguhan (mis. SVG/HTML berlabel image/*) -> ditolak */
+  return 'data:image/'+tipe+';base64,'+b64;
+}
+function urlDokumenAman(c){
+  return typeof c==='string' && /^data:(?:application\/(?:pdf|octet-stream|msword|zip|vnd\.[a-z0-9.+-]+)|text\/plain|image\/(?:jpeg|png|webp|gif|heic|heif));base64,[A-Za-z0-9+\/]+={0,2}$/i.test(c);
+}
+function kumpulkanIdFotoDokumen(){
+  const peta = new Map();
+  (state.dokumen||[]).forEach(function(d){ if(d && d.id!=null && !peta.has(d.id)) peta.set(d.id, {id:d.id, namaFile:d.namaFile, sumber:'dokumen'}); });
+  const fh = state.fotoHarian || {};
+  Object.keys(fh).forEach(function(t){ Object.keys(fh[t]||{}).forEach(function(i){ const e = fh[t][i]; if(e && e.docId && !peta.has(e.docId)) peta.set(e.docId, {id:e.docId, namaFile:(e.label||'')+' — '+t, sumber:'fotoHarian'}); }); });
+  (state.punchList||[]).forEach(function(p){ ((p&&p.fotoDokIds)||[]).forEach(function(id){ if(!peta.has(id)) peta.set(id, {id:id, namaFile:null, sumber:'punchList'}); }); });
+  (state.materialReceiving||[]).forEach(function(r){ ((r&&r.fotoDokIds)||[]).forEach(function(id){ if(!peta.has(id)) peta.set(id, {id:id, namaFile:null, sumber:'penerimaanMaterial'}); }); });
+  return Array.from(peta.values());
+}
+function fotoHarianRingkas(){
+  const hasil = {};
+  const fh = state.fotoHarian || {};
+  Object.keys(fh).forEach(function(tgl){
+    Object.keys(fh[tgl]||{}).forEach(function(i){
+      const e = fh[tgl][i]; if(!e || !idDokAman(e.docId)) return;
+      hasil[tgl] = hasil[tgl] || {};
+      const r = { docId: e.docId, uploadedAt: e.uploadedAt || 0, label: FOTO_HARIAN_SLOTS[Number(i)] || '' };
+      if(e.belumUpload) r.belumUpload = true;
+      hasil[tgl][i] = r;
+    });
+  });
+  return hasil;
+}
+/* Bangun peta foto harian. Bila proyek SUDAH punya riwayat fotoHarian (kuncinya ada, walau kosong), peta itu adalah satu-satunya
+   kebenaran: foto lama dari state.dokumen TIDAK dipetakan lagi, sehingga slot yang sudah dihapus tidak muncul kembali.
+   Pemetaan dari state.dokumen (kategori foto_progress, nama "Label — YYYY-MM-DD.jpg") hanya untuk proyek yang belum pernah punya kunci itu. */
+function pulihkanFotoHarian(tersimpan, dokumen){
+  const hasil = {}, dariLama = {};
+  const adaRiwayat = !!tersimpan && typeof tersimpan==='object' && !Array.isArray(tersimpan);
+  if(adaRiwayat){
+    Object.keys(tersimpan).forEach(function(tgl){
+      const hari = tersimpan[tgl];
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(tgl) || !hari || typeof hari!=='object') return;
+      Object.keys(hari).forEach(function(k){
+        const e = hari[k], idx = Number(k);
+        if(!e || !idDokAman(e.docId) || !Number.isInteger(idx) || idx<0 || idx>=FOTO_HARIAN_SLOTS.length) return;
+        hasil[tgl] = hasil[tgl] || {};
+        const r = { docId: e.docId, uploadedAt: Number.isFinite(e.uploadedAt) ? e.uploadedAt : 0, label: FOTO_HARIAN_SLOTS[idx] };
+        if(e.belumUpload === true) r.belumUpload = true;
+        hasil[tgl][idx] = r;
+      });
+    });
+    return hasil;
+  }
+  (dokumen||[]).forEach(function(d){
+    if(!d || d.kategori!=='foto_progress' || !idDokAman(d.id)) return;
+    const m = /^(.*) — (\d{4}-\d{2}-\d{2})\.jpg$/.exec(String(d.namaFile||''));
+    if(!m) return;
+    const idx = FOTO_HARIAN_SLOTS.indexOf(m[1]); if(idx<0) return;
+    const tgl = m[2], kunci = tgl+'|'+idx;
+    hasil[tgl] = hasil[tgl] || {};
+    const ada = hasil[tgl][idx];
+    if(ada && (d.uploadedAt||0) <= (ada.uploadedAt||0)) return;          /* sesama foto lama: yang terbaru menang (perilaku lama) */
+    hasil[tgl][idx] = { docId: d.id, uploadedAt: Number.isFinite(d.uploadedAt) ? d.uploadedAt : 0, label: FOTO_HARIAN_SLOTS[idx] };
+    dariLama[kunci] = true;
+  });
+  return hasil;
+}
+/* Samakan penanda belumUpload dengan kenyataan: dibaca dari server -> bersihkan; hanya ada di perangkat -> tandai. */
+function sinkronBenderaFoto(docId, hanyaLokal){
+  let berubah = false; const fh = state.fotoHarian || {};
+  Object.keys(fh).forEach(function(t){ Object.keys(fh[t]||{}).forEach(function(i){
+    const e = fh[t][i]; if(!e || e.docId!==docId) return;
+    if(hanyaLokal && !e.belumUpload){ e.belumUpload = true; berubah = true; }
+    if(!hanyaLokal && e.belumUpload){ delete e.belumUpload; berubah = true; }
+  }); });
+  if(berubah) debounceSave();
+  return berubah;
+}
+function muatThumbFoto(docId){
+  if(fotoHarianMemuat[docId] || docId in fotoHarianCache) return;
+  if(fotoHarianGagal[docId] && Date.now()-fotoHarianGagal[docId] < 30000) return;
+  fotoHarianMemuat[docId] = true;
+  Promise.resolve().then(function(){ return window.storage.get('pbc_doc:'+docId, false); })
+    .then(function(r){
+      const aman = (r && r.value) ? sanitasiFoto(r.value) : null;
+      if(aman){ fotoHarianCache[docId] = aman; delete fotoHarianGagal[docId]; sinkronBenderaFoto(docId, !!r.hanyaLokal); }
+      else { fotoHarianGagal[docId] = Date.now(); }
+    })
+    .catch(function(){ fotoHarianGagal[docId] = Date.now(); })
+    .then(function(){ delete fotoHarianMemuat[docId]; renderFotoHarian(); });
+}
+
+/* Kirim ulang foto yang baru ada di perangkat (aman, idempoten; lihat window.storage.kirimUlangTertunda). */
+let kirimUlangFotoTimer = null, kirimUlangFotoJalan = false;
+async function jalankanKirimUlangFoto(){
+  const st = window.storage;
+  if(!st || typeof st.kirimUlangTertunda!=='function' || kirimUlangFotoJalan) return null;
+  kirimUlangFotoJalan = true; let h = null;
+  try {
+    h = await st.kirimUlangTertunda();
+    if(h && h.berhasil && h.berhasil.length){
+      let berubah = false; const fh = state.fotoHarian || {};
+      Object.keys(fh).forEach(function(t){ Object.keys(fh[t]||{}).forEach(function(i){
+        const e = fh[t][i]; if(e && e.belumUpload && h.berhasil.indexOf(e.docId)>-1){ delete e.belumUpload; berubah = true; }
+      }); });
+      if(berubah){ renderFotoHarian(); debounceSave(); }
+      notif(h.berhasil.length+' file yang tertunda sudah terkirim ke server dan terverifikasi');
+    }
+  } catch(e){ console.warn('[PBC] Kirim ulang foto tertunda gagal:', e); }
+  finally { kirimUlangFotoJalan = false; }
+  jadwalkanKirimUlangFoto();
+  return h;
+}
+function jadwalkanKirimUlangFoto(){
+  clearTimeout(kirimUlangFotoTimer);
+  const st = window.storage; if(!st || typeof st.tertunda!=='function') return;
+  st.tertunda().then(function(ids){ if(ids.length) kirimUlangFotoTimer = setTimeout(jalankanKirimUlangFoto, 60000); }).catch(function(){});
+}
+window.addEventListener('online', function(){ jalankanKirimUlangFoto(); });
 
 function renderFotoHarian(){
   const grid = document.getElementById('fotoHarianGrid');
@@ -7171,17 +7542,42 @@ function renderFotoHarian(){
   state.fotoHarian = state.fotoHarian || {};
   const tgl = today();
   const dataHariIni = state.fotoHarian[tgl] || {};
-  grid.innerHTML = FOTO_HARIAN_SLOTS.map(function(label, idx){
+  grid.textContent = '';
+  FOTO_HARIAN_SLOTS.forEach(function(label, idx){
     const entry = dataHariIni[idx];
+    const slot = document.createElement('div');
+    slot.className = 'foto-slot' + (entry ? ' filled' : '');
+    slot.title = label;
     if(entry){
-      const dok = state.dokumen.find(function(d){ return d.id===entry.docId; });
-      const thumb = entry.thumb || (dok?dok.namaFile:'');
-      return '<div class="foto-slot filled" onclick="lihatFotoSlot('+idx+')" title="'+label+'">'
-        + '<img src="'+(entry.thumb||'')+'" alt="'+label+'" onerror="this.style.display=\'none\'">'
-        + '<div class="foto-slot-remove" onclick="hapusFotoSlot('+idx+',event)">✕</div></div>';
+      if(!(entry.docId in fotoHarianCache)) muatThumbFoto(entry.docId);
+      const src = fotoHarianCache[entry.docId];
+      slot.style.position = 'relative';
+      slot.addEventListener('click', function(){ lihatFotoSlot(idx); });
+      if(src){
+        const im = document.createElement('img'); im.alt = label; im.src = src;      /* properti DOM, bukan string HTML */
+        im.addEventListener('error', function(){ im.style.display = 'none'; });
+        slot.appendChild(im);
+      } else {
+        const ph = document.createElement('div');
+        ph.style.cssText = 'font-size:11px;opacity:.7;padding:4px;text-align:center';
+        ph.textContent = fotoHarianGagal[entry.docId] ? 'foto belum bisa dimuat' : '⏳';
+        slot.appendChild(ph);
+      }
+      if(entry.belumUpload){
+        const w = document.createElement('div'); w.className = 'foto-slot-warn';
+        w.title = 'Foto ini baru ada di HP ini, BELUM tersimpan di server';
+        w.style.cssText = 'position:absolute;left:2px;bottom:2px;background:rgba(230,126,34,.95);color:#fff;font-size:10px;border-radius:4px;padding:1px 4px';
+        w.textContent = '⚠ belum di server'; slot.appendChild(w);
+      }
+      const x = document.createElement('div'); x.className = 'foto-slot-remove'; x.textContent = '✕';
+      x.addEventListener('click', function(ev){ hapusFotoSlot(idx, ev); });
+      slot.appendChild(x);
+    } else {
+      slot.textContent = '📷';
+      slot.addEventListener('click', function(){ klikFotoSlot(idx); });
     }
-    return '<div class="foto-slot" onclick="klikFotoSlot('+idx+')" title="'+label+'">📷</div>';
-  }).join('');
+    grid.appendChild(slot);
+  });
 }
 
 function klikFotoSlot(idx){
@@ -7197,6 +7593,7 @@ async function handleFotoHarianSelected(input){
   if(!f || fotoHarianSlotAktif===null) return;
   const idx = fotoHarianSlotAktif;
   const label = FOTO_HARIAN_SLOTS[idx];
+  const tgl = today(); /* tanggal dikunci saat foto dipilih, bukan saat selesai diproses */
   const reader = new FileReader();
   reader.onload = function(){
     const img = new Image();
@@ -7207,22 +7604,28 @@ async function handleFotoHarianSelected(input){
       canvas.getContext('2d').drawImage(img,0,0,w,h);
       const finalDataUrl = canvas.toDataURL('image/jpeg',0.72);
       const id = uid();
+      let hasilSimpan;
       try {
-        await window.storage.set('pbc_doc:'+id, finalDataUrl, false);
+        hasilSimpan = await window.storage.set('pbc_doc:'+id, finalDataUrl, false);
       } catch(e){
         console.error('Gagal simpan foto harian', e);
         notif('Gagal menyimpan foto — coba lagi dengan foto yang lebih kecil','var(--red)');
         return;
       }
+      /* jujur soal lokasi simpan: tersimpanServer===false berarti isinya baru ada di perangkat ini */
+      const belumUpload = !!(hasilSimpan && hasilSimpan.tersimpanServer===false);
       state.dokumen = state.dokumen || [];
-      state.dokumen.push({ id: id, kategori: 'foto_progress', namaFile: label+' — '+today()+'.jpg', fileType: 'image/jpeg', ukuran: finalDataUrl.length*0.75, uploadedAt: Date.now() });
+      state.dokumen.push({ id: id, kategori: 'foto_progress', namaFile: label+' — '+tgl+'.jpg', fileType: 'image/jpeg', ukuran: finalDataUrl.length*0.75, uploadedAt: Date.now() });
       state.fotoHarian = state.fotoHarian || {};
-      const tgl = today();
       state.fotoHarian[tgl] = state.fotoHarian[tgl] || {};
-      state.fotoHarian[tgl][idx] = { docId: id, thumb: finalDataUrl, uploadedAt: Date.now() };
+      const entri = { docId: id, uploadedAt: Date.now(), label: label };
+      if(belumUpload) entri.belumUpload = true;
+      state.fotoHarian[tgl][idx] = entri;
+      fotoHarianCache[id] = finalDataUrl; /* thumbnail hanya di memori, tidak masuk data proyek */
       renderFotoHarian();
       debounceSave();
-      notif('Foto "'+label+'" tersimpan!');
+      if(belumUpload){ notif('Foto "'+label+'" baru tersimpan di HP ini, BELUM terunggah ke server. Akan dikirim otomatis saat tersambung internet; jangan hapus data aplikasi dulu.','var(--orange)'); jadwalkanKirimUlangFoto(); }
+      else notif('Foto "'+label+'" tersimpan!');
     };
     img.onerror = function(){ notif('File yang dipilih bukan gambar yang valid','var(--red)'); };
     img.src = reader.result;
@@ -8857,16 +9260,16 @@ function setDokFilter(key){ dokFilterAktif = key; renderDokumen(); }
 function renderDokumen(){
   document.getElementById('dokKategoriFilter').innerHTML = '<button class="btn btn-sm '+(dokFilterAktif==='semua'?'btn-blue':'btn-gold')+'" onclick="setDokFilter(\'semua\')">Semua</button>'
     + DOK_KATEGORI.filter(function(k){ return dokBoleh(k.key); }).map(function(k){ return '<button class="btn btn-sm '+(dokFilterAktif===k.key?'btn-blue':'btn-gold')+'" onclick="setDokFilter(\''+k.key+'\')">'+k.label+'</button>'; }).join('');
-  const list = state.dokumen.filter(function(d){ return dokBoleh(d.kategori) && (dokFilterAktif==='semua' || d.kategori===dokFilterAktif); }).sort(function(a,b){ return b.uploadedAt-a.uploadedAt; });
+  const list = state.dokumen.filter(function(d){ return idDokAman(d.id) && dokBoleh(d.kategori) && (dokFilterAktif==='semua' || d.kategori===dokFilterAktif); }).sort(function(a,b){ return b.uploadedAt-a.uploadedAt; });
   const grid = document.getElementById('dokumenGrid');
   if(!list.length){ grid.innerHTML = '<div class="empty"><div class="empty-icon">📁</div>Belum ada dokumen'+(dokFilterAktif!=='semua'?' di kategori ini':'')+'</div>'; return; }
   grid.innerHTML = '<div class="foto-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">'
     + list.map(function(d){
-      const isImg = d.fileType.indexOf('image')>-1;
-      const kategoriLabel = (DOK_KATEGORI.find(function(k){return k.key===d.kategori;})||{label:d.kategori}).label;
+      const isImg = String(d.fileType||'').indexOf('image')>-1;
+      const kategoriLabel = escapeHtmlPbc((DOK_KATEGORI.find(function(k){return k.key===d.kategori;})||{label:d.kategori}).label);
       return '<div style="border:1px solid var(--border);background:var(--panel);padding:10px;text-align:center">'
         + '<div style="font-size:28px;margin-bottom:6px">'+(isImg?'🖼️':'📄')+'</div>'
-        + '<div style="font-size:9px;color:var(--white);word-break:break-word;margin-bottom:3px">'+d.namaFile+'</div>'
+        + '<div style="font-size:9px;color:var(--white);word-break:break-word;margin-bottom:3px">'+escapeHtmlPbc(d.namaFile)+'</div>'
         + '<div class="badge badge-active" style="margin-bottom:6px">'+kategoriLabel+'</div>'
         + '<div style="font-size:8px;color:var(--muted2);margin-bottom:8px">'+new Date(d.uploadedAt).toLocaleDateString('id')+' · '+(d.ukuran/1024).toFixed(0)+' KB</div>'
         + '<div style="display:flex;gap:4px;justify-content:center">'
@@ -8946,9 +9349,19 @@ async function previewDokumen(id){
   notif('Membuka dokumen...','var(--blue)');
   const content = await getDokumenContent(d);
   if(!content){ notif('Gagal memuat isi dokumen','var(--red)'); return; }
-  const w = window.open();
-  if(d.fileType.indexOf('image')>-1){ w.document.write('<title>'+d.namaFile+'</title><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+content+'" style="max-width:100%;max-height:100vh"></body>'); }
-  else { w.location.href = content; }
+  if(String(d.fileType||'').indexOf('image')>-1){
+    const aman = sanitasiFoto(content);          /* gambar dibangun ulang dari ISI file; bukan HTML/SVG */
+    if(!aman){ notif('Isi file ini bukan gambar yang valid, tidak ditampilkan','var(--red)'); return; }
+    const w = window.open(); if(!w) return;
+    w.document.title = String(d.namaFile||'Foto');
+    w.document.body.style.cssText = 'margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh';
+    const im = w.document.createElement('img'); im.style.cssText = 'max-width:100%;max-height:100vh'; im.src = aman;
+    w.document.body.appendChild(im);
+  } else {
+    if(!urlDokumenAman(content)){ notif('Isi file tidak dikenali/aman untuk dibuka','var(--red)'); return; }
+    const w = window.open(); if(!w) return;
+    w.location.href = content;
+  }
 }
 async function downloadDokumen(id){
   { const _d = (state.dokumen||[]).find(function(x){return x.id===id;}); if(_d && !dokBoleh(_d.kategori)){ notif('Dokumen ini hanya untuk Direktur','var(--red)'); return; } }
@@ -8956,7 +9369,8 @@ async function downloadDokumen(id){
   if(!d) return;
   const content = await getDokumenContent(d);
   if(!content){ notif('Gagal memuat isi dokumen','var(--red)'); return; }
-  const a = document.createElement('a'); a.href = content; a.download = d.namaFile; a.click();
+  if(!urlDokumenAman(content)){ notif('Isi file tidak dikenali/aman untuk diunduh','var(--red)'); return; }
+  const a = document.createElement('a'); a.href = content; a.download = String(d.namaFile||'dokumen'); a.click();
 }
 async function hapusDokumen(id){
   state.dokumen = state.dokumen.filter(function(d){return d.id!==id;});
