@@ -3869,6 +3869,376 @@ function pbcTerjemahSemuaBoq(){
   notif(c ? (c+' nama diterjemahkan otomatis — mohon dicek, ubah kalau ada yang kurang pas') : 'Semua sudah punya nama English','var(--blue)');
 }
 
+/* ===== LAPORAN PDF NATIVE ===== */
+/* ===========================================================================
+   LAPORAN PDF PROFESIONAL (bukan salinan layar) — Kurva S, BOQ, Termin, Laporan Harian, Rekap
+   Memakai gaya dokumen resmi PBC (kop, bar hitam, tabel bergaris, bar total cokelat).
+   Bahasa mengikuti tombol Indonesia/English di menu BOQ.
+   =========================================================================== */
+const PBC_R = {
+ id:{ proyek:'Proyek', lokasi:'Lokasi', owner:'Pemilik / Owner', mulai:'Tanggal Mulai', selesai:'Target Selesai', durasi:'Durasi', minggu:'minggu', hari:'hari', per:'per',
+   aktual:'Progress Aktual', target:'Target Hari Ini', deviasi:'Deviasi', statusJadwal:'Status Jadwal', proyeksi:'Proyeksi Selesai', sisa:'Sisa Waktu', poin:'poin',
+   kurva:'KURVA S — RENCANA vs REALISASI', ringkasDiv:'RINGKASAN PER DIVISI', statusItem:'STATUS PEKERJAAN PER ITEM', rekapMg:'REKAP KEMAJUAN MINGGUAN', catatan:'CATATAN KEMAJUAN',
+   no:'No', uraian:'Uraian Pekerjaan', divisi:'Divisi', bobot:'Bobot (%)', tgtHari:'Target s/d Hari Ini', akt:'Aktual', selisih:'Selisih', mulaiK:'Mulai', selesaiK:'Selesai', prog:'Progress', status:'Status',
+   stSelesai:'Selesai', stJalan:'Berjalan', stTelat:'Terlambat', stBelum:'Belum Mulai', minggu1:'Minggu', rentang:'Rentang Tanggal', rcPer:'Rencana Periode', rcKum:'Rencana Kum.', akKum:'Realisasi Kum.',
+   subDiv:'Subtotal', dibuat:'Dibuat oleh,', mengetahui:'Mengetahui / Menyetujui,', kontraktor:'Kontraktor Pelaksana', pemilik:'Pemilik Proyek', hal:'Halaman', dari:'dari', tglLap:'Tanggal laporan',
+   sat:'Sat', vol:'Volume', harga:'Harga Satuan', jumlah:'Jumlah', total:'TOTAL KESELURUHAN', boqJudul:'BILL OF QUANTITIES (RAB)', kurvaJudul:'LAPORAN KURVA S', terminJudul:'TERMIN PEMBAYARAN',
+   lapJudul:'LAPORAN HARIAN PROYEK', rekapJudul:'REKAPITULASI PROYEK', termin:'Termin', milestone:'Milestone', persen:'%', nilai:'Nilai', targetBayar:'Target Bayar', tglLunas:'Tgl Lunas',
+   tgl:'Tanggal', cuaca:'Cuaca', tk:'Tenaga Kerja', pekerjaan:'Pekerjaan', kendala:'Kendala', riwayat:'RIWAYAT PROGRES KUMULATIF', belumAda:'Belum ada data',
+   nilaiKontrak:'Nilai Kontrak', totalTagihan:'Total Tagihan', terbayar:'Terbayar', belumBayar:'Belum Dibayar', sisaKontrak:'Sisa Belum Ditagih', retensi:'Retensi Ditahan',
+   itemTotal:'Total Item', itemSelesai:'Item Selesai', itemJalan:'Item Berjalan', itemBelum:'Belum Dimulai', opname:'Progress Opname', rencana:'Progress Rencana', ringkasan:'RINGKASAN', infoProyek:'INFORMASI PROYEK',
+   progDiv:'PROGRES PER DIVISI', ket:'Keterangan', dok:'Dokumen internal PBC', sudahBayar:'Lunas', belumLunas:'Belum Dibayar' },
+ en:{ proyek:'Project', lokasi:'Location', owner:'Owner', mulai:'Start Date', selesai:'Target Completion', durasi:'Duration', minggu:'weeks', hari:'days', per:'per',
+   aktual:'Actual Progress', target:'Planned Today', deviasi:'Variance', statusJadwal:'Schedule Status', proyeksi:'Projected Finish', sisa:'Time Remaining', poin:'pts',
+   kurva:'S-CURVE — PLAN vs ACTUAL', ringkasDiv:'SUMMARY BY DIVISION', statusItem:'WORK ITEM STATUS', rekapMg:'WEEKLY PROGRESS SUMMARY', catatan:'PROGRESS NOTES',
+   no:'No', uraian:'Description of Works', divisi:'Division', bobot:'Weight (%)', tgtHari:'Planned to Date', akt:'Actual', selisih:'Variance', mulaiK:'Start', selesaiK:'Finish', prog:'Progress', status:'Status',
+   stSelesai:'Completed', stJalan:'In Progress', stTelat:'Delayed', stBelum:'Not Started', minggu1:'Week', rentang:'Date Range', rcPer:'Planned (Period)', rcKum:'Planned Cum.', akKum:'Actual Cum.',
+   subDiv:'Subtotal', dibuat:'Prepared by,', mengetahui:'Acknowledged / Approved by,', kontraktor:'Contractor', pemilik:'Project Owner', hal:'Page', dari:'of', tglLap:'Report date',
+   sat:'Unit', vol:'Qty', harga:'Unit Rate', jumlah:'Amount', total:'GRAND TOTAL', boqJudul:'BILL OF QUANTITIES', kurvaJudul:'S-CURVE REPORT', terminJudul:'PAYMENT SCHEDULE',
+   lapJudul:'DAILY SITE REPORT', rekapJudul:'PROJECT SUMMARY', termin:'Stage', milestone:'Milestone', persen:'%', nilai:'Amount', targetBayar:'Due Date', tglLunas:'Paid On',
+   tgl:'Date', cuaca:'Weather', tk:'Workforce', pekerjaan:'Work Done', kendala:'Issues', riwayat:'CUMULATIVE PROGRESS HISTORY', belumAda:'No data yet',
+   nilaiKontrak:'Contract Value', totalTagihan:'Total Billed', terbayar:'Paid', belumBayar:'Unpaid', sisaKontrak:'Not Yet Billed', retensi:'Retention Held',
+   itemTotal:'Total Items', itemSelesai:'Completed', itemJalan:'In Progress', itemBelum:'Not Started', opname:'Verified Progress', rencana:'Planned Progress', ringkasan:'SUMMARY', infoProyek:'PROJECT INFORMATION',
+   progDiv:'PROGRESS BY DIVISION', ket:'Notes', dok:'PBC internal document', sudahBayar:'Paid', belumLunas:'Unpaid' }
+};
+function pbcLapBhs(){ return pbcBoqBhs(); }
+function pbcLapStatusEn(s){ return s; }
+function pbcLapBuat(o){
+  const doc = new window.jspdf.jsPDF({unit:'pt', format:'a4', orientation:o.land?'l':'p'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const FX = 42.85, TW = W-2*FX, P = pbcDokProfil(), R = PBC_R[o.bhs||'id'];
+  const C = { ink:[26,26,26], g5:[85,85,85], tx:[34,34,34], grid:[207,202,192], head:[244,242,238], alt:[251,250,248], brown:[138,109,59], teal:[26,140,122], gold:[201,142,18], red:[192,57,43], blue:[30,80,180], soft:[232,228,220] };
+  const c = { doc:doc, W:W, H:H, FX:FX, TW:TW, C:C, R:R, y:0, batas:H-52 };
+  function font(st,sz){ doc.setFont('helvetica',st); doc.setFontSize(sz); }
+  function col(a){ doc.setTextColor(a[0],a[1],a[2]); }
+  function fill(a){ doc.setFillColor(a[0],a[1],a[2]); }
+  function ln(a,w){ doc.setDrawColor(a[0],a[1],a[2]); doc.setLineWidth(w); }
+  doc.setLineCap('round');
+  /* kop */
+  font('bold',14); col(C.ink); doc.text(P.nama||'PRATAMA BUILD & CONSTRUCTION', FX+6, 45.7);
+  font('bold',8.5); col(C.g5); doc.text('General Contractor - Interior Design - Renovation', FX+6, 62.7);
+  font('bold',12.5); col(C.ink); doc.text(o.judul, W-FX-6, 44.2, {align:'right'});
+  font('bold',8.5); col(C.g5); if(o.sub) doc.text(o.sub, W-FX-6, 59.2, {align:'right'});
+  font('normal',8.5); doc.text(P.alamat+'  |  Email: '+P.email+'  |  Telp: '+P.telp, FX, 82.9);
+  ln(C.ink,1.2); doc.line(FX, 91.8, W-FX, 91.8);
+  c.y = 108;
+  c.baru = function(){
+    doc.addPage();
+    font('normal',7); col(C.g5); doc.text((P.nama||'PRATAMA BUILD & CONSTRUCTION')+' — '+o.judul+(o.sub?(' · '+o.sub):''), FX, 30);
+    ln(C.grid,0.5); doc.line(FX, 36, W-FX, 36); c.y = 50;
+  };
+  c.pastikan = function(h){ if(c.y+h > c.batas) c.baru(); };
+  c.info = function(rows, kolom){
+    const cw = TW/kolom; const n = rows.length;
+    rows.forEach(function(r,i){
+      const x = FX+6+(i%kolom)*cw, y = c.y+Math.floor(i/kolom)*14;
+      font('normal',8.5); col(C.g5); doc.text(r[0]+':', x, y);
+      font('bold',8.5); col(C.tx); doc.text(String(r[1]), x+(o.land?80:70), y, {maxWidth:cw-(o.land?86:76)});
+    });
+    c.y += Math.ceil(n/kolom)*14+8;
+  };
+  c.kpi = function(cards){
+    const n = cards.length, g = 6, cw = (TW-(n-1)*g)/n, h = 36;
+    c.pastikan(h+10);
+    cards.forEach(function(k,i){
+      const x = FX+i*(cw+g);
+      fill([246,248,252]); doc.roundedRect(x,c.y,cw,h,3,3,'F');
+      fill(k[2]||C.gold); doc.rect(x,c.y+4,2,h-8,'F');
+      font('normal',6.5); col(C.g5); doc.text(String(k[0]).toUpperCase(), x+8, c.y+11, {maxWidth:cw-12});
+      let fs = 12; font('bold',fs);
+      while(fs>6.5){ doc.setFontSize(fs); if(doc.getTextWidth(String(k[1]))<=cw-14) break; fs-=0.5; }
+      col(k[2]&&k[3]?k[2]:C.ink); doc.text(String(k[1]), x+8, c.y+28);
+    });
+    c.y += h+12;
+  };
+  c.bar = function(text, brown){
+    c.pastikan(20+16+16);
+    fill(brown?C.brown:C.ink); doc.rect(FX,c.y,TW,20,'F');
+    font('bold',10); doc.setTextColor(255,255,255); doc.text(text, FX+7, c.y+14); c.y += 20;
+  };
+  c.teks = function(t, size, st, warna){
+    font(st||'normal', size||9); col(warna||C.tx);
+    doc.splitTextToSize(t, TW-8).forEach(function(l){ c.pastikan(14); doc.text(l, FX+4, c.y+9); c.y += 12; });
+    c.y += 4;
+  };
+  c.gambar = function(img, w, h){ c.pastikan(h+6); doc.addImage(img,'PNG',FX,c.y,w,h); c.y += h+10; };
+  /* tabel umum */
+  c.tabel = function(cols, rows, opt){
+    opt = opt||{};
+    const sum = cols.reduce(function(s,k){ return s+(k.w||1); },0);
+    const cw = cols.map(function(k){ return (k.w||1)/sum*TW; });
+    const cx = []; let acc = 0; cw.forEach(function(w){ cx.push(FX+acc); acc += w; });
+    function judul(lanjut){ if(opt.title){ c.bar(opt.title+(lanjut?' '+(o.bhs==='en'?'(cont.)':'(lanjutan)'):'')); } }
+    function header(){
+      c.pastikan(16+16);
+      fill(C.head); doc.rect(FX,c.y,TW,16,'F');
+      font('bold',7.8); doc.setTextColor(0,0,0);
+      cols.forEach(function(k,i){
+        const a = k.a||'l'; const x = a==='l'?cx[i]+6:(a==='c'?cx[i]+cw[i]/2:cx[i]+cw[i]-6);
+        doc.text(k.l, x, c.y+9.8, {align:a==='l'?'left':(a==='c'?'center':'right'), maxWidth:cw[i]-8});
+      });
+      ln(C.grid,0.5); doc.rect(FX,c.y,TW,16); cols.forEach(function(k,i){ if(i>0) doc.line(cx[i],c.y,cx[i],c.y+16); });
+      c.y += 16;
+    }
+    judul(false); header();
+    let zebra = 0;
+    rows.forEach(function(r){
+      if(r._grp !== undefined){
+        if(c.y+16+16 > c.batas){ c.baru(); judul(true); header(); }
+        fill(C.soft); doc.rect(FX,c.y,TW,16,'F'); ln(C.grid,0.5); doc.rect(FX,c.y,TW,16);
+        font('bold',8); col(C.tx); doc.text(String(r._grp), FX+6, c.y+10.6, {maxWidth:TW-12}); c.y += 16; zebra = 0; return;
+      }
+      const cell = r.cells || r;
+      const lines = cell.map(function(v,i){
+        const t = (v && typeof v==='object') ? (v.t==null?'':v.t) : v;
+        font((v&&v.b)||r._sub?'bold':'normal',7.8);
+        return cols[i].wrap ? doc.splitTextToSize(String(t==null?'':t), cw[i]-12) : [String(t==null?'':t)];
+      });
+      const n = Math.max.apply(null, lines.map(function(l){ return l.length; }));
+      const h = n===1 ? 16 : 23+9.5*(n-2);
+      if(c.y+h > c.batas){ c.baru(); judul(true); header(); }
+      fill(r._sub ? C.head : (zebra%2===0 ? [255,255,255] : C.alt)); doc.rect(FX,c.y,TW,h,'F'); zebra++;
+      cell.forEach(function(v,i){
+        const obj = (v && typeof v==='object') ? v : {t:v};
+        const a = cols[i].a||'l'; const bold = obj.b || r._sub;
+        if(obj.pct!==undefined){
+          const bw = cw[i]-12-30, by = c.y+h/2-2.5;
+          fill([230,233,240]); doc.roundedRect(cx[i]+6,by,bw,5,2,2,'F');
+          fill(obj.warna||C.teal); if(obj.pct>0.2) doc.roundedRect(cx[i]+6,by,Math.max(2,bw*Math.min(100,obj.pct)/100),5,2,2,'F');
+          font('bold',7.8); col(C.tx); doc.text(obj.pct.toFixed(0)+'%', cx[i]+cw[i]-6, c.y+h/2+2.6, {align:'right'});
+          return;
+        }
+        font(bold?'bold':'normal',7.8); col(obj.warna||(r._sub?[0,0,0]:C.tx));
+        const ls = lines[i], x = a==='l'?cx[i]+6:(a==='c'?cx[i]+cw[i]/2:cx[i]+cw[i]-6);
+        const first = c.y + (h-ls.length*9.5)/2 + 7.0;
+        ls.forEach(function(t,j){ doc.text(t, x, first+j*9.5, {align:a==='l'?'left':(a==='c'?'center':'right')}); });
+      });
+      ln(C.grid,0.5); doc.rect(FX,c.y,TW,h); cols.forEach(function(k,i){ if(i>0) doc.line(cx[i],c.y,cx[i],c.y+h); });
+      c.y += h;
+    });
+    c.y += 10;
+  };
+  c.total = function(label, val){
+    c.pastikan(48);
+    fill(C.brown); doc.rect(FX,c.y,TW,20,'F'); font('bold',10); doc.setTextColor(255,255,255); doc.text(label, FX+7, c.y+14);
+    fill(C.head); doc.rect(FX,c.y+20,TW,22,'F'); ln(C.grid,0.5); doc.rect(FX,c.y+20,TW,22);
+    font('bold',11); doc.setTextColor(0,0,0); doc.text(val, FX+TW-8, c.y+36, {align:'right'}); c.y += 52;
+  };
+  c.ttd = function(kiri1, kiri2, kanan1, kanan2, nama, jab){
+    c.pastikan(96);
+    font('normal',9); col(C.tx);
+    doc.text(kiri1, FX+6, c.y+9); doc.text(kiri2, FX+6, c.y+21);
+    const xr = W/2+30; doc.text(kanan1, xr, c.y+9); doc.text(kanan2||'', xr, c.y+21);
+    font('bold',9); doc.text(P.ttdNama, FX+6, c.y+78); font('normal',9); doc.text(P.ttdJabatan, FX+6, c.y+90);
+    doc.text(o.bhs==='en'?'Date: ____ / ____ / ____':'Tanggal: ____ / ____ / ____', xr, c.y+78);
+    c.y += 100;
+  };
+  c.selesai = function(namaFile){
+    const np = doc.getNumberOfPages();
+    for(let i=1;i<=np;i++){
+      doc.setPage(i); ln(C.grid,0.5); doc.line(FX,H-36,W-FX,H-36);
+      font('normal',7); col(C.g5);
+      doc.text((P.nama||'PRATAMA BUILD & CONSTRUCTION')+' — '+(o.footer||R.dok), FX, H-24);
+      doc.text(R.hal+' '+i+' '+R.dari+' '+np, W-FX, H-24, {align:'right'});
+    }
+    doc.save(fileNameFor(namaFile));
+  };
+  return c;
+}
+function pbcLapTgl(mulai, off, bhs){ const d = new Date(mulai); d.setDate(d.getDate()+off); return d.toLocaleDateString(bhs==='en'?'en-GB':'id-ID',{day:'numeric',month:'short',year:'numeric'}); }
+function pbcLapSiap(syaratProyek){
+  if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!','var(--red)'); return false; }
+  if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return false; }
+  return true;
+}
+function pbcLapInfoProyek(c, R, bhs){
+  const p = state.proyek, mulai = state.kurva.mulai || p.mulai;
+  const dur = state.kurva.durasi || p.durasi || 0;
+  c.info([[R.proyek, p.nama||'-'],[R.lokasi, p.lokasi||'-'],[R.owner, p.owner||'-'],
+          [R.mulai, mulai?pbcLapTgl(mulai,0,bhs):'-'],[R.selesai, mulai?pbcLapTgl(mulai,dur*7-1,bhs):'-'],[R.durasi, dur+' '+R.minggu]], c.doc.internal.pageSize.getWidth()>600?3:2);
+}
+function pbcLapNilaiItem(i){ return itemTotal(i); }
+
+/* ===== 1. KURVA S ===== */
+async function cetakKurvaLengkapPdf(){
+  if(!pbcLapSiap()) return;
+  if(typeof Chart==='undefined'){ notif('Library grafik belum termuat, coba lagi sebentar','var(--red)'); return; }
+  const gt = grandTotal();
+  if(!state.items.length || !gt){ notif('Isi BOQ (volume & harga) dulu, lalu coba lagi','var(--red)'); return; }
+  if(!state.kurva.mulai && state.proyek.mulai){ state.kurva.mulai = state.proyek.mulai; }
+  if(!state.kurva.mulai){ notif('Isi tanggal mulai proyek dulu (menu Kurva S → Atur Durasi Proyek)','var(--red)'); return; }
+  notif('Menyiapkan PDF Kurva S...','var(--blue)');
+  await new Promise(function(r){ setTimeout(r,60); });
+  try{
+    const bhs = pbcLapBhs(), R = PBC_R[bhs];
+    const aktualPct = state.items.reduce(function(s,i){ return s+(itemTotal(i)/gt*100)*(itemPct(i)/100); },0);
+    const periode = agregasiMingguan();
+    const dataChart = periode.map(function(row){ return { label:row.label, bobot:row.bobot, rencana:row.kumulatif, realisasi:cariRealisasiPadaHari(row.akhirHari) }; });
+    const kd = kurvaKpiData(aktualPct), img = kurvaChartImage(periode, dataChart, aktualPct);
+    const c = pbcLapBuat({ judul:R.kurvaJudul, sub:state.proyek.nama, land:true, bhs:bhs });
+    const C = c.C, mulai = state.kurva.mulai;
+    pbcLapInfoProyek(c, R, bhs);
+    const stEn = { 'Sesuai / lebih cepat':'On track / ahead','Waspada':'Watch','Terlambat':'Delayed','Selesai':'Completed','Belum dimulai':'Not started','Awal proyek':'Early stage','Melewati jadwal':'Past schedule' };
+    const stTxt = bhs==='en' ? (stEn[kd.status.t]||kd.status.t) : kd.status.t;
+    const fgS = (function(h){ h=String(h||''); return (h.charAt(0)==='#'&&h.length===7)?[parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]:C.g5; })(kd.status.fg);
+    c.kpi([[R.aktual, aktualPct.toFixed(1)+'%'], [R.target, kd.plan===null?'-':kd.plan.toFixed(1)+'%'],
+           [R.deviasi, kd.dev===null?'-':((kd.dev>=0?'+':'')+kd.dev.toFixed(1)+' '+R.poin), kd.dev===null?null:(kd.dev>=0?C.teal:C.red), true],
+           [R.statusJadwal, stTxt, fgS, true], [R.proyeksi, kd.proyeksi==='Selesai'?(bhs==='en'?'Completed':'Selesai'):(kd.proyeksi==='—'?'-':kd.proyeksi)], [R.sisa, kd.sisa.replace('hari',R.hari).replace('Lewat','Over')]]);
+    c.bar(R.kurva);
+    c.gambar(img, c.TW, c.TW*600/1500);
+    /* ringkasan per divisi */
+    c.baru();
+    const hari = kd.hari, sch = getCachedSchedule(), sMap = {}; sch.forEach(function(s){ sMap[s.item.id] = s; });
+    const baris = [];
+    state.divisi.forEach(function(div){
+      const its = state.items.filter(function(i){ return i.divisiId===div.id; }); const tot = its.reduce(function(s,i){ return s+itemTotal(i); },0);
+      if(!its.length || !tot) return;
+      let pl=0, ac=0;
+      its.forEach(function(i){ const s = sMap[i.id]; let fr = 0; if(s && hari!==null){ fr = Math.max(0, Math.min(1,(hari-s.startDay)/Math.max(0.0001,(s.endDay-s.startDay)))); } pl += itemTotal(i)*fr; ac += itemTotal(i)*itemPct(i)/100; });
+      baris.push({ div:div, its:its, bobot:tot/gt*100, plan:pl/tot*100, akt:ac/tot*100 });
+    });
+    c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.divisi,w:4,wrap:true},{l:R.bobot,w:1.2,a:'r'},{l:R.tgtHari,w:1.6,a:'r'},{l:R.akt,w:1.6,a:'r'},{l:R.selisih,w:1.4,a:'r'},{l:R.prog,w:3}],
+      baris.map(function(b,i){ const sel = b.akt-b.plan; return [String(i+1), pbcNamaTampil(b.div.id,b.div.nama), b.bobot.toFixed(2), b.plan.toFixed(1)+'%', b.akt.toFixed(1)+'%',
+        {t:(sel>=0?'+':'')+sel.toFixed(1), warna:sel>=-0.05?C.teal:C.red, b:true}, {pct:b.akt, warna:b.akt>=b.plan-0.05?C.teal:C.gold}]; }), {title:R.ringkasDiv});
+    /* status tiap item */
+    let no = 0; const rows = [];
+    baris.forEach(function(b){
+      rows.push({_grp: pbcNamaTampil(b.div.id,b.div.nama)});
+      b.its.forEach(function(i){
+        no++; const s = sMap[i.id], p = itemPct(i); let st = R.stBelum, wr = C.g5;
+        if(p>=99.95){ st = R.stSelesai; wr = C.teal; }
+        else if(hari!==null && s && hari>=s.endDay){ st = R.stTelat; wr = C.red; }
+        else if(p>0){ st = R.stJalan; wr = C.gold; }
+        rows.push([String(no), pbcNamaTampil(i.id,i.nama), (s?s.bobotTotal:itemTotal(i)/gt*100).toFixed(2), s?pbcLapTgl(mulai,s.startDay,bhs):'-', s?pbcLapTgl(mulai,s.endDay-1,bhs):'-', {pct:p, warna:p>=99.95?C.teal:C.gold}, {t:st, warna:wr, b:true}]);
+      });
+      rows.push({_sub:true, cells:['', R.subDiv+' — '+pbcNamaTampil(b.div.id,b.div.nama), b.bobot.toFixed(2), '', '', {pct:b.akt, warna:C.teal}, '']});
+    });
+    c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.uraian,w:5,wrap:true},{l:R.bobot,w:1,a:'r'},{l:R.mulaiK,w:1.5,a:'c'},{l:R.selesaiK,w:1.5,a:'c'},{l:R.prog,w:2.4},{l:R.status,w:1.4,a:'c'}], rows, {title:R.statusItem});
+    /* rekap mingguan */
+    const aktSeri = kurvaAktualSeries(periode, dataChart);
+    const wk = periode.map(function(pp,i){ const awal = i>0?periode[i-1].akhirHari+1:0, a = aktSeri[i];
+      return [pp.label.replace('Minggu',R.minggu1), pbcLapTgl(mulai,awal,bhs)+' – '+pbcLapTgl(mulai,pp.akhirHari,bhs), dataChart[i].bobot.toFixed(2)+'%', dataChart[i].rencana.toFixed(1)+'%', a===null?'-':a.toFixed(1)+'%',
+        a===null?'-':{t:((a-dataChart[i].rencana>=0?'+':'')+(a-dataChart[i].rencana).toFixed(1)+' '+R.poin), warna:a-dataChart[i].rencana>=0?C.teal:C.red, b:true}]; });
+    c.tabel([{l:R.minggu1,w:1,a:'l'},{l:R.rentang,w:3},{l:R.rcPer,w:1.5,a:'r'},{l:R.rcKum,w:1.5,a:'r'},{l:R.akKum,w:1.5,a:'r'},{l:R.deviasi,w:1.5,a:'r'}], wk, {title:R.rekapMg});
+    /* catatan */
+    let cat = (bhs==='en'?'As of ':'Per ')+pbcLapTgl(today(),0,bhs)+(bhs==='en'?', physical progress reached ':', progres fisik terpasang mencapai ')+aktualPct.toFixed(1)+'%'+(bhs==='en'?' of the total scope':' dari seluruh lingkup pekerjaan');
+    if(kd.plan!==null && kd.hari>=0) cat += (bhs==='en'?', against a planned '+kd.plan.toFixed(1)+'% today (variance '+(kd.dev>=0?'+':'')+kd.dev.toFixed(1)+' pts, status: '+stTxt+').':', sedangkan target jadwal hari ini '+kd.plan.toFixed(1)+'% (deviasi '+(kd.dev>=0?'+':'')+kd.dev.toFixed(1)+' poin, status: '+stTxt+').'); else cat += '.';
+    if(kd.proyeksi!=='—' && kd.proyeksi!=='Selesai') cat += (bhs==='en'?' At the current pace the projected completion is ':' Dengan laju saat ini, proyeksi penyelesaian adalah ')+kd.proyeksi+'.';
+    c.pastikan(40); c.bar(R.catatan); c.y += 6; c.teks(cat, 9);
+    c.ttd(R.dibuat, 'PT Pratama Build & Construction', R.mengetahui, state.proyek.owner||R.pemilik);
+    c.selesai('Laporan_KurvaS');
+    notif(bhs==='en'?'S-Curve PDF created':'PDF Kurva S berhasil dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+
+/* ===== 2. BOQ ===== */
+function pbcCetakBoq(){
+  if(!pbcLapSiap()) return;
+  if(!state.items.length){ notif('Belum ada item BOQ','var(--red)'); return; }
+  try{
+    const bhs = pbcLapBhs(), R = PBC_R[bhs], uang = PBC_UANG_TERBUKA(), gt = grandTotal();
+    const c = pbcLapBuat({ judul:R.boqJudul, sub:state.proyek.nama, land:false, bhs:bhs }), C = c.C;
+    pbcLapInfoProyek(c, R, bhs);
+    const cols = uang ? [{l:R.no,w:0.55,a:'c'},{l:R.uraian,w:4.2,wrap:true},{l:R.sat,w:0.8,a:'c'},{l:R.vol,w:1,a:'r'},{l:R.harga,w:1.6,a:'r'},{l:R.jumlah,w:1.8,a:'r'},{l:R.bobot,w:1,a:'r'},{l:R.prog,w:1.6}]
+                       : [{l:R.no,w:0.6,a:'c'},{l:R.uraian,w:5,wrap:true},{l:R.sat,w:0.9,a:'c'},{l:R.vol,w:1.2,a:'r'},{l:R.bobot,w:1.1,a:'r'},{l:R.prog,w:2}];
+    let no = 0; const rows = [];
+    state.divisi.forEach(function(div){
+      const its = state.items.filter(function(i){ return i.divisiId===div.id; }); if(!its.length) return;
+      rows.push({_grp: pbcNamaTampil(div.id,div.nama)});
+      its.forEach(function(i){ no++; const p = itemPct(i), bob = gt?itemTotal(i)/gt*100:0;
+        const base = [String(no), pbcNamaTampil(i.id,i.nama), pbcSatPakai(i.sat,bhs), pbcQty(i.vol||0)];
+        rows.push(uang ? base.concat([pbcRp(i.harga||0), pbcRp(itemTotal(i)), bob.toFixed(2), {pct:p, warna:p>=99.95?C.teal:C.gold}]) : base.concat([bob.toFixed(2), {pct:p, warna:p>=99.95?C.teal:C.gold}])); });
+      const sub = its.reduce(function(s,i){ return s+itemTotal(i); },0);
+      rows.push({_sub:true, cells: uang ? ['', R.subDiv+' — '+pbcNamaTampil(div.id,div.nama), '', '', '', pbcRp(sub), (gt?sub/gt*100:0).toFixed(2), ''] : ['', R.subDiv+' — '+pbcNamaTampil(div.id,div.nama), '', '', (gt?sub/gt*100:0).toFixed(2), '']});
+    });
+    c.tabel(cols, rows, {title: bhs==='en'?'BILL OF QUANTITIES':'RINCIAN PEKERJAAN'});
+    if(uang) c.total(R.total, pbcRp(gt));
+    c.selesai('BOQ');
+    notif(bhs==='en'?'BOQ PDF created':'PDF BOQ berhasil dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+
+/* ===== 3. TERMIN ===== */
+function pbcCetakTermin(){
+  if(!pbcLapSiap()) return;
+  if(!PBC_UANG_TERBUKA()){ notif('Termin pembayaran berisi nominal — hanya bisa dicetak oleh Direktur','var(--red)'); return; }
+  if(!state.termin.length){ notif('Belum ada termin','var(--red)'); return; }
+  try{
+    const bhs = pbcLapBhs(), R = PBC_R[bhs], gt = grandTotal(), C0 = null;
+    const c = pbcLapBuat({ judul:R.terminJudul, sub:state.proyek.nama, land:false, bhs:bhs }), C = c.C;
+    pbcLapInfoProyek(c, R, bhs);
+    const tag = state.termin.reduce(function(s,t){ return s+t.nilai; },0), paid = state.termin.filter(function(t){ return t.status==='Lunas'; }).reduce(function(s,t){ return s+t.nilai; },0);
+    const ret = state.termin.filter(function(t){ return t.status==='Lunas' && !t.retensiDicairkanAt; }).reduce(function(s,t){ return s+(t.nilaiRetensi||0); },0);
+    c.kpi([[R.nilaiKontrak,pbcRp(gt)],[R.totalTagihan,pbcRp(tag)],[R.terbayar,pbcRp(paid),C.teal,true],[R.belumBayar,pbcRp(tag-paid),C.gold,true],[R.sisaKontrak,pbcRp(gt-tag)],[R.retensi,pbcRp(ret)]]);
+    const rows = state.termin.map(function(t,i){ const lunas = t.status==='Lunas';
+      return [String(i+1), t.nama, t.milestone||'-', t.pct+'%', pbcRp(t.nilai), t.tgl||'-', {t:lunas?R.sudahBayar:R.belumLunas, warna:lunas?C.teal:C.gold, b:true}, t.paidAt||'-']; });
+    rows.push({_sub:true, cells:['', R.total.replace('KESELURUHAN',''), '', state.termin.reduce(function(s,t){ return s+(t.pct||0); },0)+'%', pbcRp(tag), '', '', '']});
+    c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.termin,w:2.6,wrap:true},{l:R.milestone,w:3.2,wrap:true},{l:R.persen,w:0.8,a:'r'},{l:R.nilai,w:1.9,a:'r'},{l:R.targetBayar,w:1.4,a:'c'},{l:R.status,w:1.3,a:'c'},{l:R.tglLunas,w:1.4,a:'c'}], rows, {title:R.terminJudul});
+    c.selesai('Termin');
+    notif(bhs==='en'?'Payment schedule PDF created':'PDF Termin berhasil dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+
+/* ===== 4. LAPORAN HARIAN ===== */
+function pbcCetakLaporanHarian(){
+  if(!pbcLapSiap()) return;
+  try{
+    const bhs = pbcLapBhs(), R = PBC_R[bhs];
+    const c = pbcLapBuat({ judul:R.lapJudul, sub:state.proyek.nama, land:true, bhs:bhs }), C = c.C;
+    pbcLapInfoProyek(c, R, bhs);
+    const lap = (state.laporan||[]).slice().sort(function(a,b){ return String(a.tgl).localeCompare(String(b.tgl)); });
+    const rows = lap.length ? lap.map(function(l,i){ return [String(i+1), l.tgl||'-', l.cuaca||'-', l.tk||'-', l.div||'-', l.ket||'-', l.kendala||'-']; }) : [['','','','','',R.belumAda,'']];
+    c.tabel([{l:R.no,w:0.4,a:'c'},{l:R.tgl,w:1.1,a:'c'},{l:R.cuaca,w:1.1,a:'c'},{l:R.tk,w:1,a:'c'},{l:R.divisi,w:1.8,wrap:true},{l:R.pekerjaan,w:5,wrap:true},{l:R.kendala,w:2.6,wrap:true}], rows, {title:R.lapJudul});
+    const lg = (state.progressLog||[]).slice().sort(function(a,b){ return String(a.tanggal).localeCompare(String(b.tanggal)); });
+    if(lg.length){ c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.tgl,w:2,a:'c'},{l:R.akKum,w:2,a:'r'},{l:R.prog,w:6}], lg.map(function(g,i){ return [String(i+1), g.tanggal, Number(g.kumulatifPct).toFixed(1)+'%', {pct:Number(g.kumulatifPct), warna:C.teal}]; }), {title:R.riwayat}); }
+    c.selesai('LaporanHarian');
+    notif(bhs==='en'?'Daily report PDF created':'PDF Laporan Harian berhasil dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+
+/* ===== 5. REKAPITULASI (juga dipakai Owner Report) ===== */
+async function pbcCetakRekap(){
+  if(!pbcLapSiap()) return;
+  try{
+    const bhs = pbcLapBhs(), R = PBC_R[bhs], uang = PBC_UANG_TERBUKA(), gt = grandTotal();
+    const c = pbcLapBuat({ judul:R.rekapJudul, sub:state.proyek.nama, land:false, bhs:bhs }), C = c.C;
+    pbcLapInfoProyek(c, R, bhs);
+    if(!state.kurva.mulai && state.proyek.mulai) state.kurva.mulai = state.proyek.mulai;
+    const aktualPct = gt ? state.items.reduce(function(s,i){ return s+(itemTotal(i)/gt*100)*(itemPct(i)/100); },0) : 0;
+    const lastW = getCurrentKurvaWeek(), rencana = lastW ? lastW.rencana : 0, opn = getOpname(), dev = (opn.pct||0)-rencana;
+    c.kpi([[R.rencana, rencana.toFixed(1)+'%'],[R.aktual, aktualPct.toFixed(1)+'%',C.teal,true],[R.opname,(opn.pct||0).toFixed(1)+'%',C.gold,true],[R.deviasi,(dev>=0?'+':'')+dev.toFixed(1)+' '+R.poin, dev>=0?C.teal:C.red, true]]);
+    if(uang){
+      const paid = state.termin.filter(function(t){ return t.status==='Lunas'; }).reduce(function(s,t){ return s+t.nilai; },0), tag = state.termin.reduce(function(s,t){ return s+t.nilai; },0);
+      c.kpi([[R.nilaiKontrak,pbcRp(gt)],[R.terbayar,pbcRp(paid),C.teal,true],[R.belumBayar,pbcRp(tag-paid),C.gold,true]]);
+    }
+    const tot = state.items.length, sel = state.items.filter(function(i){ return itemPct(i)>=99.95; }).length, bel = state.items.filter(function(i){ return itemPct(i)<=0; }).length;
+    c.kpi([[R.itemTotal,String(tot)],[R.itemSelesai,String(sel),C.teal,true],[R.itemJalan,String(tot-sel-bel),C.gold,true],[R.itemBelum,String(bel)]]);
+    const rows = []; state.divisi.forEach(function(div,i){
+      const its = state.items.filter(function(x){ return x.divisiId===div.id; }); const t = its.reduce(function(s,x){ return s+itemTotal(x); },0); if(!its.length||!t) return;
+      const ac = its.reduce(function(s,x){ return s+itemTotal(x)*itemPct(x)/100; },0)/t*100;
+      rows.push([String(rows.length+1), pbcNamaTampil(div.id,div.nama), String(its.length), (t/gt*100).toFixed(2), {pct:ac, warna:ac>=99.95?C.teal:C.gold}]); });
+    c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.divisi,w:4,wrap:true},{l:R.itemTotal,w:1.2,a:'c'},{l:R.bobot,w:1.2,a:'r'},{l:R.prog,w:3}], rows, {title:R.progDiv});
+    if(typeof Chart!=='undefined' && state.kurva.mulai && gt){
+      try{ const periode = agregasiMingguan(); const dataChart = periode.map(function(row){ return { label:row.label, bobot:row.bobot, rencana:row.kumulatif, realisasi:cariRealisasiPadaHari(row.akhirHari) }; });
+        const img = kurvaChartImage(periode, dataChart, aktualPct); c.bar(R.kurva); c.gambar(img, c.TW, c.TW*600/1500); }catch(e){ console.error(e); }
+    }
+    if(uang && state.termin.length){
+      c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.termin,w:3,wrap:true},{l:R.persen,w:0.8,a:'r'},{l:R.nilai,w:2,a:'r'},{l:R.status,w:1.4,a:'c'}],
+        state.termin.map(function(t,i){ const l = t.status==='Lunas'; return [String(i+1), t.nama, t.pct+'%', pbcRp(t.nilai), {t:l?R.sudahBayar:R.belumLunas, warna:l?C.teal:C.gold, b:true}]; }), {title:R.terminJudul});
+    }
+    c.ttd(R.dibuat, 'PT Pratama Build & Construction', R.mengetahui, state.proyek.owner||R.pemilik);
+    c.selesai('Rekapitulasi');
+    notif(bhs==='en'?'Project summary PDF created':'PDF Rekapitulasi berhasil dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+function printKurva(){ cetakKurvaLengkapPdf(); }
+function cetakKurvaOwnerPdf(){ cetakKurvaLengkapPdf(); }
+function printBOQ(){ pbcCetakBoq(); }
+function printTermin(){ pbcCetakTermin(); }
+function printLaporanHarian(){ pbcCetakLaporanHarian(); }
+function printRekap(){ pbcCetakRekap(); }
+function generateOwnerReport(){ pbcCetakRekap(); }
+
 /* ===========================================================================
    GERBANG KONTRAK -> DP -> SPK -> PROYEK AKTIF
    Proposal TIDAK BOLEH langsung jadi Proyek (koreksi dari versi sebelumnya yang melompat
@@ -7479,11 +7849,11 @@ function rekapBodyHtml(){
     + '<h2>Dokumentasi</h2>'+dokumentasiGalleryHtml();
 }
 
-function printBOQ(){ exportPageToPdf('page-boq', renderBoq, fileNameFor('BOQ'), 'BOQ — Bill of Quantities'); }
-function printKurva(){ exportPageToPdf('page-schedule', renderKurva, fileNameFor('KurvaS'), 'Kurva S — Jadwal Pelaksanaan'); }
-function printLaporanHarian(){ exportPageToPdf('page-progress', renderProgress, fileNameFor('LaporanProgress'), 'Laporan Harian & Progres'); }
-function printTermin(){ exportPageToPdf('page-termin', renderTermin, fileNameFor('Termin'), 'Termin Pembayaran'); }
-function printRekap(){ exportPageToPdf('page-rekap', renderRekap, fileNameFor('Rekapitulasi'), 'Rekapitulasi Proyek'); }
+function printLamaBOQ(){ exportPageToPdf('page-boq', renderBoq, fileNameFor('BOQ'), 'BOQ — Bill of Quantities'); }
+function printLamaKurva(){ exportPageToPdf('page-schedule', renderKurva, fileNameFor('KurvaS'), 'Kurva S — Jadwal Pelaksanaan'); }
+function printLamaLaporanHarian(){ exportPageToPdf('page-progress', renderProgress, fileNameFor('LaporanProgress'), 'Laporan Harian & Progres'); }
+function printLamaTermin(){ exportPageToPdf('page-termin', renderTermin, fileNameFor('Termin'), 'Termin Pembayaran'); }
+function printLamaRekap(){ exportPageToPdf('page-rekap', renderRekap, fileNameFor('Rekapitulasi'), 'Rekapitulasi Proyek'); }
 
 const PDF = { navy:[12,30,61], navyLight:[19,49,92], gold:[201,162,39], goldLight:[230,196,90], gray:[122,129,149], lightGray:[230,233,240], dark:[28,35,51], teal:[26,140,122] };
 
@@ -7737,7 +8107,7 @@ function buildOwnerReportSections(){
   return sections;
 }
 
-async function generateOwnerReport(){
+async function generateOwnerReportLama(){
   if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!','var(--red)'); return; }
   if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
   notif('Menyiapkan Owner Report, mohon tunggu...','var(--blue)');
@@ -10330,7 +10700,7 @@ function kurvaMainConfig(periode, dataChart, aktualPct, print){
         y2:{ position:'right', min:0, max:Math.ceil(maxB*3.4*10)/10, display:false, grid:{ drawOnChartArea:false } },
         x:{ ticks:{ color:txt, font:{size:TK}, maxRotation:0, autoSkip:true, maxTicksLimit:print?26:(window.innerWidth<600?8:18) }, grid:{ display:false } } },
       plugins:{ todayLine:{ pos:todayPos, big:print },
-        legend:{ position:'top', align:'start', labels:{ usePointStyle:true, boxWidth:print?12:8, padding:print?18:12, color:'rgba(26,29,36,0.85)', font:{ size:FS },
+        legend:{ position:'top', align:'start', labels:{ usePointStyle:true, boxWidth:print?12:8, padding:print?30:12, color:'rgba(26,29,36,0.85)', font:{ size:FS },
           filter:function(item){ return !(item.text==='Proyeksi selesai' && !fc); } } },
         tooltip:{ backgroundColor:'#0E1730', titleColor:'#F0C864', bodyColor:'#fff', padding:10, cornerRadius:8, itemSort:function(a,b){ return a.datasetIndex-b.datasetIndex; },
           callbacks:{ label:function(c){ if(c.parsed.y===null || c.parsed.y===undefined) return null;
@@ -10397,7 +10767,7 @@ function renderKurvaChartsPro(periode, dataChart, aktualPct){
 }
 
 /* ===== PDF Laporan Kemajuan untuk Owner — TANPA nominal uang, boleh dicetak semua peran ===== */
-async function cetakKurvaOwnerPdf(){
+async function cetakKurvaOwnerPdfLama(){
   if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!','var(--red)'); return; }
   if(typeof window.jspdf==='undefined' || typeof Chart==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
   if(!state.items.length || !grandTotal() || !state.kurva.mulai){ notif('Isi BOQ dan tanggal mulai dulu, lalu coba lagi','var(--red)'); return; }
