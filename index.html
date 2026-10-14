@@ -559,14 +559,26 @@ window.PBC_CONFIG = {
     }catch(e){}
     tampilkanStatusKoneksi(false);var lv2=await lsGet(key);return lv2?{key:key,value:lv2,shared:!!shared}:null;
   }
+  /* T6: bedakan "memang tidak ada" ('tidakada') dari "gagal dibaca" ('gagal'). get() tetap dipakai modul lain apa adanya.
+     'gagal' = server tidak terjangkau/menolak DAN tidak ada salinan lokal: JANGAN dianggap kosong, JANGAN ditimpa dengan kosong. */
+  async function getAman(key){
+    try{
+      var r=await fetch(REST_BASE+'?key=eq.'+encodeURIComponent(key)+'&select=value,shared',{headers:AH()});
+      if(r.ok){tampilkanStatusKoneksi(true);var rows=await r.json();
+        if(rows.length) return {status:'ok',value:rows[0].value,dariServer:true};
+        var lv=await lsGet(key); return lv?{status:'ok',value:lv,dariServer:false}:{status:'tidakada',value:null};}
+    }catch(e){}
+    tampilkanStatusKoneksi(false);var lv2=await lsGet(key);
+    return lv2?{status:'ok',value:lv2,dariServer:false,serverGagal:true}:{status:'gagal',value:null};
+  }
   async function set(key,value,shared){
     if(key.indexOf('pbc_doc:')===0) return uploadFile(idDariKeyDokumen(key),value);
     await lsSet(key,value); /* simpan lokal dulu sebagai jaring pengaman, SELALU */
     try{
       var r=await fetch(REST_BASE,{method:'POST',headers:Object.assign({},AH(),{'Prefer':'resolution=merge-duplicates,return=representation'}),body:JSON.stringify({key:key,value:value,shared:!!shared,updated_at:new Date().toISOString()})});
-      if(r.ok){tampilkanStatusKoneksi(true);return{key:key,value:value,shared:!!shared};}
+      if(r.ok){tampilkanStatusKoneksi(true);return{key:key,value:value,shared:!!shared,tersimpanServer:true};}
     }catch(e){}
-    tampilkanStatusKoneksi(false);return{key:key,value:value,shared:!!shared};
+    tampilkanStatusKoneksi(false);return{key:key,value:value,shared:!!shared,tersimpanServer:false}; /* T6: hanya di HP ini, BELUM di server */
   }
   async function del(key,shared){
     if(key.indexOf('pbc_doc:')===0) return deleteFile(idDariKeyDokumen(key));
@@ -583,7 +595,7 @@ window.PBC_CONFIG = {
     tampilkanStatusKoneksi(false);return{keys:await lsList(prefix),prefix:prefix,shared:!!shared};
   }
 
-  window.storage = { get: get, set: set, delete: del, list: list, tertunda: tertunda, kirimUlangTertunda: kirimUlangTertunda };
+  window.storage = { get: get, getAman: getAman, set: set, delete: del, list: list, tertunda: tertunda, kirimUlangTertunda: kirimUlangTertunda };
   window.addEventListener('load', function(){
     setTimeout(function(){
       fetch(REST_BASE+'?select=key&limit=1',{headers:AH()}).then(function(r){tampilkanStatusKoneksi(r.ok);}).catch(function(){tampilkanStatusKoneksi(false);});
@@ -2235,6 +2247,10 @@ function setSaveStatus(txt) {
 }
 
 let lastSavedProjectId = null;
+/* T6: kunci data (MRP/penerimaan/pemakaian/absensi) yang GAGAL dibaca saat proyek dimuat. Selama proyek itu belum dimuat ulang
+   dengan sukses, kunci tersebut TIDAK ditulis (supaya daftar kosong tidak menimpa data di server). Bentuk: {idProyek:{'pbc_mrp:':true,...}} */
+let _kunciTahan = {};
+let _ulangSimpanTimer = null;
 /* ===========================================================================
    INTEGRASI SUPABASE — Proyek + Divisi + BOQ Item disinkronkan ke database
    sungguhan supaya bisa diakses dari perangkat apa pun (laptop, HP, dst), bukan
@@ -2481,10 +2497,13 @@ async function saveProjectNow() {
   /* Data utama proyek — paling kritis. Dicoba 2x (dengan jeda sebentar) sebelum benar-benar
      mengalah & memberi tahu user, supaya kegagalan sesaat/transient tidak langsung jadi alarm. */
   let gagalUtama = false, pesanError = '';
+  let belumServer = false;   /* T6: server TIDAK menerima (data hanya di HP ini) */
   for(let percobaan=0; percobaan<2; percobaan++){
     try {
-      await window.storage.set('pbc_project:'+state.proyek.id, payload, false);
-      gagalUtama = false; pesanError = ''; break;
+      const hs = await window.storage.set('pbc_project:'+state.proyek.id, payload, false);
+      gagalUtama = false; pesanError = ''; belumServer = !!(hs && hs.tersimpanServer === false);
+      if(belumServer && percobaan===0){ await new Promise(function(r){ setTimeout(r, 1200); }); continue; }
+      break;
     } catch(e){
       gagalUtama = true; pesanError = (e && e.message) ? e.message : String(e);
       if(percobaan===0) await new Promise(function(r){ setTimeout(r, 1200); });
@@ -2496,17 +2515,27 @@ async function saveProjectNow() {
     notif('Gagal menyimpan data proyek: '+pesanError+' — perubahan tetap ada di tampilan, akan dicoba lagi otomatis','var(--red)');
     return; /* jangan lanjut ke data sekunder kalau data utama saja sudah gagal */
   }
+  /* T6: server menolak/tidak terjangkau: JANGAN tampilkan "Tersimpan". Salinan HP ini aman; coba lagi otomatis tiap 20 detik. */
+  if(belumServer){
+    setSaveStatus('⚠ Belum tersimpan di server (hanya di HP ini)');
+    if(!_ulangSimpanTimer) notif('Belum tersimpan di server — perubahan aman di HP ini dan akan dicoba lagi otomatis. Jangan tutup aplikasi dulu.','var(--red)');
+    clearTimeout(_ulangSimpanTimer); _ulangSimpanTimer = setTimeout(function(){ _ulangSimpanTimer = null; saveProjectNow(); }, 20000);
+    return;
+  }
+  clearTimeout(_ulangSimpanTimer); _ulangSimpanTimer = null;
   /* Data sekunder (mrpDraft, materialReceiving, index, pointer proyek terakhir) — kalau gagal, JANGAN
      tampilkan alarm ke user (data utama proyek sudah aman tersimpan); cukup log diam-diam, otomatis
      ikut tersimpan lagi di proses save berikutnya karena selalu ditulis ulang penuh setiap kali. */
-  try { await window.storage.set('pbc_mrp:'+state.proyek.id, JSON.stringify(state.mrpDraft||[]), false); }
-  catch(e){ console.warn('[PBC] Gagal simpan mrpDraft (akan dicoba lagi di save berikutnya):', e); }
-  try { await window.storage.set('pbc_receiving:'+state.proyek.id, JSON.stringify(state.materialReceiving||[]), false); }
-  catch(e){ console.warn('[PBC] Gagal simpan materialReceiving (akan dicoba lagi di save berikutnya):', e); }
-  try { await window.storage.set('pbc_usage:'+state.proyek.id, JSON.stringify(state.materialUsageLog||[]), false); }
-  catch(e){ console.warn('[PBC] Gagal simpan materialUsageLog (akan dicoba lagi di save berikutnya):', e); }
-  try { await window.storage.set('pbc_absensi:'+state.proyek.id, JSON.stringify(state.absensi||[]), false); }
-  catch(e){ console.warn('[PBC] Gagal simpan absensi (akan dicoba lagi di save berikutnya):', e); }
+  const tahan = _kunciTahan[state.proyek.id] || {}, ditahan = []; let sekunderBelumServer = false;
+  async function tulisKunci(prefix, daftar, nama){
+    if(tahan[prefix]){ ditahan.push(nama); console.warn('[PBC] '+nama+' tidak ditulis: gagal dibaca saat proyek dimuat (tidak boleh menimpa data server dengan daftar kosong). Muat ulang proyek.'); return; }
+    try { const h = await window.storage.set(prefix+state.proyek.id, JSON.stringify(daftar||[]), false); if(h && h.tersimpanServer === false) sekunderBelumServer = true; }
+    catch(e){ console.warn('[PBC] Gagal simpan '+nama+' (akan dicoba lagi di save berikutnya):', e); }
+  }
+  await tulisKunci('pbc_mrp:', state.mrpDraft, 'MRP');
+  await tulisKunci('pbc_receiving:', state.materialReceiving, 'penerimaan material');
+  await tulisKunci('pbc_usage:', state.materialUsageLog, 'pemakaian material');
+  await tulisKunci('pbc_absensi:', state.absensi, 'absensi');
   try { await updateIndex(state.proyek.id, state.proyek.nama); }
   catch(e){ console.warn('[PBC] Gagal update index proyek (akan dicoba lagi):', e); }
   if(lastSavedProjectId !== state.proyek.id){
@@ -2514,7 +2543,14 @@ async function saveProjectNow() {
     catch(e){ console.warn('[PBC] Gagal update penanda proyek terakhir:', e); }
   }
   const now = new Date();
-  setSaveStatus('✓ Tersimpan ' + now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0'));
+  if(ditahan.length){
+    setSaveStatus('⚠ Tersimpan, tetapi '+ditahan.join(', ')+' TIDAK ditimpa (gagal dibaca) — muat ulang proyek');
+  } else if(sekunderBelumServer){
+    setSaveStatus('⚠ Sebagian data belum tersimpan di server');
+    clearTimeout(_ulangSimpanTimer); _ulangSimpanTimer = setTimeout(function(){ _ulangSimpanTimer = null; saveProjectNow(); }, 20000);
+  } else {
+    setSaveStatus('✓ Tersimpan ' + now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0'));
+  }
   syncProjectCoreToSupabase(); /* tidak ditunggu (await) supaya tidak memperlambat tampilan -- kalau gagal, cuma badge status yang berubah, data lokal sudah aman duluan */
 }
 
@@ -2564,8 +2600,14 @@ async function loadProjectById(id) {
        window.storage sendiri tidak tersedia (mis. dibuka di browser biasa tanpa Claude) */
     let data = {};
     try {
-      const r = await window.storage.get('pbc_project:'+id, false);
-      if(r && r.value) data = JSON.parse(r.value);
+      /* T6: blob proyek gagal dibaca (server gagal + tidak ada salinan lokal) atau rusak: JANGAN dibuka. Dulu dianggap kosong,
+         lalu simpan berikutnya menimpa blob di server dengan data kosong. */
+      const r = await window.storage.getAman('pbc_project:'+id);
+      if(r.status === 'gagal'){ notif('Data proyek belum bisa dibaca (koneksi bermasalah). Proyek TIDAK dibuka supaya data tidak tertimpa — coba lagi.','var(--red)'); return; }
+      if(r.status === 'ok' && r.value){
+        try { data = JSON.parse(r.value); }
+        catch(pe){ console.error('[PBC] Blob proyek rusak:', id, pe); notif('Data proyek tidak terbaca (rusak). Proyek TIDAK dibuka supaya tidak tertimpa — hubungi admin.','var(--red)'); return; }
+      }
     } catch(e){ console.warn('[PBC] Penyimpanan cadangan lokal tidak tersedia, lanjut coba Supabase saja:', e); }
 
     /* Proyek + Divisi + BOQ Item: UTAMAKAN Supabase (data sungguhan, sama di semua perangkat).
@@ -2609,22 +2651,26 @@ async function loadProjectById(id) {
     state.retensiPencairan = data.retensiPencairan || [];
     state.inspections = data.inspections || [];
     state.punchList = data.punchList || [];
-    try {
-      const rMrp = await window.storage.get('pbc_mrp:'+id, false);
-      state.mrpDraft = (rMrp && rMrp.value) ? JSON.parse(rMrp.value) : [];
-    } catch(e){ state.mrpDraft = []; }
-    try {
-      const rRecv = await window.storage.get('pbc_receiving:'+id, false);
-      state.materialReceiving = (rRecv && rRecv.value) ? JSON.parse(rRecv.value) : [];
-    } catch(e){ state.materialReceiving = []; }
-    try {
-      const rUsage = await window.storage.get('pbc_usage:'+id, false);
-      state.materialUsageLog = (rUsage && rUsage.value) ? JSON.parse(rUsage.value) : [];
-    } catch(e){ state.materialUsageLog = []; }
-    try {
-      const rAbsensi = await window.storage.get('pbc_absensi:'+id, false);
-      state.absensi = (rAbsensi && rAbsensi.value) ? JSON.parse(rAbsensi.value) : [];
-    } catch(e){ state.absensi = []; }
+    /* T6: kunci yang GAGAL dibaca (bukan "kosong") ditandai dan tidak akan ditulis ulang dengan daftar kosong. */
+    const tahanBaru = {};
+    async function bacaDaftar(prefix){
+      try {
+        const r = await window.storage.getAman(prefix+id);
+        if(r.status === 'gagal'){ tahanBaru[prefix] = true; return []; }
+        if(r.status !== 'ok' || !r.value) return [];
+        const v = JSON.parse(r.value);
+        if(!Array.isArray(v)){ tahanBaru[prefix] = true; return []; }
+        return v;
+      } catch(e){ tahanBaru[prefix] = true; return []; }
+    }
+    state.mrpDraft = await bacaDaftar('pbc_mrp:');
+    state.materialReceiving = await bacaDaftar('pbc_receiving:');
+    state.materialUsageLog = await bacaDaftar('pbc_usage:');
+    state.absensi = await bacaDaftar('pbc_absensi:');
+    _kunciTahan[id] = tahanBaru;
+    if(Object.keys(tahanBaru).length){
+      setTimeout(function(){ notif('Sebagian data (MRP/material/absensi) belum bisa dibaca. Data itu tidak akan ditimpa — muat ulang proyek bila koneksi sudah baik.','var(--red)'); }, 900);
+    }
     if(typeof muatKatalogMaterial==='function'){ muatKatalogMaterial(); }
     document.getElementById('topProject').textContent = state.proyek.nama;
     try { await window.storage.set('pbc_last', id, false); } catch(e){ /* abaikan kalau tidak tersedia */ }
