@@ -1261,8 +1261,8 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
   </div>
 
   <div class="toolbar" style="flex-wrap:wrap">
-    <button class="btn btn-gold" style="padding:10px 22px;font-size:11px" onclick="generateOwnerReport()">📄 GENERATE OWNER REPORT</button>
-    <button class="btn btn-blue" onclick="printRekap()">🖨 Cetak Rekap PDF</button>
+    <button class="btn btn-gold" style="padding:10px 22px;font-size:11px" onclick="pbcCetakRekapOwner()">📄 REKAPITULASI UNTUK OWNER (PDF)</button>
+    <button class="btn btn-blue" style="padding:10px 22px;font-size:11px" id="btnRekapDir" onclick="pbcCetakRekapDirektur()">🔒 REKAPITULASI DIREKTUR (PDF, lengkap + keuangan internal)</button>
     <span style="margin-left:auto;font-size:9px;color:var(--muted2);align-self:center">Export modul lain:</span>
     <button class="btn btn-gold btn-sm" onclick="printBOQ()">BOQ</button>
     <button class="btn btn-gold btn-sm" onclick="printKurva()">Kurva S</button>
@@ -4231,13 +4231,227 @@ async function pbcCetakRekap(){
     notif(bhs==='en'?'Project summary PDF created':'PDF Rekapitulasi berhasil dibuat');
   }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
 }
+/* ===== REKAPITULASI LENGKAP: versi OWNER & versi DIREKTUR ===== */
+const PBC_RK = {
+ id:{ ownerJudul:'REKAPITULASI PROYEK', dirJudul:'REKAPITULASI PROYEK — DIREKTUR', ownerFoot:'Laporan untuk Pemilik Proyek', dirFoot:'Dokumen Internal & Rahasia — khusus Direktur',
+  ringkas:'RINGKASAN EKSEKUTIF', kontrakAwal:'Nilai Kontrak (BOQ)', addendum:'Addendum / VO Disetujui', kontrakFinal:'Nilai Kontrak Final', sisaTagih:'Sisa Belum Dibayar',
+  progOpname:'Progres Terverifikasi (Opname)', jadwal:'STATUS JADWAL', terminJ:'TERMIN PEMBAYARAN', voJ:'ADDENDUM / VARIATION ORDER', voNo:'No. VO', jenis:'Jenis', tglL:'Tanggal',
+  tambah:'Tambah Pekerjaan', kurang:'Kurang Pekerjaan', ubah:'Ubah Spesifikasi', stVo:{draft:'Draft',diajukan:'Diajukan',disetujui:'Disetujui',ditolak:'Ditolak',selesai:'Selesai'},
+  qcJ:'KUALITAS (QC) & DAFTAR TEMUAN', insp:'Inspeksi', temuanTotal:'Total Temuan', temuanBuka:'Masih Terbuka', temuanSelesai:'Sudah Selesai', lokasi:'Lokasi', temuan:'Temuan', tingkat:'Tingkat', targetS:'Target Selesai',
+  lapJ:'LAPORAN HARIAN TERAKHIR', opJ:'OPNAME TERVERIFIKASI', garansiJ:'MASA GARANSI & RETENSI', garansi:'Masa Garansi', retPencair:'Retensi Dicairkan', berjalan:'Berjalan', belumMulai:'Belum dimulai',
+  keuJ:'ANALISIS KEUANGAN INTERNAL', uraian:'Uraian', jml:'Jumlah', keterangan:'Keterangan', progRp:'Nilai Pekerjaan Terpasang', terminCair:'Termin Sudah Diterima', pengMat:'Pengeluaran Material (PO diterima)',
+  pengUpah:'Pengeluaran Upah Tenaga Kerja', pengOps:'Pengeluaran Operasional', totalPeng:'TOTAL PENGELUARAN', cashflow:'Cashflow Bersih (Termin − Pengeluaran)', laba:'Estimasi Laba Kotor (Terpasang − Pengeluaran)', margin:'Margin Kotor Terhadap Nilai Terpasang',
+  poJ:'PURCHASE ORDER', poNo:'No. PO', supplier:'Supplier', stPo:'Status', totalPo:'Nilai PO', diterima:'Diterima', tkJ:'TENAGA KERJA', pekerja:'Pekerja', peran:'Peran', hadir:'Hari Hadir', upahDibayar:'Upah Dibayar',
+  gajiLog:'Riwayat Pembayaran Gaji', periode:'Periode', catatanDir:'CATATAN & PERHATIAN DIREKTUR', hargaS:'Harga Satuan', jumlah:'Jumlah', volT:'Terpasang', tdk:'Tidak ada data', cuaca:'Cuaca', tk:'TK', pekerjaan:'Pekerjaan / Kegiatan', kendala:'Kendala',
+  unit:'', rp:'Rp' },
+ en:{ ownerJudul:'PROJECT SUMMARY', dirJudul:'PROJECT SUMMARY — DIRECTOR', ownerFoot:'Report for the Project Owner', dirFoot:'Internal & Confidential — Director only',
+  ringkas:'EXECUTIVE SUMMARY', kontrakAwal:'Contract Value (BOQ)', addendum:'Approved Addendum / VO', kontrakFinal:'Final Contract Value', sisaTagih:'Outstanding Balance',
+  progOpname:'Verified Progress (Opname)', jadwal:'SCHEDULE STATUS', terminJ:'PAYMENT SCHEDULE', voJ:'ADDENDUM / VARIATION ORDERS', voNo:'VO No.', jenis:'Type', tglL:'Date',
+  tambah:'Additional Works', kurang:'Omitted Works', ubah:'Specification Change', stVo:{draft:'Draft',diajukan:'Submitted',disetujui:'Approved',ditolak:'Rejected',selesai:'Completed'},
+  qcJ:'QUALITY (QC) & PUNCH LIST', insp:'Inspections', temuanTotal:'Total Findings', temuanBuka:'Still Open', temuanSelesai:'Resolved', lokasi:'Location', temuan:'Finding', tingkat:'Severity', targetS:'Target Date',
+  lapJ:'LATEST DAILY REPORTS', opJ:'VERIFIED MEASUREMENT (OPNAME)', garansiJ:'WARRANTY & RETENTION', garansi:'Warranty Period', retPencair:'Retention Released', berjalan:'Running', belumMulai:'Not started',
+  keuJ:'INTERNAL FINANCIAL ANALYSIS', uraian:'Description', jml:'Amount', keterangan:'Notes', progRp:'Value of Work in Place', terminCair:'Payments Received', pengMat:'Material Cost (received POs)',
+  pengUpah:'Labour Cost', pengOps:'Operational Cost', totalPeng:'TOTAL EXPENDITURE', cashflow:'Net Cashflow (Payments − Expenditure)', laba:'Estimated Gross Profit (Work in Place − Expenditure)', margin:'Gross Margin on Work in Place',
+  poJ:'PURCHASE ORDERS', poNo:'PO No.', supplier:'Supplier', stPo:'Status', totalPo:'PO Value', diterima:'Received', tkJ:'WORKFORCE', pekerja:'Worker', peran:'Role', hadir:'Days Present', upahDibayar:'Wages Paid',
+  gajiLog:'Payroll History', periode:'Period', catatanDir:'DIRECTOR NOTES & ALERTS', hargaS:'Unit Rate', jumlah:'Amount', volT:'Installed', tdk:'No data', cuaca:'Weather', tk:'Crew', pekerjaan:'Work Done', kendala:'Issues',
+  unit:'', rp:'Rp' }
+};
+function pbcRkGaji(){ const log = state.payrollLog||[]; if(log.length) return log.reduce(function(s,p){ return s+(p.totalDibayar||0); },0);
+  return (state.laporan||[]).reduce(function(s,l){ return s+(parseInt(l.tk)||0); },0) * (typeof UPAH_HARIAN_DEFAULT!=='undefined'?UPAH_HARIAN_DEFAULT:150000); }
+function pbcRkKeu(){
+  const gt = grandTotal(), k = getKeuangan(), adBoq = 0;
+  const vos = (state.variationOrders||[]).filter(function(v){ return v.status==='disetujui'||v.status==='selesai'; });
+  const addVo = vos.reduce(function(s,v){ return s+(v.nilaiPerubahan||0); },0);
+  const addendum = (k.addendum||0);
+  const paid = state.termin.filter(function(t){ return t.status==='Lunas'; }).reduce(function(s,t){ return s+t.nilai; },0);
+  const tag = state.termin.reduce(function(s,t){ return s+t.nilai; },0);
+  const progRp = state.items.reduce(function(s,i){ return s+(i.terpasang||0)*(i.harga||0); },0);
+  const mat = (state.purchaseOrders||[]).reduce(function(s,po){ return s+(po.items||[]).reduce(function(s2,it){ return s2+(it.qtyDiterima||0)*(it.harga||0); },0); },0);
+  const upah = pbcRkGaji(), ops = k.pengeluaranOperasional||0, peng = mat+upah+ops;
+  return { gt:gt, addendum:addendum, final:gt+addendum, paid:paid, tag:tag, progRp:progRp, mat:mat, upah:upah, ops:ops, peng:peng, cash:paid-peng, laba:progRp-peng, vos:vos, addVo:addVo };
+}
+function pbcRkStatusItem(R, C, i, hari, sMap){
+  const s = sMap[i.id], p = itemPct(i); let st = R.stBelum, wr = C.g5;
+  if(p>=99.95){ st = R.stSelesai; wr = C.teal; } else if(hari!==null && s && hari>=s.endDay){ st = R.stTelat; wr = C.red; } else if(p>0){ st = R.stJalan; wr = C.gold; }
+  return { t:st, warna:wr, b:true, p:p };
+}
+async function pbcCetakRekapLengkap(mode){
+  if(!pbcLapSiap()) return;
+  const dir = mode==='direktur';
+  if(dir && !PBC_UANG_TERBUKA()){ notif('Rekapitulasi Direktur hanya bisa dicetak oleh Direktur','var(--red)'); return; }
+  const gt = grandTotal();
+  if(!state.items.length || !gt){ notif('Isi BOQ (volume & harga) dulu, lalu coba lagi','var(--red)'); return; }
+  notif('Menyiapkan Rekapitulasi '+(dir?'Direktur':'Owner')+'...','var(--blue)');
+  await new Promise(function(r){ setTimeout(r,60); });
+  try{
+    const bhs = pbcLapBhs(), R = PBC_R[bhs], L = PBC_RK[bhs], uang = PBC_UANG_TERBUKA(), en = bhs==='en';
+    const c = pbcLapBuat({ judul: dir?L.dirJudul:L.ownerJudul, sub:state.proyek.nama, land:false, bhs:bhs, footer: dir?L.dirFoot:L.ownerFoot }), C = c.C;
+    pbcLapInfoProyek(c, R, bhs);
+    if(!state.kurva.mulai && state.proyek.mulai) state.kurva.mulai = state.proyek.mulai;
+    const mulai = state.kurva.mulai, K = pbcRkKeu();
+    const aktualPct = state.items.reduce(function(s,i){ return s+(itemTotal(i)/gt*100)*(itemPct(i)/100); },0);
+    let kd = null; try{ if(mulai) kd = kurvaKpiData(aktualPct); }catch(e){}
+    const opn = getOpname(), plan = kd && kd.plan!==null ? kd.plan : null, dev = plan===null ? null : aktualPct-plan;
+    const tot = state.items.length, sel = state.items.filter(function(i){ return itemPct(i)>=99.95; }).length, bel = state.items.filter(function(i){ return itemPct(i)<=0; }).length;
+    const fgS = kd ? (function(h){ h=String(h||''); return (h.charAt(0)==='#'&&h.length===7)?[parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]:C.g5; })(kd.status.fg) : C.g5;
+    const stEn = { 'Sesuai / lebih cepat':'On track / ahead','Waspada':'Watch','Terlambat':'Delayed','Selesai':'Completed','Belum dimulai':'Not started','Awal proyek':'Early stage','Melewati jadwal':'Past schedule' };
+    const stTxt = kd ? (en ? (stEn[kd.status.t]||kd.status.t) : kd.status.t) : '-';
+    /* 1. ringkasan eksekutif */
+    c.bar(L.ringkas, dir); c.y += 6;
+    c.kpi([[R.aktual, aktualPct.toFixed(1)+'%', C.teal, true],[R.target, plan===null?'-':plan.toFixed(1)+'%'],[R.deviasi, dev===null?'-':((dev>=0?'+':'')+dev.toFixed(1)+' '+R.poin), dev===null?null:(dev>=0?C.teal:C.red), true],[R.statusJadwal, stTxt, fgS, true]]);
+    c.kpi([[L.progOpname,(opn.pct||0).toFixed(1)+'%',C.gold,true],[R.proyeksi, kd?(kd.proyeksi==='Selesai'?(en?'Completed':'Selesai'):(kd.proyeksi==='—'?'-':kd.proyeksi)):'-'],[R.sisa, kd?kd.sisa.replace('hari',R.hari).replace('Lewat','Over'):'-']]);
+    c.kpi([[R.itemTotal,String(tot)],[R.itemSelesai,String(sel),C.teal,true],[R.itemJalan,String(tot-sel-bel),C.gold,true],[R.itemBelum,String(bel)]]);
+    if(uang){
+      c.kpi([[L.kontrakAwal,pbcRp(K.gt)],[L.addendum,(K.addendum?'+':'')+pbcRp(K.addendum),C.blue,true],[L.kontrakFinal,pbcRp(K.final),C.ink,true]]);
+      c.kpi([[R.terbayar,pbcRp(K.paid),C.teal,true],[R.belumBayar,pbcRp(K.final-K.paid),C.gold,true],[R.nilaiKontrak+' '+(en?'Paid':'Dibayar'), (K.final?(K.paid/K.final*100).toFixed(1):'0')+'%']]);
+    }
+    /* narasi */
+    let nar = (en?'As of ':'Per ')+pbcLapTgl(today(),0,bhs)+(en?', physical progress of the project reached ':', progres fisik proyek mencapai ')+aktualPct.toFixed(1)+'%';
+    if(plan!==null) nar += en ? (' against a planned '+plan.toFixed(1)+'% ('+(dev>=0?'ahead by ':'behind by ')+Math.abs(dev).toFixed(1)+' pts).') : (' dari target jadwal '+plan.toFixed(1)+'% ('+(dev>=0?'lebih cepat ':'tertinggal ')+Math.abs(dev).toFixed(1)+' poin).'); else nar += '.';
+    nar += en ? (' '+sel+' of '+tot+' work items are complete, '+(tot-sel-bel)+' in progress and '+bel+' not yet started.') : (' '+sel+' dari '+tot+' item pekerjaan telah selesai, '+(tot-sel-bel)+' sedang berjalan dan '+bel+' belum dimulai.');
+    const tp = (state.punchList||[]).filter(function(p){ return p.status==='terbuka'||p.status==='dikerjakan'; }).length;
+    if(tp) nar += en ? (' There are '+tp+' open QC findings to be resolved.') : (' Terdapat '+tp+' temuan QC yang masih terbuka dan perlu diselesaikan.');
+    c.teks(nar, 9);
+    /* 2. progres per divisi */
+    const hari = kd ? kd.hari : null, sch = (typeof getCachedSchedule==='function'&&mulai) ? getCachedSchedule() : [], sMap = {}; sch.forEach(function(s){ sMap[s.item.id] = s; });
+    const baris = [];
+    state.divisi.forEach(function(div){
+      const its = state.items.filter(function(i){ return i.divisiId===div.id; }); const t = its.reduce(function(s,i){ return s+itemTotal(i); },0); if(!its.length||!t) return;
+      let pl=0, ac=0; its.forEach(function(i){ const s = sMap[i.id]; let fr = 0; if(s && hari!==null) fr = Math.max(0,Math.min(1,(hari-s.startDay)/Math.max(0.0001,(s.endDay-s.startDay)))); pl += itemTotal(i)*fr; ac += itemTotal(i)*itemPct(i)/100; });
+      baris.push({ div:div, its:its, t:t, bobot:t/gt*100, plan:pl/t*100, akt:ac/t*100 }); });
+    c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.divisi,w:4,wrap:true},{l:(en?'Items':'Item'),w:1,a:'c'},{l:R.bobot,w:1.1,a:'r'},{l:R.tgtHari,w:1.4,a:'r'},{l:R.akt,w:1.2,a:'r'},{l:R.prog,w:2.8}],
+      baris.map(function(b,i){ const sl = b.akt-b.plan; return [String(i+1), pbcNamaTampil(b.div.id,b.div.nama), String(b.its.length), b.bobot.toFixed(2), b.plan.toFixed(1)+'%', {t:b.akt.toFixed(1)+'%', warna:sl>=-0.05?C.teal:C.red, b:true}, {pct:b.akt, warna:b.akt>=b.plan-0.05?C.teal:C.gold}]; }), {title:R.progDiv});
+    /* 3. kurva S */
+    if(typeof Chart!=='undefined' && mulai){
+      try{ const periode = agregasiMingguan(); const dc = periode.map(function(row){ return { label:row.label, bobot:row.bobot, rencana:row.kumulatif, realisasi:cariRealisasiPadaHari(row.akhirHari) }; });
+        const img = kurvaChartImage(periode, dc, aktualPct); c.pastikan(c.TW*600/1500+40); c.bar(R.kurva); c.gambar(img, c.TW, c.TW*600/1500); }catch(e){ console.error(e); }
+    }
+    /* 4. status tiap pekerjaan */
+    let no = 0; const rows = [];
+    baris.forEach(function(b){
+      rows.push({_grp: pbcNamaTampil(b.div.id,b.div.nama)});
+      b.its.forEach(function(i){ no++; const st = pbcRkStatusItem(R,C,i,hari,sMap), s = sMap[i.id];
+        const terpasang = (Math.round((i.terpasang||0)*100)/100).toLocaleString('id');
+        if(dir) rows.push([String(no), pbcNamaTampil(i.id,i.nama), pbcSatPakai?pbcSatPakai(i):(i.sat||''), String(i.vol||0), pbcRp(i.harga||0), pbcRp(itemTotal(i)), {pct:st.p, warna:st.p>=99.95?C.teal:C.gold}, {t:st.t, warna:st.warna, b:true}]);
+        else rows.push([String(no), pbcNamaTampil(i.id,i.nama), pbcSatPakai?pbcSatPakai(i):(i.sat||''), String(i.vol||0), terpasang, {pct:st.p, warna:st.p>=99.95?C.teal:C.gold}, {t:st.t, warna:st.warna, b:true}]);
+      });
+      if(dir) rows.push({_sub:true, cells:['', R.subDiv+' — '+pbcNamaTampil(b.div.id,b.div.nama), '', '', '', pbcRp(b.t), {pct:b.akt, warna:C.teal}, '']});
+      else rows.push({_sub:true, cells:['', R.subDiv+' — '+pbcNamaTampil(b.div.id,b.div.nama), '', '', '', {pct:b.akt, warna:C.teal}, '']});
+    });
+    if(dir) c.tabel([{l:R.no,w:0.45,a:'c'},{l:R.uraian,w:3.4,wrap:true},{l:R.sat,w:0.6,a:'c'},{l:R.vol,w:0.7,a:'r'},{l:R.harga,w:1.5,a:'r'},{l:R.jumlah,w:1.7,a:'r'},{l:R.prog,w:1.9},{l:R.status,w:1.2,a:'c'}], rows, {title:R.statusItem});
+    else c.tabel([{l:R.no,w:0.45,a:'c'},{l:R.uraian,w:4,wrap:true},{l:R.sat,w:0.6,a:'c'},{l:R.vol,w:0.8,a:'r'},{l:L.volT,w:1,a:'r'},{l:R.prog,w:2.2},{l:R.status,w:1.3,a:'c'}], rows, {title:R.statusItem});
+    if(dir) c.total(R.total, pbcRp(gt));
+    /* 5. termin */
+    if(uang && state.termin.length){
+      c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.termin,w:3.2,wrap:true},{l:R.persen,w:0.7,a:'r'},{l:R.nilai,w:1.8,a:'r'},{l:R.tglLunas,w:1.4,a:'c'},{l:R.status,w:1.3,a:'c'}],
+        state.termin.map(function(t,i){ const l = t.status==='Lunas'; const tg = t.tglLunas||t.tanggalLunas||t.tglBayar||''; return [String(i+1), t.nama, t.pct+'%', pbcRp(t.nilai), tg?pbcLapTgl(tg,0,bhs):'-', {t:l?R.sudahBayar:R.belumLunas, warna:l?C.teal:C.gold, b:true}]; })
+        .concat([{_sub:true, cells:['', (en?'TOTAL':'TOTAL'), state.termin.reduce(function(s,t){return s+(+t.pct||0);},0)+'%', pbcRp(K.tag), '', '']}]), {title:L.terminJ});
+    }
+    /* 6. VO / addendum */
+    const vo = state.variationOrders||[];
+    if(vo.length){
+      const jn = {tambah_pekerjaan:L.tambah, kurang_pekerjaan:L.kurang, ubah_spesifikasi:L.ubah};
+      c.tabel([{l:R.no,w:0.4,a:'c'},{l:L.voNo,w:1,a:'l'},{l:L.tglL,w:1.3,a:'c'},{l:L.jenis,w:1.8},{l:R.ket,w:3,wrap:true}].concat(uang?[{l:R.nilai,w:1.6,a:'r'}]:[]).concat([{l:R.status,w:1.2,a:'c'}]),
+        vo.map(function(v,i){ const ok = v.status==='disetujui'||v.status==='selesai'; return [String(i+1), v.nomorVo, pbcLapTgl(v.tanggal,0,bhs), jn[v.jenisPerubahan]||v.jenisPerubahan||'-', v.deskripsiPerubahan||'-']
+          .concat(uang?[(v.nilaiPerubahan>=0?'+':'')+pbcRp(v.nilaiPerubahan||0)]:[]).concat([{t:L.stVo[v.status]||v.status, warna:ok?C.teal:(v.status==='ditolak'?C.red:C.gold), b:true}]); }), {title:L.voJ});
+    }
+    /* 7. QC */
+    const ins = state.inspections||[], pun = state.punchList||[];
+    if(ins.length || pun.length){
+      const pb = pun.filter(function(p){ return p.status==='terbuka'||p.status==='dikerjakan'; }), ps = pun.length-pb.length;
+      c.bar(L.qcJ); c.y += 6;
+      c.kpi([[L.insp,String(ins.length)],[L.temuanTotal,String(pun.length)],[L.temuanBuka,String(pb.length),pb.length?C.red:C.teal,true],[L.temuanSelesai,String(ps),C.teal,true]]);
+      if(pb.length){
+        const itm = {}; state.items.forEach(function(i){ itm[i.id] = i; });
+        c.tabel([{l:R.no,w:0.4,a:'c'},{l:L.temuan,w:4,wrap:true},{l:L.lokasi,w:1.8,wrap:true},{l:L.tingkat,w:1,a:'c'},{l:L.targetS,w:1.4,a:'c'}],
+          pb.map(function(p,i){ return [String(i+1), p.deskripsiTemuan||'-', p.lokasi||(itm[p.itemBoqId]?itm[p.itemBoqId].nama:'-'), String(p.tingkat||'-'), p.targetSelesai?pbcLapTgl(p.targetSelesai,0,bhs):'-']; }), {});
+      }
+    }
+    /* 8. Opname */
+    const ol = (state.opnameList||[]).filter(function(o){ return o.status==='final'; });
+    if(ol.length){
+      c.tabel([{l:R.no,w:0.4,a:'c'},{l:'Opname',w:1.6},{l:L.tglL,w:1.5,a:'c'},{l:R.prog,w:1.2,a:'r'}].concat(uang?[{l:R.nilai,w:2,a:'r'}]:[]),
+        ol.map(function(o,i){ return [String(i+1), o.nomor||'-', o.tanggal?pbcLapTgl(o.tanggal,0,bhs):'-', (o.pct||0).toFixed(1)+'%'].concat(uang?[pbcRp(o.nilai||0)]:[]); }), {title:L.opJ});
+    }
+    /* 9. Garansi & retensi */
+    if(state.masaGaransi){
+      const g = state.masaGaransi, rets = state.retensiPencairan||[];
+      const rr = [[L.garansi, (g.tanggalMulai?pbcLapTgl(g.tanggalMulai,0,bhs):'-')+' — '+(g.tanggalSelesai?pbcLapTgl(g.tanggalSelesai,0,bhs):'-')],[R.status, g.status||'-']];
+      if(uang) rr.push([L.retPencair, pbcRp(rets.reduce(function(s,x){ return s+(x.totalDicairkan||0); },0))]);
+      c.tabel([{l:L.uraian,w:3},{l:L.keterangan,w:4}], rr.map(function(r){ return [r[0], {t:String(r[1]), b:true}]; }), {title:L.garansiJ});
+    }
+    /* 10. Laporan harian */
+    const lp = (state.laporan||[]).slice().sort(function(a,b){ return String(b.tgl).localeCompare(String(a.tgl)); }).slice(0, dir?15:10);
+    if(lp.length){
+      c.tabel([{l:L.tglL,w:1.3,a:'c'},{l:L.cuaca,w:1,a:'c'},{l:L.tk,w:0.6,a:'c'},{l:L.pekerjaan,w:4,wrap:true},{l:L.kendala,w:2,wrap:true}],
+        lp.map(function(l){ return [l.tgl?pbcLapTgl(l.tgl,0,bhs):'-', l.cuaca||'-', String(l.tk||0), (l.div?l.div+': ':'')+(l.ket||'-'), l.kendala||'-']; }), {title:L.lapJ});
+    }
+    /* ===== KHUSUS DIREKTUR ===== */
+    if(dir){
+      const pct = function(a,b){ return b?(a/b*100).toFixed(1)+'%':'-'; };
+      c.baru();
+      c.tabel([{l:L.uraian,w:5,wrap:true},{l:L.jml,w:2,a:'r'},{l:L.keterangan,w:2.4,wrap:true}], [
+        [L.kontrakAwal, pbcRp(K.gt), 'BOQ'],
+        [L.addendum, (K.addendum?'+':'')+pbcRp(K.addendum), K.vos.length?(K.vos.length+' VO'):'-'],
+        {_sub:true, cells:[L.kontrakFinal, pbcRp(K.final), '']},
+        [L.progRp, pbcRp(K.progRp), pct(K.progRp,K.final)+' '+(en?'of contract':'dari kontrak')],
+        [L.terminCair, pbcRp(K.paid), pct(K.paid,K.final)+' '+(en?'of contract':'dari kontrak')],
+        [L.sisaTagih, pbcRp(K.final-K.paid), ''],
+        [L.pengMat, pbcRp(K.mat), pct(K.mat,K.peng)+' '+(en?'of expenditure':'dari pengeluaran')],
+        [L.pengUpah, pbcRp(K.upah), pct(K.upah,K.peng)+' '+(en?'of expenditure':'dari pengeluaran')],
+        [L.pengOps, pbcRp(K.ops), pct(K.ops,K.peng)+' '+(en?'of expenditure':'dari pengeluaran')],
+        {_sub:true, cells:[L.totalPeng, pbcRp(K.peng), '']},
+        [L.cashflow, {t:pbcRp(K.cash), warna:K.cash>=0?C.teal:C.red, b:true}, K.cash>=0?(en?'Positive':'Positif'):(en?'Negative — funding needed':'Negatif — perlu dana talangan')],
+        [L.laba, {t:pbcRp(K.laba), warna:K.laba>=0?C.teal:C.red, b:true}, ''],
+        [L.margin, {t:K.progRp?(K.laba/K.progRp*100).toFixed(1)+'%':'-', b:true}, state.targetMarginPct?((en?'Target ':'Target ')+state.targetMarginPct+'%'):'']
+      ], {title:L.keuJ});
+      /* PO */
+      const pos = state.purchaseOrders||[];
+      if(pos.length){
+        const sup = {}; (state.suppliers||[]).forEach(function(s){ sup[s.id] = s.nama; });
+        c.tabel([{l:R.no,w:0.4,a:'c'},{l:L.poNo,w:1.3},{l:L.tglL,w:1.3,a:'c'},{l:L.supplier,w:2.4,wrap:true},{l:L.stPo,w:1.5,a:'c'},{l:L.totalPo,w:1.6,a:'r'},{l:L.diterima,w:1.6,a:'r'}],
+          pos.map(function(p,i){ const dt = (p.items||[]).reduce(function(s,it){ return s+(it.qtyDiterima||0)*(it.harga||0); },0); return [String(i+1), p.poNumber||'-', p.tanggal?pbcLapTgl(p.tanggal,0,bhs):'-', sup[p.supplierId]||'-', String(p.status||'-').replace(/_/g,' '), pbcRp(p.total||0), pbcRp(dt)]; })
+          .concat([{_sub:true, cells:['', 'TOTAL', '', '', '', pbcRp(pos.reduce(function(s,p){return s+(p.total||0);},0)), pbcRp(K.mat)]}]), {title:L.poJ});
+      }
+      /* tenaga kerja */
+      const pk = state.pekerja||[], ab = state.absensi||[];
+      if(pk.length){
+        c.tabel([{l:R.no,w:0.4,a:'c'},{l:L.pekerja,w:3},{l:L.peran,w:2},{l:L.hadir,w:1.2,a:'c'}],
+          pk.map(function(w,i){ const h = ab.filter(function(a){ return a.pekerjaId===w.id; }).length; return [String(i+1), w.nama||'-', w.peran||'-', String(h)]; }), {title:L.tkJ});
+      }
+      const pl = state.payrollLog||[];
+      if(pl.length){
+        c.tabel([{l:R.no,w:0.4,a:'c'},{l:L.tglL,w:1.4,a:'c'},{l:L.periode,w:3},{l:L.upahDibayar,w:1.8,a:'r'}],
+          pl.map(function(p,i){ return [String(i+1), p.tanggal?pbcLapTgl(p.tanggal,0,bhs):'-', (p.periodeMulai||'')+' s/d '+(p.periodeSelesai||''), pbcRp(p.totalDibayar||0)]; })
+          .concat([{_sub:true, cells:['', 'TOTAL', '', pbcRp(K.upah)]}]), {title:L.gajiLog});
+      }
+      /* catatan direktur otomatis */
+      const cat = [];
+      if(dev!==null && dev<-5) cat.push(en?('Schedule is behind plan by '+Math.abs(dev).toFixed(1)+' points — consider adding crew or re-sequencing work.'):('Progres tertinggal '+Math.abs(dev).toFixed(1)+' poin dari jadwal — pertimbangkan menambah tenaga kerja atau mengatur ulang urutan pekerjaan.'));
+      if(K.cash<0) cat.push(en?'Net cashflow is negative: expenditure exceeds payments received. Check the next payment stage.':'Cashflow bersih negatif: pengeluaran melebihi termin yang sudah diterima. Periksa penagihan termin berikutnya.');
+      if(K.progRp && K.laba/K.progRp<0.1) cat.push(en?'Gross margin on work in place is below 10%.':'Margin kotor atas pekerjaan terpasang di bawah 10%.');
+      const nextT = state.termin.find(function(t){ return t.status!=='Lunas'; });
+      if(nextT) cat.push(en?('Next payment stage: '+nextT.nama+' ('+pbcRp(nextT.nilai)+').'):('Termin berikutnya yang perlu ditagih: '+nextT.nama+' ('+pbcRp(nextT.nilai)+').'));
+      if(tp) cat.push(en?(tp+' open QC findings may delay handover / retention release.'):(tp+' temuan QC terbuka dapat menghambat serah terima / pencairan retensi.'));
+      if(!cat.length) cat.push(en?'No critical alerts at this time.':'Tidak ada hal kritis saat ini.');
+      c.pastikan(40); c.bar(L.catatanDir, true); c.y += 6; cat.forEach(function(t){ c.teks('•  '+t, 9); });
+    }
+    c.ttd(R.dibuat, 'PT Pratama Build & Construction', R.mengetahui, dir?'':(state.proyek.owner||R.pemilik));
+    c.selesai(dir?'Rekapitulasi_Direktur':'Rekapitulasi_Owner');
+    notif(en?'Project summary PDF created':'PDF Rekapitulasi '+(dir?'Direktur':'Owner')+' berhasil dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+function pbcCetakRekapOwner(){ return pbcCetakRekapLengkap('owner'); }
+function pbcCetakRekapDirektur(){ return pbcCetakRekapLengkap('direktur'); }
+function printRekap(){ return pbcCetakRekapOwner(); }
+function generateOwnerReport(){ return pbcCetakRekapOwner(); }
+
 function printKurva(){ cetakKurvaLengkapPdf(); }
 function cetakKurvaOwnerPdf(){ cetakKurvaLengkapPdf(); }
 function printBOQ(){ pbcCetakBoq(); }
 function printTermin(){ pbcCetakTermin(); }
 function printLaporanHarian(){ pbcCetakLaporanHarian(); }
-function printRekap(){ pbcCetakRekap(); }
-function generateOwnerReport(){ pbcCetakRekap(); }
+
 
 /* ===========================================================================
    GERBANG KONTRAK -> DP -> SPK -> PROYEK AKTIF
@@ -7540,6 +7754,7 @@ function getOpname(){
 }
 
 function renderRekap(){
+  (function(){ var b=document.getElementById('btnRekapDir'); if(b) b.style.display = PBC_UANG_TERBUKA()?'':'none'; })();
   const empty = document.getElementById('rekapEmpty');
   const content = document.getElementById('rekapContent');
   if(!state.proyek){ empty.style.display='block'; content.style.display='none'; return; }
