@@ -823,6 +823,22 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
 .usr-tbl th{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);text-align:left;padding:8px;border-bottom:1px solid var(--border)}
 .usr-tbl td{padding:8px;border-bottom:1px solid rgba(30,80,180,.12);vertical-align:middle}
 .usr-tbl select,.usr-tbl input{padding:5px 6px;font-size:11px}
+
+/* ===== PERBAIKAN TAMPILAN HP (v14): kartu & tabel tidak melebar keluar layar ===== */
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0;border-bottom:1px solid rgba(30,80,180,0.08);font-size:11px}
+.kv span{color:var(--muted)}
+.kv strong{text-align:right}
+@media(max-width:768px){
+  html,body{overflow-x:hidden;max-width:100vw}
+  .page,.panel,.card,.main,#content{max-width:100%;min-width:0}
+  .kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .kpi-row>*{min-width:0}
+  .kpi-row .kpi-val{font-size:clamp(15px,4.6vw,22px);overflow-wrap:anywhere}
+  .grid2,.grid3,.grid4{grid-template-columns:minmax(0,1fr)!important}
+  .tbl-wrap{max-width:100%;-webkit-overflow-scrolling:touch;background:linear-gradient(to right,#fff,#fff),linear-gradient(to right,rgba(0,0,0,.12),rgba(255,255,255,0));background-repeat:no-repeat;background-size:100% 100%,0 0}
+  .tbl-wrap table{min-width:100%}
+  .tbl-wrap th,.tbl-wrap td{padding:8px 6px!important;font-size:10px!important;letter-spacing:.03em!important}
+}
 </style>
 </head>
 <body>
