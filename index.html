@@ -1065,6 +1065,11 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     <button class="btn btn-gold" onclick="saranRelasiParalel()">💡 Saran Relasi Paralel</button>
     <button class="btn btn-gold btn-sm" onclick="openFaktorModal()">⚙ Faktor Lapangan</button>
     <button class="btn btn-blue" onclick="cetakPenawaranBoq()">📑 PDF Penawaran (Format PBC)</button>
+    <span style="margin-left:10px;font-size:9px;color:var(--muted2);align-self:center">Bahasa BOQ:</span>
+    <button class="btn btn-sm" id="btnBhsId" onclick="pbcSetBoqBhs('id')">🇮🇩 Indonesia</button>
+    <button class="btn btn-sm" id="btnBhsEn" onclick="pbcSetBoqBhs('en')">🇬🇧 English</button>
+    <button class="btn btn-green btn-sm" onclick="pbcTerjemahSemuaBoq()">🌐 Terjemahkan Otomatis ke English</button>
+    <span id="boqEnCount" style="font-size:9px;color:var(--muted2);align-self:center"></span>
     <button class="btn btn-gold" onclick="exportBoqCsv()">⬇ Export CSV</button>
     <div style="margin-left:auto;font-size:10px;color:var(--muted)">Total BOQ: <strong style="color:var(--gold)" id="boqTotalDisplay">Rp 0</strong></div>
   </div>
@@ -2042,6 +2047,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
 <script>
 let state = {
   proyek: null,
+  namaEn: {},
   divisi: [],
   items: [],
   laporan: [],
@@ -2280,7 +2286,7 @@ async function saveProjectNow() {
     analisaPekerjaan: state.analisaPekerjaan,
     materialRequests: state.materialRequests, approvalLog: state.approvalLog, purchaseOrders: state.purchaseOrders, progressLog: state.progressLog, opnameList: state.opnameList || [],
     pekerja: state.pekerja, payrollLog: state.payrollLog, payrollSettings: state.payrollSettings,
-    variationOrders: state.variationOrders, dokumenPdfLog: state.dokumenPdfLog,
+    namaEn: state.namaEn||{}, variationOrders: state.variationOrders, dokumenPdfLog: state.dokumenPdfLog,
     masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan,
     inspections: state.inspections, punchList: state.punchList
   });
@@ -2380,7 +2386,7 @@ async function loadProjectById(id) {
     state.pekerja = data.pekerja || [];
     state.payrollLog = data.payrollLog || [];
     state.payrollSettings = data.payrollSettings || { siklus: 'mingguan', tanggalAwalSiklus: null };
-    state.variationOrders = data.variationOrders || [];
+    state.variationOrders = data.variationOrders || []; state.namaEn = data.namaEn || {};
     state.dokumenPdfLog = data.dokumenPdfLog || [];
     state.masaGaransi = data.masaGaransi || null;
     state.retensiPencairan = data.retensiPencairan || [];
@@ -3142,7 +3148,7 @@ function renderProposalPage(){
     proposalState.divisi.forEach(function(div){
       const dItems = proposalState.items.filter(function(i){ return i.divisiId===div.id; });
       const sub = dItems.reduce(function(s,i){ return s+(i.vol||0)*(i.harga||0); },0);
-      html += '<tr class="cat-row"><td colspan="5" style="padding:10px 10px">'+div.nama+'</td>'
+      html += '<tr class="cat-row"><td colspan="5" style="padding:10px 10px">'+pbcNamaTampil(div.id, div.nama)+pbcInputEn(div.id, true)+'</td>'
         + '<td class="readonly">'+fmtRp(sub)+'</td><td class="bobot-cell">'+(gt?(sub/gt*100).toFixed(2):0)+'%</td>'
         + '<td><button class="btn btn-red btn-sm" onclick="hapusDivisiProposal(\''+div.id+'\')">x</button></td></tr>';
       if(!dItems.length){
@@ -3561,7 +3567,7 @@ function pbcDokTglFmt(v, bhs){
   return d.toLocaleDateString(bhs==='id'?'id-ID':'en-US', bhs==='id' ? {day:'numeric',month:'long',year:'numeric'} : {month:'long',day:'numeric',year:'numeric'});
 }
 function pbcDokData(kind){
-  const bhsPref = pbcDokPref().bahasa || 'en';
+  const bhsPref = (kind==='boq') ? pbcBoqBhs() : (pbcDokPref().bahasa || 'en');
   const prof = pbcDokProfil();
   if(kind==='vo'){
     const vo = getCurrentVo(); if(!vo) return null;
@@ -3581,7 +3587,7 @@ function pbcDokTeks(d, bhs){
   const en = bhs==='en', prof = d.prof;
   const bank = en ? 'Bank Transfer Account: '+prof.bank+'.' : 'Rekening Transfer: '+prof.bank+'.';
   if(d.kind==='vo'){
-    const vo = d.vo, pendek = String(vo.deskripsiPerubahan||'').replace(/\s+/g,' ').trim().slice(0,60);
+    const vo = d.vo; let pendek = String(vo.deskripsiPerubahan||'').replace(/\s+/g,' ').trim().slice(0,60); if(en && pendek) pendek = pbcTerjemahEn(pendek);
     const tambah = vo.jenisPerubahan==='tambah_pekerjaan';
     return {
       judul: (en?'PROJECT ADDENDUM NO. ':'ADENDUM PROYEK NO. ')+d.nomor,
@@ -3612,30 +3618,51 @@ function pbcDokTeks(d, bhs){
     totalBar: en?'TOTAL QUOTATION VALUE':'TOTAL NILAI PENAWARAN', totalLabel: en?'Total Quotation Value:':'Total Nilai Penawaran:'
   };
 }
-function pbcDokBagian(d){
-  /* kumpulkan baris tabel per bagian */
+/* Daftar nama yang punya versi English (untuk dicek/ubah sebelum cetak) */
+function pbcDokEntri(d){
+  const out = [];
+  function tambah(ref, teks, isDiv, get, set){ out.push({ ref:ref, id:teks, div:isDiv, get:get, set:set }); }
+  if(d.kind==='boq'){
+    const m = pbcNamaEnMap();
+    const kaitan = function(k){ return { get:function(){ return m[k]||''; }, set:function(v){ if(v) m[k]=v; else delete m[k]; } }; };
+    state.divisi.forEach(function(x){ const o = kaitan(x.id); tambah(x, x.nama, true, o.get, o.set); });
+    state.items.forEach(function(x){ const o = kaitan(x.id); tambah(x, x.nama, false, o.get, o.set); });
+  } else if(d.kind==='proposal'){
+    proposalState.divisi.forEach(function(x){ tambah(x, x.nama, true, function(){ return x.namaEn||''; }, function(v){ x.namaEn = v; }); });
+    proposalState.items.forEach(function(x){ tambah(x, x.nama, false, function(){ return x.namaEn||''; }, function(v){ x.namaEn = v; }); });
+  } else if(d.kind==='vo'){
+    (d.vo.itemPerubahan||[]).forEach(function(x){ tambah(x, x.nama, false, function(){ return x.namaEn||''; }, function(v){ x.namaEn = v; }); });
+  }
+  return out;
+}
+function pbcDokBagian(d, bhs){
+  const en = bhs==='en';
+  const ent = pbcDokEntri(d), peta = new Map(); ent.forEach(function(e){ peta.set(e.ref, e); });
+  const nama = function(ref, teks, isDiv){ if(!en) return teks; const e = peta.get(ref); return (e && e.get()) || pbcTerjemahEn(teks, isDiv); };
   if(d.kind==='vo'){
-    const vo = d.vo, aksiHapus = function(r){ return r.aksi==='hapus'; };
+    const vo = d.vo;
     const rows = (vo.itemPerubahan||[]).map(function(r){
       const harga = r.aksi==='hapus' ? r.hargaLama : r.harga;
       let qty = r.aksi==='hapus' ? r.volumeLama : r.volumeBaru;
       if(r.aksi==='ubah' && harga){ qty = r.nilai/harga; }
-      return { desc:(r.aksi==='hapus'?'(Omitted) ':'')+r.nama, qty:qty||0, sat:r.sat, rate:harga||0, amt:r.nilai||0 };
+      const pre = r.aksi==='hapus' ? (en?'(Omitted) ':'(Dikurangi) ') : '';
+      return { desc: pre+nama(r, r.nama, false), qty:qty||0, sat:pbcSatPakai(r.sat,bhs), rate:harga||0, amt:r.nilai||0 };
     });
     return [{ rows:rows, subtotal: rows.reduce(function(s,r){ return s+r.amt; },0) }];
   }
   const divs = d.kind==='proposal' ? proposalState.divisi : state.divisi;
   const items = d.kind==='proposal' ? proposalState.items : state.items;
+  const baris = function(i){ return { desc:nama(i, i.nama, false), qty:i.vol||0, sat:pbcSatPakai(i.sat,bhs), rate:i.harga||0, amt:(i.vol||0)*(i.harga||0) }; };
   const out = [];
   divs.forEach(function(div){
     const its = items.filter(function(i){ return i.divisiId===div.id; });
     if(!its.length) return;
-    const rows = its.map(function(i){ return { desc:i.nama, qty:i.vol||0, sat:i.sat, rate:i.harga||0, amt:(i.vol||0)*(i.harga||0) }; });
-    out.push({ judul:String(div.nama).toUpperCase(), rows:rows, subtotal:rows.reduce(function(s,r){ return s+r.amt; },0) });
+    const rows = its.map(baris);
+    out.push({ judul:String(nama(div, div.nama, true)).toUpperCase(), rows:rows, subtotal:rows.reduce(function(s,r){ return s+r.amt; },0) });
   });
   const lain = items.filter(function(i){ return !divs.some(function(dv){ return dv.id===i.divisiId; }); });
-  if(lain.length){ const rows = lain.map(function(i){ return { desc:i.nama, qty:i.vol||0, sat:i.sat, rate:i.harga||0, amt:(i.vol||0)*(i.harga||0) }; });
-    out.push({ judul:'OTHER WORKS', rows:rows, subtotal:rows.reduce(function(s,r){ return s+r.amt; },0) }); }
+  if(lain.length){ const rows = lain.map(baris);
+    out.push({ judul: en?'OTHER WORKS':'PEKERJAAN LAIN', rows:rows, subtotal:rows.reduce(function(s,r){ return s+r.amt; },0) }); }
   return out;
 }
 
@@ -3647,7 +3674,7 @@ function pbcDokBukaForm(kind){
   if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
   const d = pbcDokData(kind);
   if(!d){ notif(kind==='proposal'?'Buka/buat proposal terlebih dahulu':(kind==='vo'?'Pilih Variation Order terlebih dahulu':'Buat / pilih proyek terlebih dahulu'),'var(--red)'); return; }
-  const sec = pbcDokBagian(d);
+  const sec = pbcDokBagian(d, 'id');
   if(!sec.length || !sec.some(function(s){ return s.rows.length; })){ notif('Belum ada item pekerjaan untuk dicetak','var(--red)'); return; }
   _pbcDokKind = kind; _pbcDokD = d;
   let el = document.getElementById('modalDokPbc');
@@ -3667,11 +3694,27 @@ function pbcDokBukaForm(kind){
     + (kind==='vo' ? f('dokJudulTabel','Judul tabel',t.judulTabel) : '')
     + ta('dokIntro','Kalimat pembuka',t.intro,3)
     + ta('dokCatatan','Catatan &amp; Ketentuan (satu baris = satu poin, nomor otomatis)',t.notes.join('\n'),5)
+    + '<div id="dokEnBox"></div>'
     + '<details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:11px;color:var(--gold)">Data perusahaan &amp; penandatangan</summary>'
     + f('dokAlamat','Alamat',pr.alamat)+f('dokEmail','Email',pr.email)+f('dokTelp','Telepon',pr.telp)+f('dokBank','Rekening bank',pr.bank)
     + '<div class="form-row">'+f('dokTtdNama','Nama penandatangan',pr.ttdNama)+f('dokTtdJab','Jabatan',pr.ttdJabatan)+'</div></details>'
     + '<div class="modal-footer"><button class="btn btn-gold" onclick="hideModal(\'modalDokPbc\')">Batal</button><button class="btn btn-blue" onclick="pbcDokCetak()">📄 Buat PDF</button></div></div>';
   showModal('modalDokPbc');
+  pbcDokIsiEn();
+}
+function pbcDokIsiEn(){
+  const box = document.getElementById('dokEnBox'), d = _pbcDokD; if(!box || !d) return;
+  const sel = document.getElementById('dokBhs');
+  if(!sel || sel.value!=='en'){ box.innerHTML = ''; return; }
+  const ent = pbcDokEntri(d); let otomatis = 0;
+  const baris = ent.map(function(e,i){
+    const tersimpan = e.get(); const v = tersimpan || pbcTerjemahEn(e.id, e.div); if(!tersimpan) otomatis++;
+    return '<div style="margin-bottom:6px"><div style="font-size:9px;color:var(--muted2)">'+(e.div?'<b>[Divisi]</b> ':'')+pbcDokEsc(e.id)+'</div>'
+      + '<input class="form-input" id="dokEn_'+i+'" value="'+pbcDokEsc(v)+'" style="font-size:11px;padding:6px 8px'+(tersimpan?'':';border-color:var(--orange)')+'"></div>';
+  }).join('');
+  box.innerHTML = '<div class="form-group"><label class="form-label">🇬🇧 Nama pekerjaan dalam English — cek &amp; ubah sebelum cetak</label>'
+    + '<div style="font-size:9px;color:var(--orange);margin-bottom:6px">'+(otomatis? (otomatis+' nama diterjemahkan otomatis (garis oranye) — periksa dulu. ') : 'Semua sudah tersimpan. ')+'Yang Bapak ubah di sini ikut tersimpan di BOQ.</div>'
+    + '<div style="max-height:230px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:8px">'+baris+'</div></div>';
 }
 function pbcDokGantiBahasa(){
   const d = _pbcDokD; if(!d) return;
@@ -3681,6 +3724,7 @@ function pbcDokGantiBahasa(){
   document.getElementById('dokPerihal').value = t.perihal; document.getElementById('dokSub').value = t.sub;
   document.getElementById('dokIntro').value = t.intro; document.getElementById('dokCatatan').value = t.notes.join('\n');
   const jt = document.getElementById('dokJudulTabel'); if(jt) jt.value = t.judulTabel;
+  pbcDokIsiEn();
 }
 function pbcDokCetak(){
   const d = _pbcDokD; if(!d) return;
@@ -3691,7 +3735,9 @@ function pbcDokCetak(){
   pbcDokSimpanPref({ bahasa:bhs, profil:{ alamat:prof.alamat, email:prof.email, telp:prof.telp, bank:prof.bank, ttdNama:prof.ttdNama, ttdJabatan:prof.ttdJabatan } });
   try{
     const t = pbcDokTeks(Object.assign({}, d, {prof:prof}), bhs);
-    const secs = pbcDokBagian(d).filter(function(s){ return s.rows.length; });
+    if(bhs==='en'){ pbcDokEntri(d).forEach(function(e,i){ const el = document.getElementById('dokEn_'+i); if(el){ const v = el.value.trim(); if(v) e.set(v); else e.set(''); } });
+      if(d.kind==='proposal'){ try{ debounceSaveProposal(); }catch(x){} } else { try{ debounceSave(); }catch(x){} } }
+    const secs = pbcDokBagian(d, bhs).filter(function(s){ return s.rows.length; });
     if(d.kind==='vo'){ secs[0].judul = v('dokJudulTabel') || t.judulTabel; }
     const total = secs.reduce(function(s,x){ return s+x.subtotal; },0);
     const kiri = [[L.date, pbcDokTglFmt(v('dokTgl'),bhs)], [L.ref, v('dokRef')||'-']];
@@ -3716,6 +3762,112 @@ function pbcDokCetak(){
 function exportProposalPdf(){ pbcDokBukaForm('proposal'); }
 function cetakVoPdf(){ pbcDokBukaForm('vo'); }
 function cetakPenawaranBoq(){ pbcDokBukaForm('boq'); }
+
+
+/* ===========================================================================
+   DUA BAHASA (Indonesia / English) untuk BOQ & dokumen resmi
+   - Nama English disimpan per item/divisi (state.namaEn) dan bisa diedit.
+   - Terjemahan otomatis memakai kamus istilah konstruksi bawaan (tanpa internet) —
+     hasilnya draf awal yang WAJIB dicek, lalu disimpan.
+   =========================================================================== */
+const PBC_KAMUS_DIV = {
+ 'persiapan':'Preparatory Works','persiapan lahan':'Site Preparation','tanah & pondasi':'Earthworks & Foundation','struktur beton':'Concrete Structure','struktur beton bertulang':'Reinforced Concrete Structure',
+ 'struktur baja':'Steel Structure','struktur':'Structure','dinding':'Walls','plesteran & acian':'Plastering & Skim Coat','lantai':'Flooring','plafon':'Ceiling','atap':'Roofing','pintu & jendela':'Doors & Windows',
+ 'pengecatan':'Painting','plumbing':'Plumbing','elektrikal':'Electrical','interior':'Interior','landscape':'Landscape','pekerjaan lainnya':'Miscellaneous Works','mep':'MEP','arsitektur':'Architectural Works',
+ 'arsitektur dan finishing':'Architectural & Finishing Works','finishing':'Finishing Works'
+};
+const PBC_KAMUS = {
+ 'persiapan':'preparation','pemasangan':'Installation of','pasang':'Installation of','memasang':'Installation of','pembuatan':'Construction of','buat':'Making of','membuat':'Making of',
+ 'pembongkaran':'Demolition of','bongkar':'Demolition of','pembersihan':'Cleaning of','bersihkan':'Cleaning of','pengukuran':'Surveying of','penggalian':'Excavation of','galian':'Excavation',
+ 'pengurugan':'Backfilling of','urugan':'Backfill','pemadatan':'Compaction of','pengadaan':'Supply of','penyediaan':'Supply of','finishing':'finishing','pelapisan':'Coating of','penutup':'Cover',
+ 'perbaikan':'Repair of','penggantian':'Replacement of','relokasi':'Relocation of','pemindahan':'Relocation of','pemotongan':'Cutting of','pelubangan':'Hole Cutting for','penyambungan':'Connection of',
+ 'pekerjaan tambah':'Additional Works','pekerjaan tambahan':'Additional Works','pekerjaan':'Works','mobilisasi':'Mobilization','demobilisasi':'Demobilization','direksi keet':'Site Office','bedeng':'Workers Barracks',
+ 'bedeng pekerja':'Workers Barracks','k3':'Health & Safety (K3)','gambar kerja':'Shop Drawings','as built drawing':'As-Built Drawings','pengujian':'Testing of','uji coba':'Testing',
+ 'semen':'cement','pasir':'sand','batu':'stone','batu kali':'river stone','batu bata':'brick','bata merah':'red brick','bata ringan':'lightweight brick (AAC)','hebel':'lightweight brick (AAC)','beton':'concrete',
+ 'beton bertulang':'reinforced concrete','besi':'steel','besi beton':'rebar','pembesian':'Reinforcement','tulangan':'reinforcement','bekisting':'formwork','begisting':'formwork','cor':'casting','pengecoran':'Concrete Casting of',
+ 'lantai kerja':'working floor (lean concrete)','pondasi':'foundation','pondasi footplat':'Pad Foundation','footplat':'pad foundation','sloof':'tie beam (sloof)','kolom':'columns','balok':'beams','ring balok':'ring beam',
+ 'plat lantai':'floor slab','plat':'slab','tangga':'stairs','plesteran':'plastering','plester':'plastering','acian':'skim coat','aci':'skim coat','waterproofing':'waterproofing','anti bocor':'waterproofing',
+ 'keramik':'ceramic tile','granit':'granite','marmer':'marble','homogenous tile':'homogeneous tile','vinyl':'vinyl','epoxy':'epoxy','karpet':'carpet','parket':'parquet','rubber mat':'rubber mat','osb':'OSB','osb board':'OSB board',
+ 'multiplek':'plywood','triplek':'plywood','kayu':'timber','balok kayu':'timber beam','papan':'board','hpl':'HPL','gypsum':'gypsum','gypsum board':'gypsum board','gibson':'gypsum (Gibson)','rockwool':'rockwool','glasswool':'glasswool',
+ 'rangka':'frame','rangka kayu':'timber frame','hollow':'hollow steel','baja ringan':'light steel','genteng':'roof tile','genteng metal':'metal roof tile','spandek':'zinc-aluminium roofing sheet','talang':'gutter','nok':'ridge',
+ 'kusen':'frame','kusen pintu':'door frame','kusen jendela':'window frame','pintu':'door','jendela':'window','kaca':'glass','engsel':'hinge','kunci':'lock','handle':'handle','rolling door':'rolling door',
+ 'cat':'paint','cat dinding':'wall paint','cat plafon':'ceiling paint','cat kayu':'wood paint','cat besi':'steel paint','dempul':'putty','plamir':'primer putty','politur':'varnish','melamik':'melamine finish','duco':'duco paint',
+ 'lantai':'floor','dinding':'wall','plafon':'ceiling','atap':'roof','keramik lantai':'floor ceramic tile','keramik dinding':'wall ceramic tile','dinding bata':'brick wall','pasangan bata':'brick masonry','pasangan batu':'stone masonry','dinding partisi':'partition wall','partisi':'partition',
+ 'plafon gypsum':'gypsum ceiling','plafon pvc':'PVC ceiling','list plafon':'ceiling cornice','rangka plafon':'ceiling frame','kamar mandi':'bathroom','toilet':'toilet','dapur':'kitchen','kitchen set':'kitchen set','kamar tidur':'bedroom',
+ 'ruang tamu':'living room','ruang keluarga':'family room','teras':'terrace','carport':'carport','taman':'garden','kolam':'pond','kolam renang':'swimming pool','pagar':'fence','gerbang':'gate','gudang':'storage room',
+ 'instalasi':'Installation of','instalasi listrik':'electrical installation','listrik':'electrical','titik lampu':'lighting point','titik':'point','stop kontak':'power outlet','saklar':'switch','lampu':'lamp','downlight':'downlight','kabel':'cable',
+ 'panel listrik':'electrical panel','panel':'panel','grounding':'grounding','mcb':'MCB','pipa':'pipe','pipa pvc':'PVC pipe','pipa air bersih':'clean water pipe','pipa air kotor':'waste water pipe','air bersih':'clean water','air kotor':'waste water',
+ 'kloset':'water closet','closet':'water closet','wastafel':'washbasin','kran':'faucet','shower':'shower','floor drain':'floor drain','septic tank':'septic tank','sumur resapan':'infiltration well','bak kontrol':'inspection chamber',
+ 'ac':'air conditioning','split duct':'split duct AC','pendingin':'cooling','exhaust fan':'exhaust fan','speaker':'speaker','akustik':'acoustic','peredam':'acoustic insulation','soundshield':'soundshield',
+ 'furniture':'furniture','lemari':'cabinet','lemari pakaian':'wardrobe','meja':'table','kursi':'chair','rak':'shelf','bufet':'buffet','tv unit':'TV unit','backdrop':'backdrop','wallpaper':'wallpaper','tirai':'curtain','gorden':'curtain',
+ 'dan':'and','dengan':'with','untuk':'for','di':'at','pada':'on','termasuk':'including','sesuai':'as per','lengkap':'complete','material':'materials','bahan':'materials','upah':'labor','tukang':'labor','jasa':'labor',
+ 'seluruh':'all','semua':'all','ruangan':'room','luar':'exterior','dalam':'interior','atas':'upper','bawah':'lower','lantai 1':'ground floor','lantai 2':'first floor','lama':'existing','baru':'new',
+ 'tebal':'thickness','ukuran':'size','tinggi':'height','lebar':'width','panjang':'length','paket':'package','lumpsum':'lump sum','lump sum':'lump sum',
+ 'mur':'nut','baut':'bolt','paku':'nail','lem':'adhesive','silikon':'silicone','sambungan':'joint','sanding':'sanding','pengamplasan':'sanding of','amplas':'sanding',
+ 'penutupan':'closing of','tutup':'closing','lubang':'hole','lubang yang tidak terpakai':'unused hole','tidak terpakai':'unused','pembukaan':'opening of','bukaan':'opening',
+ 'arsitektur':'architectural','area kerja':'work area','kerja':'work','pengecatan':'Painting of','lapis':'coats','pembersihan lahan':'Site Clearing','pengukuran dan bouwplank':'Surveying & Batter Boards','bouwplank':'batter boards','direksi':'site office','listrik dan air kerja':'Temporary Power & Water',
+ 'sementara':'temporary','pagar sementara':'temporary fence','papan nama proyek':'project signboard','dokumentasi':'documentation','laporan':'report','harian':'daily','mingguan':'weekly','bulanan':'monthly'
+};
+const PBC_KAMUS_KECIL = ['of','and','for','with','to','at','on','the','in','per','as','a','an','including'];
+function pbcSatEn(s){
+  const k = String(s||'').trim().toLowerCase().replace(/[’']/g,"'");
+  const m = { 'ls':'lot','lumpsum':'lot','ttk':'point','titik':'point','buah':'pcs','bh':'pcs','bj':'pcs','m1':'lm',"m'":'lm','m¹':'lm','mtr':'m','meter':'m','m2':'m²','m3':'m³','lembar':'sheet','lbr':'sheet','batang':'bar','btg':'bar','paket':'package','orang':'person','hari':'day','oh':'man-day' };
+  return m[k] || s;
+}
+function pbcSatPakai(s, bhs){ return bhs==='en' ? pbcSatEn(s) : s; }
+function pbcTerjemahEn(teks, isDiv){
+  let t = String(teks||'').trim(); if(!t) return '';
+  let awalan = ''; const mA = t.match(/^((?:[IVXLC]+|\d+)[.)]\s+)(.*)$/); if(mA){ awalan = mA[1]; t = mA[2]; }
+  const rendah = t.toLowerCase();
+  if(isDiv && PBC_KAMUS_DIV[rendah]){ return awalan + (/^[^a-z]*$/.test(t.replace(/[^A-Za-z]/g,'')) && t===t.toUpperCase() ? PBC_KAMUS_DIV[rendah].toUpperCase() : PBC_KAMUS_DIV[rendah]); }
+  let akhiran = '';
+  const mP = rendah.match(/^pekerjaan\s+(.+)$/);
+  if(mP && !PBC_KAMUS['pekerjaan '+mP[1]]){ t = t.slice(t.length - mP[1].length); akhiran = ' Works'; }
+  const tok = t.match(/[^\s,;()]+|[,;()]/g) || [];
+  const out = []; let i = 0;
+  while(i < tok.length){
+    let cocok = false;
+    for(let n=Math.min(4, tok.length-i); n>=1 && !cocok; n--){
+      const seg = tok.slice(i, i+n);
+      if(n>1 && seg.some(function(x){ return /^[,;()]$/.test(x); })) continue;
+      const frasa = seg.join(' ').toLowerCase();
+      if(Object.prototype.hasOwnProperty.call(PBC_KAMUS, frasa)){ out.push(PBC_KAMUS[frasa]); i += n; cocok = true; }
+    }
+    if(!cocok){ out.push(tok[i]); i++; }
+  }
+  let hasil = out.join(' ').replace(/\s+([,;)])/g,'$1').replace(/\(\s+/g,'(').replace(/\s{2,}/g,' ').trim() + akhiran;
+  hasil = hasil.split(' ').map(function(w, idx){
+    if(!w) return w; const l = w.toLowerCase();
+    if(idx>0 && PBC_KAMUS_KECIL.indexOf(l)>-1) return l;
+    return /^[a-z]/.test(w) ? w.charAt(0).toUpperCase()+w.slice(1) : w;
+  }).join(' ');
+  hasil = hasil.replace(/\b(\w+)( \1\b)+/gi, '$1').replace(/\b(Wall|Floor|Ceiling|Door|Window|Roof|Pipe|Frame)s? (Existing|New)\b/g, '$2 $1').replace(/\b(Wall|Floor|Ceiling) (Interior|Exterior)\b/g, '$2 $1');
+  return awalan + hasil;
+}
+function pbcInputEn(id, isDiv){
+  const v = pbcNamaEnMap()[id] || '';
+  return '<input class="tbl-input" placeholder="🇬🇧 English name…" value="'+pbcDokEsc(v)+'" oninput="pbcSetNamaEn(\''+id+'\',this.value)" style="display:block;margin-top:4px;font-size:10px;width:100%;max-width:360px;text-align:left;'+(v?'':'border-color:rgba(230,126,34,0.5);')+'">';
+}
+function pbcNamaEnMap(){ if(!state.namaEn) state.namaEn = {}; return state.namaEn; }
+function pbcBoqBhs(){ try{ return localStorage.getItem('pbc_boq_bhs')==='en' ? 'en' : 'id'; }catch(e){ return 'id'; } }
+function pbcNamaTampil(id, namaId){ if(pbcBoqBhs()==='en'){ const e = pbcNamaEnMap()[id]; if(e) return e; } return namaId; }
+function pbcSetBoqBhs(b){ try{ localStorage.setItem('pbc_boq_bhs', b); }catch(e){} pbcDokSimpanPref({bahasa:b}); renderBoq(); }
+function pbcBoqBhsUi(){
+  const b = pbcBoqBhs(), m = pbcNamaEnMap();
+  const a = document.getElementById('btnBhsId'), e = document.getElementById('btnBhsEn');
+  if(a){ a.style.background = b==='id'?'var(--gold)':'transparent'; a.style.color = b==='id'?'#1a1a2e':''; }
+  if(e){ e.style.background = b==='en'?'var(--gold)':'transparent'; e.style.color = b==='en'?'#1a1a2e':''; }
+  const n = state.items.length, ada = state.items.filter(function(i){ return m[i.id]; }).length;
+  const c = document.getElementById('boqEnCount'); if(c) c.textContent = n ? ('English: '+ada+'/'+n+' item terisi') : '';
+}
+function pbcSetNamaEn(id, v){ const m = pbcNamaEnMap(); v = String(v||'').trim(); if(v) m[id] = v; else delete m[id]; debounceSave(); pbcBoqBhsUi(); }
+function pbcTerjemahSemuaBoq(){
+  const m = pbcNamaEnMap(); let c = 0;
+  state.divisi.forEach(function(d){ if(!m[d.id]){ m[d.id] = pbcTerjemahEn(d.nama, true); c++; } });
+  state.items.forEach(function(i){ if(!m[i.id]){ m[i.id] = pbcTerjemahEn(i.nama); c++; } });
+  debounceSave(); renderBoq();
+  notif(c ? (c+' nama diterjemahkan otomatis — mohon dicek, ubah kalau ada yang kurang pas') : 'Semua sudah punya nama English','var(--blue)');
+}
 
 /* ===========================================================================
    GERBANG KONTRAK -> DP -> SPK -> PROYEK AKTIF
@@ -4029,7 +4181,7 @@ async function convertProposalToProject(){
   state.laporan = []; state.termin = []; state.kurva = { mulai:null, durasi:24, weeks:[] }; state.estimasiFaktor = 1;
   state.dokumen = []; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = [];
   state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = [];
-  state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
+  state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
 
   await saveProjectNow();
   proposalState.proyekId = newId; /* tandai proposal ini sudah dikonversi, supaya panel Aktivasi tidak tampil lagi & tidak bisa konversi dobel */
@@ -4066,7 +4218,7 @@ async function exportBackupJSON(){
       purchaseOrders: state.purchaseOrders, progressLog: state.progressLog, opnameList: state.opnameList || [],
       mrpDraft: state.mrpDraft, materialReceiving: state.materialReceiving, materialUsageLog: state.materialUsageLog,
       pekerja: state.pekerja, absensi: state.absensi, payrollLog: state.payrollLog, payrollSettings: state.payrollSettings,
-      variationOrders: state.variationOrders, dokumenPdfLog: state.dokumenPdfLog,
+      namaEn: state.namaEn||{}, variationOrders: state.variationOrders, dokumenPdfLog: state.dokumenPdfLog,
     masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan,
       inspections: state.inspections, punchList: state.punchList
     };
@@ -4128,7 +4280,7 @@ async function importBackupJSON(file){
     state.absensi = data.absensi || [];
     state.payrollLog = data.payrollLog || [];
     state.payrollSettings = data.payrollSettings || { siklus: 'mingguan', tanggalAwalSiklus: null };
-    state.variationOrders = data.variationOrders || [];
+    state.variationOrders = data.variationOrders || []; state.namaEn = data.namaEn || {};
     state.dokumenPdfLog = data.dokumenPdfLog || [];
     state.masaGaransi = data.masaGaransi || null;
     state.retensiPencairan = data.retensiPencairan || [];
@@ -5023,7 +5175,7 @@ async function simpanProyek() {
     state.proyek = null;
     state.divisi = []; state.items = []; state.laporan = []; state.termin = [];
     state.kurva = { mulai:null, durasi:24, weeks:[] };
-    state.dokumen = []; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
+    state.dokumen = []; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
   }
   state.proyek = {
     id: state.proyek && state.proyek.id ? state.proyek.id : uid(),
@@ -5648,7 +5800,7 @@ function renderBoq() {
       const bob = bobotMap[item.id]!==undefined ? bobotMap[item.id] : (gt ? (jml/gt*100) : 0); /* fallback aman kalau item tak ada di schedule */
       const durasiHr = durasiBobotMap[item.id] || Math.max(1,item.durasi||1);
       html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04)"><td class="no-cell">'+noGlobal+'</td>'
-        + '<td class="item-cell">'+item.nama+'<div style="margin-top:4px;display:flex;align-items:center;gap:5px;font-size:9px;color:var(--teal-lt)">⏱<input type="number" min="1" style="width:34px;background:transparent;border:none;border-bottom:1px solid rgba(26,140,122,0.4);color:var(--teal-lt);font-size:9px;text-align:center" value="'+(item.durasi||0)+'" oninput="onDurasiChange(\''+item.id+'\',this.value)">hari · target '+targetHarian(item).toFixed(2)+'/hr · '+targetMingguan(item).toFixed(2)+'/mgg'
+        + '<td class="item-cell">'+pbcNamaTampil(item.id, item.nama)+pbcInputEn(item.id, false)+'<div style="margin-top:4px;display:flex;align-items:center;gap:5px;font-size:9px;color:var(--teal-lt)">⏱<input type="number" min="1" style="width:34px;background:transparent;border:none;border-bottom:1px solid rgba(26,140,122,0.4);color:var(--teal-lt);font-size:9px;text-align:center" value="'+(item.durasi||0)+'" oninput="onDurasiChange(\''+item.id+'\',this.value)">hari · target '+targetHarian(item).toFixed(2)+'/hr · '+targetMingguan(item).toFixed(2)+'/mgg'
         + ' <a onclick="bukaModalRelasi(\''+item.id+'\')" style="cursor:pointer;color:var(--gold);margin-left:4px" title="Atur relasi FS/SS/FF/Parallel">🔗'+((item.predecessors&&item.predecessors.length)?(' '+item.predecessors.length):'')+'</a></div></td>'
         + '<td class="sat-cell">'+item.sat+'</td>'
         + '<td><input class="tbl-input" type="number" value="'+item.vol+'" step="0.01" oninput="onVolChange(\''+item.id+'\',this.value)"></td>'
@@ -5662,11 +5814,12 @@ function renderBoq() {
       + '<td class="readonly" id="sub2_'+div.id+'">'+fmtRp(sub)+'</td>'
       + '<td class="bobot-cell">'+(gt?(sub/gt*100).toFixed(2):0)+'%</td><td></td><td></td></tr>';
   });
-  html += '<tr class="total-row"><td colspan="5" style="padding:10px 10px">TOTAL KESELURUHAN</td>'
+  html += '<tr class="total-row"><td colspan="5" style="padding:10px 10px">'+(pbcBoqBhs()==='en'?'GRAND TOTAL':'TOTAL KESELURUHAN')+'</td>'
     + '<td class="readonly">'+fmtRp(gt)+'</td>'
     + '<td class="bobot-cell" style="color:var(--gold-lt)">100.000%</td>'
     + '<td style="font-size:8px;color:var(--muted2)">'+modeInfo+'</td><td></td></tr>';
   tbody.innerHTML = html;
+  pbcBoqBhsUi();
 }
 
 function refreshItemDivisiSelect() {
