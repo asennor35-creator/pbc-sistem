@@ -6343,33 +6343,44 @@ function hapusDivisi(divId) {
 
 function recalcAll() { renderBoq(); debounceSave(); notif('Bobot dihitung ulang otomatis dari total BOQ'); }
 
+/* T8: mengetik di kolom volume/harga/durasi harus terasa langsung. Per ketikan hanya angka baris, subtotal dan total yang dihitung (ringan);
+   distribusi bobot, Kurva S dan Dashboard (berat) dihitung sekali setelah berhenti mengetik. */
+let _hitungBeratTimer = null;
+function hitungRingan(id){
+  const item = state.items.find(function(i){ return i.id===id; });
+  const gt = grandTotal();
+  const a = document.getElementById('boqTotalDisplay'), b = document.getElementById('boqGrandTotal');
+  if(a) a.textContent = fmtRp(gt); if(b) b.textContent = fmtRp(gt);
+  const jml = document.getElementById('jml_'+id); if(jml && item) jml.textContent = fmtRp(itemTotal(item));
+  if(item){
+    const dItems = state.items.filter(function(i){ return i.divisiId===item.divisiId; });
+    const sub = dItems.reduce(function(s,it){ return s+itemTotal(it); },0);
+    const s1 = document.getElementById('sub_'+item.divisiId), s2 = document.getElementById('sub2_'+item.divisiId);
+    if(s1) s1.textContent = fmtRp(sub); if(s2) s2.textContent = fmtRp(sub);
+  }
+}
+function hitungBeratNanti(id){
+  clearTimeout(_hitungBeratTimer);
+  _hitungBeratTimer = setTimeout(function(){
+    _hitungBeratTimer = null;
+    try{
+      updateRowCalc(id);
+      if(typeof renderKurva==='function') renderKurva();
+      if(typeof refreshDashboard==='function') refreshDashboard();
+    }catch(e){ console.warn('[PBC] hitung berat:', e); }
+  }, 350);
+}
 function onHargaChange(id, val) {
   const item = state.items.find(function(i){ return i.id===id; });
-  if(item){
-    item.harga = parseRupiah(val); updateRowCalc(id); debounceSave();
-    /* FASE D — real-time tanpa tombol: panggil renderKurva()+refreshDashboard() langsung (BUKAN
-       generateKurva() yang juga memanggil renderBoq() penuh) supaya fokus input yang sedang
-       diketik tidak hilang di tengah jalan. Cache jadwal (Fase A) otomatis menyesuaikan sendiri
-       karena fingerprint-nya berubah saat harga berubah. */
-    if(typeof renderKurva==='function') renderKurva();
-    if(typeof refreshDashboard==='function') refreshDashboard();
-  }
+  if(item){ item.harga = parseRupiah(val); hitungRingan(id); debounceSave(); hitungBeratNanti(id); }
 }
 function onVolChange(id, val) {
   const item = state.items.find(function(i){ return i.id===id; });
-  if(item){
-    item.vol = parseFloat(val)||0; updateRowCalc(id); debounceSave();
-    if(typeof renderKurva==='function') renderKurva();
-    if(typeof refreshDashboard==='function') refreshDashboard();
-  }
+  if(item){ item.vol = parseFloat(val)||0; hitungRingan(id); debounceSave(); hitungBeratNanti(id); }
 }
 function onDurasiChange(id, val) {
   const item = state.items.find(function(i){ return i.id===id; });
-  if(item){
-    item.durasi = Math.max(1, parseFloat(val)||1); updateRowCalc(id); debounceSave();
-    if(typeof renderKurva==='function') renderKurva();
-    if(typeof refreshDashboard==='function') refreshDashboard();
-  }
+  if(item){ item.durasi = Math.max(1, parseFloat(val)||1); hitungRingan(id); debounceSave(); hitungBeratNanti(id); }
 }
 
 let bulkDivisiId = null;
@@ -6823,6 +6834,8 @@ function renderBoq() {
     + '<td style="font-size:8px;color:var(--muted2)">'+modeInfo+'</td><td></td></tr>';
   tbody.innerHTML = html;
   pbcBoqBhsUi();
+  /* T8: total di Dashboard (Nilai Kontrak, Sisa, progres per divisi) harus ikut berubah SEGERA setelah item/divisi ditambah, diubah atau dihapus */
+  if(typeof refreshDashboard==='function'){ try{ refreshDashboard(); }catch(e){ console.warn('[PBC] refreshDashboard:', e); } }
 }
 
 function refreshItemDivisiSelect() {
