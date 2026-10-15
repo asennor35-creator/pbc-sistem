@@ -561,15 +561,49 @@ window.PBC_CONFIG = {
   }
   /* T6: bedakan "memang tidak ada" ('tidakada') dari "gagal dibaca" ('gagal'). get() tetap dipakai modul lain apa adanya.
      'gagal' = server tidak terjangkau/menolak DAN tidak ada salinan lokal: JANGAN dianggap kosong, JANGAN ditimpa dengan kosong. */
+  /* T7: versi baris yang TERAKHIR dibaca/ditulis perangkat ini (updated_at dari server). Dipakai setCas() untuk menolak simpan bila
+     orang lain sudah mengubah baris itu. HANYA getAman()/setCas() yang mengisi ini (get() biasa tidak, supaya membaca "sekilas"
+     tidak membuat versi terlihat segar padahal isinya belum dimuat ke layar). undefined = belum pernah dibaca; null = dibaca, belum ada. */
+  var _ver = {};
   async function getAman(key){
     try{
-      var r=await fetch(REST_BASE+'?key=eq.'+encodeURIComponent(key)+'&select=value,shared',{headers:AH()});
+      var r=await fetch(REST_BASE+'?key=eq.'+encodeURIComponent(key)+'&select=value,shared,updated_at',{headers:AH()});
       if(r.ok){tampilkanStatusKoneksi(true);var rows=await r.json();
-        if(rows.length) return {status:'ok',value:rows[0].value,dariServer:true};
+        if(rows.length){ _ver[key]=rows[0].updated_at||null; return {status:'ok',value:rows[0].value,dariServer:true}; }
+        _ver[key]=null;
         var lv=await lsGet(key); return lv?{status:'ok',value:lv,dariServer:false}:{status:'tidakada',value:null};}
     }catch(e){}
-    tampilkanStatusKoneksi(false);var lv2=await lsGet(key);
+    tampilkanStatusKoneksi(false);delete _ver[key];var lv2=await lsGet(key);
     return lv2?{status:'ok',value:lv2,dariServer:false,serverGagal:true}:{status:'gagal',value:null};
+  }
+  function lupakanVersi(sub){ Object.keys(_ver).forEach(function(k){ if(k.indexOf(sub)>-1) delete _ver[k]; }); }
+  /* T7: tulis HANYA bila baris di server masih sama dengan yang terakhir dibaca perangkat ini (satu pernyataan atomik di database).
+     Hasil: {tersimpanServer:true} | {konflik:true} (orang lain sudah mengubah; TIDAK ada yang ditulis) | {tersimpanServer:false} (jaringan/ditolak). */
+  async function setCas(key,value,shared){
+    await lsSet(key,value);   /* salinan lokal selalu, jaring pengaman */
+    var tahu=_ver[key], baru=new Date().toISOString();
+    if(typeof tahu==='string'){ var t0=Date.parse(tahu); if(!isNaN(t0) && Date.parse(baru)<=t0) baru=new Date(t0+1).toISOString(); }
+    try{
+      var r, rows;
+      if(typeof tahu==='string'){
+        r=await fetch(REST_BASE+'?key=eq.'+encodeURIComponent(key)+'&updated_at=eq.'+encodeURIComponent(tahu),{method:'PATCH',headers:Object.assign({},AH(),{'Prefer':'return=representation'}),body:JSON.stringify({value:value,updated_at:baru})});
+        if(r.ok){
+          tampilkanStatusKoneksi(true); rows=await r.json();
+          if(rows.length===1){ _ver[key]=rows[0].updated_at||baru; return {key:key,value:value,shared:!!shared,tersimpanServer:true}; }
+          if(rows.length===0){
+            /* Jawaban simpan kita sebelumnya bisa hilang di jalan padahal sudah masuk: bila isi di server SAMA dengan yang akan kita tulis, itu bukan konflik. */
+            var c=await fetch(REST_BASE+'?key=eq.'+encodeURIComponent(key)+'&select=value,updated_at',{headers:AH()});
+            if(c.ok){ var cr=await c.json(); if(cr.length===1 && cr[0].value===value){ _ver[key]=cr[0].updated_at||null; return {key:key,value:value,shared:!!shared,tersimpanServer:true}; } }
+            return {key:key,value:value,shared:!!shared,tersimpanServer:false,konflik:true};
+          }
+        }
+      } else {
+        r=await fetch(REST_BASE,{method:'POST',headers:Object.assign({},AH(),{'Prefer':'return=representation'}),body:JSON.stringify({key:key,value:value,shared:!!shared,updated_at:baru})});
+        if(r.ok){ tampilkanStatusKoneksi(true); rows=await r.json(); _ver[key]=(rows && rows[0] && rows[0].updated_at) || baru; return {key:key,value:value,shared:!!shared,tersimpanServer:true}; }
+        if(r.status===409){ tampilkanStatusKoneksi(true); return {key:key,value:value,shared:!!shared,tersimpanServer:false,konflik:true}; }
+      }
+    }catch(e){}
+    tampilkanStatusKoneksi(false);return {key:key,value:value,shared:!!shared,tersimpanServer:false};
   }
   async function set(key,value,shared){
     if(key.indexOf('pbc_doc:')===0) return uploadFile(idDariKeyDokumen(key),value);
@@ -595,7 +629,7 @@ window.PBC_CONFIG = {
     tampilkanStatusKoneksi(false);return{keys:await lsList(prefix),prefix:prefix,shared:!!shared};
   }
 
-  window.storage = { get: get, getAman: getAman, set: set, delete: del, list: list, tertunda: tertunda, kirimUlangTertunda: kirimUlangTertunda };
+  window.storage = { get: get, getAman: getAman, setCas: setCas, lupakanVersi: lupakanVersi, lokalSet: lsSet, set: set, delete: del, list: list, tertunda: tertunda, kirimUlangTertunda: kirimUlangTertunda };
   window.addEventListener('load', function(){
     setTimeout(function(){
       fetch(REST_BASE+'?select=key&limit=1',{headers:AH()}).then(function(r){tampilkanStatusKoneksi(r.ok);}).catch(function(){tampilkanStatusKoneksi(false);});
@@ -2476,8 +2510,72 @@ function setSupabaseBadge(ok){
   el.style.color = ok ? '#2ecc71' : 'var(--orange)';
 }
 
+/* ===== T7: KONFLIK ANTAR PERANGKAT =====
+   Simpan memakai cek versi (storage.setCas). Bila perangkat/pengguna lain sudah menyimpan proyek ini sejak dimuat di sini,
+   simpan DITOLAK (tidak ada yang ditulis), salinan perubahan di perangkat ini diamankan, dan pengguna memilih: muat versi terbaru
+   atau tunda. Tidak ada penimpaan dan tidak ada penggabungan diam-diam. */
+let _konflik = {};          /* {idProyek: ['proyek','MRP',...]} selama konflik belum diselesaikan */
+let _konflikDialogWaktu = 0;
+let _simpanBerjalan = null, _simpanAntri = false;
+function adaKonflik(pid){ return !!_konflik[pid]; }
+async function tanganiKonflik(pid, bagian, payload){
+  _konflik[pid] = (_konflik[pid] || []).concat(bagian.filter(function(b){ return (_konflik[pid] || []).indexOf(b) < 0; }));
+  clearTimeout(_ulangSimpanTimer); _ulangSimpanTimer = null;
+  setSaveStatus('⚠ KONFLIK: proyek ini baru diubah orang lain — perubahan Anda BELUM disimpan');
+  try {
+    const salinan = { proyekId: pid, waktu: new Date().toISOString(), bagianBentrok: _konflik[pid], blob: payload || null,
+      mrp: state.mrpDraft || [], pemakaian: state.materialUsageLog || [], penerimaan: state.materialReceiving || [], absensi: state.absensi || [] };
+    await window.storage.lokalSet('pbc_salinan_konflik:'+pid, JSON.stringify(salinan));
+  } catch(e){ console.warn('[PBC] Salinan perubahan (konflik) tidak bisa diamankan lokal:', e); }
+  tampilDialogKonflik(pid);
+}
+function tampilDialogKonflik(pid){
+  _konflikDialogWaktu = Date.now();
+  if(document.getElementById('pbcKonflik')) return;
+  const el = document.createElement('div'); el.id = 'pbcKonflik';
+  el.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+  const boleh = typeof PBC_UANG_TERBUKA === 'function' && PBC_UANG_TERBUKA();
+  el.innerHTML = '<div style="background:#fff;color:#111;max-width:440px;width:100%;border-radius:10px;padding:16px;font:14px/1.5 sans-serif">'
+    + '<div style="font:bold 16px sans-serif;margin-bottom:6px">Proyek ini baru diubah orang lain</div>'
+    + '<div>Pengguna atau perangkat lain sudah menyimpan perubahan pada proyek ini sejak Anda membukanya. Supaya perubahan mereka tidak tertimpa, perubahan Anda <b>BELUM disimpan</b>. Salinan perubahan Anda sudah diamankan di HP/laptop ini.</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">'
+    + '<button id="pbcKonflikMuat" style="padding:12px;background:#0a7d3b;color:#fff;border:0;border-radius:8px;font:bold 14px sans-serif">Muat versi terbaru</button>'
+    + (boleh ? '<button id="pbcKonflikUnduh" style="padding:12px;background:#fff;border:1px solid #888;border-radius:8px;font:14px sans-serif">Unduh salinan perubahan saya (.json)</button>' : '')
+    + '<button id="pbcKonflikNanti" style="padding:12px;background:#fff;border:1px solid #888;border-radius:8px;font:14px sans-serif">Nanti dulu (jangan simpan)</button>'
+    + '</div></div>';
+  document.body.appendChild(el);
+  const tutup = function(){ const e = document.getElementById('pbcKonflik'); if(e) e.remove(); };
+  el.querySelector('#pbcKonflikNanti').onclick = tutup;
+  el.querySelector('#pbcKonflikMuat').onclick = async function(){
+    tutup(); delete _konflik[pid]; window.storage.lupakanVersi(pid);
+    await loadProjectById(pid);
+  };
+  const u = el.querySelector('#pbcKonflikUnduh');
+  if(u) u.onclick = async function(){
+    try {
+      const r = await window.storage.get('pbc_salinan_konflik:'+pid, false);
+      const b = new Blob([r && r.value ? r.value : '{}'], { type:'application/json' }), url = URL.createObjectURL(b), a = document.createElement('a');
+      a.href = url; a.download = 'PBC_Salinan_Konflik_'+pid+'_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } catch(e){ notif('Salinan tidak bisa diunduh: '+((e && e.message) || e),'var(--red)'); }
+  };
+}
+/* Simpan bergiliran: satu penyimpanan pada satu waktu per perangkat (kalau tidak, versi yang dibaca bisa usang dan memicu konflik palsu). */
 async function saveProjectNow() {
+  if(_simpanBerjalan){ _simpanAntri = true; return _simpanBerjalan; }
+  _simpanBerjalan = (async function(){
+    try { do { _simpanAntri = false; await saveProjectNowInti(); } while(_simpanAntri); }
+    finally { _simpanBerjalan = null; }
+  })();
+  return _simpanBerjalan;
+}
+async function saveProjectNowInti() {
   if(!state.proyek || !state.proyek.id) return;
+  if(adaKonflik(state.proyek.id)){
+    setSaveStatus('⚠ KONFLIK: proyek ini baru diubah orang lain — perubahan Anda BELUM disimpan');
+    if(Date.now() - _konflikDialogWaktu > 30000) tampilDialogKonflik(state.proyek.id);
+    return;
+  }
   const dokumenRingkas = (state.dokumen||[]).map(function(d){
     return { id:d.id, kategori:d.kategori, namaFile:d.namaFile, fileType:d.fileType, ukuran:d.ukuran, uploadedAt:d.uploadedAt };
   });
@@ -2498,10 +2596,12 @@ async function saveProjectNow() {
      mengalah & memberi tahu user, supaya kegagalan sesaat/transient tidak langsung jadi alarm. */
   let gagalUtama = false, pesanError = '';
   let belumServer = false;   /* T6: server TIDAK menerima (data hanya di HP ini) */
+  let hs = null;
   for(let percobaan=0; percobaan<2; percobaan++){
     try {
-      const hs = await window.storage.set('pbc_project:'+state.proyek.id, payload, false);
-      gagalUtama = false; pesanError = ''; belumServer = !!(hs && hs.tersimpanServer === false);
+      hs = await window.storage.setCas('pbc_project:'+state.proyek.id, payload, false);
+      gagalUtama = false; pesanError = ''; belumServer = !!(hs && hs.tersimpanServer === false && !hs.konflik);
+      if(hs && hs.konflik) break;
       if(belumServer && percobaan===0){ await new Promise(function(r){ setTimeout(r, 1200); }); continue; }
       break;
     } catch(e){
@@ -2515,6 +2615,7 @@ async function saveProjectNow() {
     notif('Gagal menyimpan data proyek: '+pesanError+' — perubahan tetap ada di tampilan, akan dicoba lagi otomatis','var(--red)');
     return; /* jangan lanjut ke data sekunder kalau data utama saja sudah gagal */
   }
+  if(hs && hs.konflik){ await tanganiKonflik(state.proyek.id, ['proyek'], payload); return; }
   /* T6: server menolak/tidak terjangkau: JANGAN tampilkan "Tersimpan". Salinan HP ini aman; coba lagi otomatis tiap 20 detik. */
   if(belumServer){
     setSaveStatus('⚠ Belum tersimpan di server (hanya di HP ini)');
@@ -2526,16 +2627,21 @@ async function saveProjectNow() {
   /* Data sekunder (mrpDraft, materialReceiving, index, pointer proyek terakhir) — kalau gagal, JANGAN
      tampilkan alarm ke user (data utama proyek sudah aman tersimpan); cukup log diam-diam, otomatis
      ikut tersimpan lagi di proses save berikutnya karena selalu ditulis ulang penuh setiap kali. */
-  const tahan = _kunciTahan[state.proyek.id] || {}, ditahan = []; let sekunderBelumServer = false;
+  const tahan = _kunciTahan[state.proyek.id] || {}, ditahan = [], konflikKunci = []; let sekunderBelumServer = false;
   async function tulisKunci(prefix, daftar, nama){
     if(tahan[prefix]){ ditahan.push(nama); console.warn('[PBC] '+nama+' tidak ditulis: gagal dibaca saat proyek dimuat (tidak boleh menimpa data server dengan daftar kosong). Muat ulang proyek.'); return; }
-    try { const h = await window.storage.set(prefix+state.proyek.id, JSON.stringify(daftar||[]), false); if(h && h.tersimpanServer === false) sekunderBelumServer = true; }
+    try {
+      const h = await window.storage.setCas(prefix+state.proyek.id, JSON.stringify(daftar||[]), false);
+      if(h && h.konflik) konflikKunci.push(nama);
+      else if(h && h.tersimpanServer === false) sekunderBelumServer = true;
+    }
     catch(e){ console.warn('[PBC] Gagal simpan '+nama+' (akan dicoba lagi di save berikutnya):', e); }
   }
   await tulisKunci('pbc_mrp:', state.mrpDraft, 'MRP');
   await tulisKunci('pbc_receiving:', state.materialReceiving, 'penerimaan material');
   await tulisKunci('pbc_usage:', state.materialUsageLog, 'pemakaian material');
   await tulisKunci('pbc_absensi:', state.absensi, 'absensi');
+  if(konflikKunci.length) await tanganiKonflik(state.proyek.id, konflikKunci, payload);
   try { await updateIndex(state.proyek.id, state.proyek.nama); }
   catch(e){ console.warn('[PBC] Gagal update index proyek (akan dicoba lagi):', e); }
   if(lastSavedProjectId !== state.proyek.id){
@@ -2543,7 +2649,9 @@ async function saveProjectNow() {
     catch(e){ console.warn('[PBC] Gagal update penanda proyek terakhir:', e); }
   }
   const now = new Date();
-  if(ditahan.length){
+  if(konflikKunci.length){
+    /* status KONFLIK sudah diatur oleh tanganiKonflik */
+  } else if(ditahan.length){
     setSaveStatus('⚠ Tersimpan, tetapi '+ditahan.join(', ')+' TIDAK ditimpa (gagal dibaca) — muat ulang proyek');
   } else if(sekunderBelumServer){
     setSaveStatus('⚠ Sebagian data belum tersimpan di server');
@@ -2557,8 +2665,9 @@ async function saveProjectNow() {
 /* T3: bedakan "indeks memang kosong" dari "indeks gagal dibaca/rusak". Penulisan indeks DILARANG bila gagal dibaca. */
 async function getIndexAman() {
   try {
-    const r = await window.storage.get('pbc_index', false);
-    if(!r || !r.value) return { ok:true, list:[] };
+    const r = await window.storage.getAman('pbc_index');
+    if(r.status === 'gagal') return { ok:false, list:[] };   /* T7: gagal dibaca BUKAN "kosong" */
+    if(r.status === 'tidakada' || !r.value) return { ok:true, list:[] };
     const idx = JSON.parse(r.value);
     if(!Array.isArray(idx)) return { ok:false, list:[] };
     return { ok:true, list: idx };
@@ -2566,12 +2675,24 @@ async function getIndexAman() {
 }
 async function getIndex() { return (await getIndexAman()).list; }
 
+/* T7: indeks diubah dengan cek versi; bila orang lain mengubahnya bersamaan, baca ulang dan terapkan lagi (perubahan indeks sifatnya bisa digabung). */
+async function ubahIndeks(fn) {
+  for(let i = 0; i < 4; i++){
+    const g = await getIndexAman();
+    if(!g.ok) throw new Error('indeks proyek tidak terbaca; tidak ditimpa');
+    const h = await window.storage.setCas('pbc_index', JSON.stringify(fn(g.list)), false);
+    if(h.konflik) continue;
+    if(h.tersimpanServer === false) throw new Error('indeks proyek belum tersimpan di server');
+    return;
+  }
+  throw new Error('indeks proyek bentrok berulang');
+}
 async function updateIndex(id, nama) {
-  const g = await getIndexAman();
-  if(!g.ok) throw new Error('indeks proyek tidak terbaca; tidak ditimpa');
-  const idx = g.list.filter(function(p){ return p.id!==id; });
-  idx.unshift({id:id, nama:nama, updatedAt:Date.now()});
-  await window.storage.set('pbc_index', JSON.stringify(idx), false);
+  await ubahIndeks(function(list){
+    const idx = list.filter(function(p){ return p.id!==id; });
+    idx.unshift({id:id, nama:nama, updatedAt:Date.now()});
+    return idx;
+  });
 }
 /* Daftar proyek yang aman: tabel + indeks, tanpa entri yatim (indeks yang datanya tidak ada). Entri yatim TIDAK dihapus. */
 async function daftarProyekAman(){
@@ -2667,7 +2788,7 @@ async function loadProjectById(id) {
     state.materialReceiving = await bacaDaftar('pbc_receiving:');
     state.materialUsageLog = await bacaDaftar('pbc_usage:');
     state.absensi = await bacaDaftar('pbc_absensi:');
-    _kunciTahan[id] = tahanBaru;
+    _kunciTahan[id] = tahanBaru; delete _konflik[id];
     if(Object.keys(tahanBaru).length){
       setTimeout(function(){ notif('Sebagian data (MRP/material/absensi) belum bisa dibaca. Data itu tidak akan ditimpa — muat ulang proyek bila koneksi sudah baik.','var(--red)'); }, 900);
     }
@@ -2792,12 +2913,8 @@ async function deleteProject(id) {
     } catch(e){ /* tetap lanjutkan hapus proyek meski gagal membaca daftar dokumen */ }
     /* 2) Indeks DULU (kalau terbaca), baru blob: kegagalan di tengah meninggalkan blob tanpa indeks (data tetap ada),
           bukan indeks tanpa data (entri yatim). */
-    const g = await getIndexAman();
-    if(g.ok){
-      await window.storage.set('pbc_index', JSON.stringify(g.list.filter(function(p){ return p.id!==id; })), false);
-    } else {
-      console.warn('[PBC] Indeks proyek tidak terbaca saat hapus; indeks tidak diubah');
-    }
+    try { await ubahIndeks(function(list){ return list.filter(function(p){ return p.id!==id; }); }); }
+    catch(e){ console.warn('[PBC] Indeks proyek tidak diubah saat hapus:', e && e.message); }
     await window.storage.delete('pbc_project:'+id, false);
     const sisaBlob = await window.storage.get('pbc_project:'+id, false);
     if(sisaBlob && sisaBlob.value){ notif('Proyek terhapus dari daftar, tetapi data utamanya masih ada di server (izin?) — hubungi Direktur','var(--red)'); return; }
