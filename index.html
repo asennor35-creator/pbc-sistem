@@ -375,6 +375,78 @@ window.PBC_CONFIG = {
     XMLHttpRequest.prototype.open = function(m, u){ if(/supabase\.(co|in)/i.test(String(u))){ window.PBC_DEMO_PERMINTAAN_KELUAR.push(String(u)); throw new Error('Mode demo: dilarang'); } return xo.apply(this, arguments); };
   }catch(e){}
 
+  /* ---------- pembatasan Mode Demo: ekspor & salin teks dikunci (menulis/mengubah/menghapus tetap bebas) ---------- */
+  var _batasT = 0;
+  function linkWaLengkap(){
+    var p = profilDemo() || {}, nm = p.nama ? (' Nama saya ' + p.nama + '.') : '';
+    return 'https://wa.me/' + WA_NOMOR + '?text=' + encodeURIComponent('Halo PBC, saya sedang mencoba demo PBC Sistem Terpadu dan ingin mendapatkan versi lengkap (ekspor PDF/Excel, cadangan data).' + nm + ' Mohon informasinya.');
+  }
+  function batas(apa){
+    var now = Date.now(); if(now - _batasT < 1500) return; _batasT = now;
+    window.PBC_DEMO_BATAS_TERPICU = (window.PBC_DEMO_BATAS_TERPICU || 0) + 1;
+    function tampil(){
+      if(document.getElementById('pbcDemoBatas')) return;
+      var o = document.createElement('div'); o.id = 'pbcDemoBatas';
+      o.style.cssText = 'position:fixed;inset:0;z-index:2147483640;background:rgba(10,20,40,.88);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,sans-serif';
+      o.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:400px;width:100%;padding:20px;text-align:center">'
+        + '<div style="font-size:34px">🔒</div>'
+        + '<div style="font-weight:800;font-size:17px;color:#0B2A5B;margin:6px 0">Dibatasi di Mode Demo</div>'
+        + '<p style="color:#334;font-size:14px;line-height:1.5;margin:0 0 14px">' + apa + ' hanya tersedia di <b>versi lengkap</b> PBC Sistem Terpadu. Di demo Anda tetap bebas menulis, mengubah, dan menghapus data untuk mencoba semua fitur.</p>'
+        + '<button type="button" id="pbcBatasWa" style="display:block;width:100%;padding:12px;border:0;border-radius:10px;background:#25D366;color:#073B1E;font:800 15px system-ui,sans-serif;cursor:pointer;margin-bottom:8px">Hubungi PBC untuk versi lengkap</button>'
+        + '<button type="button" id="pbcBatasTutup" style="background:none;border:0;color:#556;font-size:14px;padding:8px;cursor:pointer">Tutup</button></div>';
+      document.body.appendChild(o);
+      document.getElementById('pbcBatasWa').addEventListener('click', function(){ window.open(linkWaLengkap(), '_blank'); });
+      document.getElementById('pbcBatasTutup').addEventListener('click', function(){ o.remove(); });
+    }
+    if(document.body) tampil(); else document.addEventListener('DOMContentLoaded', tampil);
+  }
+  window.PBC_DEMO_BATAS = batas;
+  /* 1) unduhan file apa pun (PDF, CSV, cadangan JSON, dokumen): diblok di satu pintu */
+  try{
+    var ac = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function(){
+      if(this.hasAttribute && this.hasAttribute('download')){ batas('Ekspor / unduh file'); return; }
+      return ac.apply(this, arguments);
+    };
+    var de = EventTarget.prototype.dispatchEvent;
+    EventTarget.prototype.dispatchEvent = function(ev){
+      if(this instanceof HTMLAnchorElement && this.hasAttribute('download') && ev && ev.type === 'click'){ batas('Ekspor / unduh file'); return false; }
+      return de.apply(this, arguments);
+    };
+    document.addEventListener('click', function(e){ var a = e.target && e.target.closest && e.target.closest('a[download]'); if(a){ e.preventDefault(); e.stopImmediatePropagation(); batas('Ekspor / unduh file'); } }, true);
+  }catch(e){}
+  /* 2) PDF (jsPDF): simpan/keluarkan file diblok */
+  function kunciPdf(){
+    try{
+      var J = window.jspdf && window.jspdf.jsPDF;
+      if(J && !J.prototype.__demoKunci){
+        J.prototype.save = function(){ batas('Ekspor PDF'); return this; };
+        J.prototype.output = function(){ batas('Ekspor PDF'); return ''; };
+        J.prototype.autoPrint = function(){ batas('Cetak'); return this; };
+        J.prototype.__demoKunci = 1;
+      }
+    }catch(e){}
+  }
+  kunciPdf(); document.addEventListener('DOMContentLoaded', kunciPdf); window.addEventListener('load', kunciPdf);
+  /* 3) cetak */
+  window.print = function(){ batas('Cetak'); };
+  /* 4) salin teks: pilih-teks dimatikan (kecuali kolom isian untuk mengetik), perintah salin/potong diblok */
+  (function(){
+    var st = document.createElement('style');
+    st.textContent = 'html,body,body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}input,textarea,select,[contenteditable="true"]{-webkit-user-select:text;user-select:text}';
+    (document.head || document.documentElement).appendChild(st);
+  })();
+  function dalamIsian(t){ return t && t.closest && t.closest('input,textarea,[contenteditable="true"]'); }
+  ['copy', 'cut'].forEach(function(n){ document.addEventListener(n, function(e){ e.preventDefault(); e.stopImmediatePropagation(); batas('Menyalin teks'); }, true); });
+  document.addEventListener('contextmenu', function(e){ if(!dalamIsian(e.target)){ e.preventDefault(); } }, true);
+  document.addEventListener('dragstart', function(e){ e.preventDefault(); }, true);
+  document.addEventListener('selectstart', function(e){ if(!dalamIsian(e.target)){ e.preventDefault(); } }, true);
+  document.addEventListener('keydown', function(e){
+    if(!(e.ctrlKey || e.metaKey)) return;
+    var k = (e.key || '').toLowerCase();
+    if(k === 'c' || k === 'x' || k === 'p' || k === 's'){ e.preventDefault(); batas(k === 'p' ? 'Cetak' : (k === 's' ? 'Menyimpan halaman' : 'Menyalin teks')); }
+  }, true);
+
   /* ---------- mulai dari awal ---------- */
   window.PBC_DEMO_RESET = function(){
     if(!confirm('Mulai dari awal?\n\nSemua perubahan yang Anda buat di demo ini akan dihapus dan data contoh dikembalikan. Aplikasi sungguhan tidak terpengaruh.')) return;
