@@ -58,6 +58,19 @@ window.PBC_CONFIG = {
   Object.defineProperty(ls, 'length', { get: function(){ return this._keys().length; } });
   try{ Object.defineProperty(window, 'localStorage', { value: ls, configurable: true }); }catch(e){ console.warn('[DEMO] gagal mengganti localStorage', e); }
 
+  /* ---------- pilihan pengunjung: jumlah karyawan/tukang ---------- */
+  var PILIHAN = [
+    { id: '1-5', label: '1 – 5 orang', ket: 'Usaha kecil / tukang borongan', jumlah: 5 },
+    { id: '6-15', label: '6 – 15 orang', ket: 'Kontraktor menengah kecil', jumlah: 10 },
+    { id: '16-40', label: '16 – 40 orang', ket: 'Kontraktor menengah', jumlah: 25 },
+    { id: '40+', label: 'Lebih dari 40 orang', ket: 'Kontraktor besar', jumlah: 40 }
+  ];
+  function profilDemo(){ try{ return JSON.parse(ls.getItem('demo_profil') || 'null'); }catch(e){ return null; } }
+  var WA_NOMOR = '6285745026574';
+  function linkWa(){
+    var p = profilDemo() || {}, nm = p.nama ? (' Nama saya ' + p.nama + '.') : '', tim = p.label ? (' Jumlah karyawan/tukang kami: ' + p.label + '.') : '';
+    return 'https://wa.me/' + WA_NOMOR + '?text=' + encodeURIComponent('Halo PBC, saya baru mencoba demo PBC Sistem Terpadu.' + nm + tim + ' Saya ingin tahu lebih lanjut.');
+  }
   /* ---------- data contoh (fiktif) ---------- */
   function iso(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function hariLalu(n){ var d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - n); return d; }
@@ -114,20 +127,21 @@ window.PBC_CONFIG = {
       { id: 'demo_lap_2', tgl: iso(hariLalu(9)), cuaca: 'Berawan', tk: '6', div: 'B. Pekerjaan Dinding', ket: 'Plester dinding kamar utama dan kamar tidur anak.', kendala: 'Pasir terlambat datang setengah hari.' },
       { id: 'demo_lap_1', tgl: iso(hariLalu(20)), cuaca: 'Cerah', tk: '8', div: 'D. Atap & Plafon', ket: 'Pasang rangka dan penutup atap metal seluruhnya.', kendala: '' }
     ];
-    var pekerja = [
-      { id: 'demo_pk_1', nama: 'Pak Wayan', peran: 'Kepala Tukang', tarifHarian: 220000, aktif: true },
-      { id: 'demo_pk_2', nama: 'Pak Ketut', peran: 'Tukang', tarifHarian: 190000, aktif: true },
-      { id: 'demo_pk_3', nama: 'Pak Made', peran: 'Tukang', tarifHarian: 190000, aktif: true },
-      { id: 'demo_pk_4', nama: 'Komang', peran: 'Kenek/Pembantu', tarifHarian: 130000, aktif: true },
-      { id: 'demo_pk_5', nama: 'Nyoman', peran: 'Kenek/Pembantu', tarifHarian: 130000, aktif: true }
-    ];
+    var NAMA = ['Wayan','Ketut','Made','Komang','Nyoman','Putu','Kadek','Gede','Agus','Budi','Dedi','Eko','Fajar','Hendra','Indra','Joko','Rudi','Slamet','Tono','Yoga','Ari','Bayu','Dimas','Edi','Feri','Gilang','Heru','Ilham','Jaya','Karta','Lanang','Mursid','Nando','Oka','Panji','Rama','Surya','Teguh','Ujang','Wira'];
+    var jml = (profilDemo() && profilDemo().jumlah) || 5;
+    var pekerja = [];
+    for(var q = 0; q < jml; q++){
+      var peran = (q % 5 === 0) ? 'Kepala Tukang' : (q % 5 <= 2 ? 'Tukang' : 'Kenek/Pembantu');
+      var tarif = peran === 'Kepala Tukang' ? 220000 : (peran === 'Tukang' ? 190000 : 130000);
+      pekerja.push({ id: 'demo_pk_' + (q + 1), nama: 'Pak ' + NAMA[q % NAMA.length] + (q >= NAMA.length ? ' ' + (Math.floor(q / NAMA.length) + 1) : ''), peran: peran, tarifHarian: tarif, aktif: true });
+    }
     var absensi = [], n = 0;
     for(var h = 7; h >= 1; h--){
       var d = hariLalu(h); if(d.getDay() === 0) continue;
       pekerja.forEach(function(p, pi){
         var st = 'hadir';
-        if(h === 4 && pi === 4) st = 'absen';
-        if(h === 2 && pi === 0) st = 'lembur';
+        if(h === 4 && pi % 5 === 4) st = 'absen';
+        if(h === 2 && pi % 5 === 0) st = 'lembur';
         absensi.push({ id: 'demo_abs_' + (++n), tanggal: iso(d), pekerjaId: p.id, status: st, dibayar: false });
       });
     }
@@ -364,7 +378,7 @@ window.PBC_CONFIG = {
   /* ---------- mulai dari awal ---------- */
   window.PBC_DEMO_RESET = function(){
     if(!confirm('Mulai dari awal?\n\nSemua perubahan yang Anda buat di demo ini akan dihapus dan data contoh dikembalikan. Aplikasi sungguhan tidak terpengaruh.')) return;
-    try{ ls.clear(); }catch(e){}
+    try{ ls._keys().forEach(function(k){ if(KEEP.indexOf(k) < 0) ls.removeItem(k); }); }catch(e){}   /* profil & perangkat dipertahankan: tidak minta isi ulang, tidak kirim data ganda */
     var sisa = 2;
     function selesai(){ if(--sisa <= 0) location.replace(location.pathname + '?demo=1'); }
     [DB_BACKEND, DB_APP].forEach(function(n){
@@ -372,6 +386,75 @@ window.PBC_CONFIG = {
     });
     setTimeout(function(){ location.replace(location.pathname + '?demo=1'); }, 2500);
   };
+
+  /* ---------- formulir pengunjung demo (data disimpan PBC, dengan pemberitahuan jelas) ---------- */
+  var KEEP = ['demo_profil', 'demo_device', 'demo_lead_antrian'];
+  function idPerangkat(){
+    var d = ls.getItem('demo_device');
+    if(!d){ d = 'd' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); try{ ls.setItem('demo_device', d); }catch(e){} }
+    return d;
+  }
+  function antrianLead(){ try{ return JSON.parse(ls.getItem('demo_lead_antrian') || '[]'); }catch(e){ return []; } }
+  async function kirimLead(lead){
+    /* SATU-SATUNYA permintaan ke server PBC dari Mode Demo: menambah 1 baris di tabel demo_leads (hak "tambah saja"). */
+    var ac = new AbortController(), tm = setTimeout(function(){ ac.abort(); }, 9000);
+    try{
+      var r = await fetchAsli(REAL_URL + '/rest/v1/demo_leads', { method: 'POST', signal: ac.signal,
+        headers: { 'apikey': (window.PBC_CONFIG || {}).SUPABASE_KEY || '', 'Authorization': 'Bearer ' + ((window.PBC_CONFIG || {}).SUPABASE_KEY || ''), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify(lead) });
+      return r.ok;
+    }catch(e){ return false; }
+    finally{ clearTimeout(tm); }
+  }
+  async function kirimAntrian(){
+    var a = antrianLead(); if(!a.length) return;
+    var sisa = [];
+    for(var i = 0; i < a.length; i++){ if(!(await kirimLead(a[i]))) sisa.push(a[i]); }
+    try{ if(sisa.length) ls.setItem('demo_lead_antrian', JSON.stringify(sisa)); else ls.removeItem('demo_lead_antrian'); }catch(e){}
+  }
+  async function terapkanForm(pil, isian){
+    var profil = { id: pil.id, label: pil.label, jumlah: pil.jumlah, nama: isian.nama, wa: isian.wa, email: isian.email, jenis: isian.jenis, namaUsaha: isian.namaUsaha, waktu: new Date().toISOString() };
+    try{ ls.setItem('demo_profil', JSON.stringify(profil)); }catch(e){}
+    var lead = { nama: isian.nama, wa: isian.wa, email: isian.email || null, jenis_usaha: isian.jenis || null, nama_usaha: isian.namaUsaha || null,
+      jumlah_karyawan: pil.label, perangkat_id: idPerangkat(), persetujuan: true };
+    var terkirim = await kirimLead(lead);
+    if(!terkirim){ var a = antrianLead(); a.push(lead); try{ ls.setItem('demo_lead_antrian', JSON.stringify(a)); }catch(e){} }
+    try{ await mulaiDb(); DB = bangunSeed(); if(handleDb) await idbPut(handleDb, 'tabel', JSON.stringify(DB)); }catch(e){}
+    location.replace(location.pathname + '?demo=1');
+  }
+  function sambutan(){
+    if(document.getElementById('pbcDemoSambut')) return;
+    var o = document.createElement('div'); o.id = 'pbcDemoSambut';
+    o.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(10,20,40,.94);display:flex;align-items:flex-start;justify-content:center;padding:12px;font-family:system-ui,sans-serif;overflow:auto';
+    var inp = 'display:block;width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid #B8C6E6;border-radius:9px;font-size:15px;font-family:inherit;background:#F8FAFE;color:#0B2A5B';
+    var lab = 'display:block;font-size:12px;font-weight:700;color:#334;margin:11px 0 4px';
+    var h = '<form id="pbcDemoForm" novalidate style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:18px;margin:auto">'
+      + '<div style="font-weight:800;font-size:18px;color:#0B2A5B">Coba PBC Sistem Terpadu</div>'
+      + '<p style="margin:6px 0 4px;color:#334;font-size:13.5px;line-height:1.45">Aplikasi ini <b>sama persis</b> dengan yang dipakai PBC. Isi data singkat agar tim PBC bisa mendampingi Anda, lalu langsung coba.</p>'
+      + '<label style="' + lab + '">Nama <span style="color:#B42318">*</span></label><input id="dfNama" autocomplete="name" maxlength="100" style="' + inp + '" placeholder="Nama Anda">'
+      + '<label style="' + lab + '">Nomor WhatsApp <span style="color:#B42318">*</span></label><input id="dfWa" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" style="' + inp + '" placeholder="08xx xxxx xxxx">'
+      + '<label style="' + lab + '">Email (boleh dikosongkan)</label><input id="dfEmail" type="email" autocomplete="email" maxlength="150" style="' + inp + '" placeholder="nama@email.com">'
+      + '<label style="' + lab + '">Bentuk usaha</label><select id="dfJenis" style="' + inp + '"><option>Perorangan</option><option>CV</option><option>PT</option><option>Lainnya</option></select>'
+      + '<label style="' + lab + '">Nama usaha (boleh dikosongkan)</label><input id="dfUsaha" maxlength="120" style="' + inp + '" placeholder="Contoh: CV Maju Jaya">'
+      + '<label style="' + lab + '">Jumlah karyawan / tukang</label><select id="dfKaryawan" style="' + inp + '">'
+      + PILIHAN.map(function(p){ return '<option value="' + p.id + '">' + p.label + '</option>'; }).join('') + '</select>'
+      + '<div id="dfGalat" style="color:#B42318;font-size:13px;margin-top:10px;min-height:16px"></div>'
+      + '<button type="submit" id="dfKirim" style="display:block;width:100%;margin-top:6px;padding:13px;border:0;border-radius:10px;background:#B45309;color:#fff;font:800 15px system-ui,sans-serif;cursor:pointer">Mulai Coba Demo</button>'
+      + '<p style="font-size:11.5px;color:#556;line-height:1.5;margin:10px 0 0">Dengan menekan <b>Mulai Coba Demo</b>, Anda menyetujui data di atas <b>disimpan oleh Pratama Build &amp; Construction</b> dan dipakai untuk menghubungi Anda terkait demo dan layanan PBC. Data proyek contoh yang Anda ubah di demo ini hanya tersimpan di HP Anda.</p></form>';
+    o.innerHTML = h; document.body.appendChild(o);
+    var f = document.getElementById('pbcDemoForm');
+    f.addEventListener('submit', function(e){
+      e.preventDefault();
+      var v = function(id){ return (document.getElementById(id).value || '').trim(); };
+      var nama = v('dfNama'), wa = v('dfWa'), email = v('dfEmail'), g = document.getElementById('dfGalat');
+      if(nama.length < 2){ g.textContent = 'Isi nama Anda (minimal 2 huruf).'; return; }
+      if(!/^[0-9+][0-9 +-]{7,19}$/.test(wa)){ g.textContent = 'Nomor WhatsApp belum benar. Contoh: 081234567890'; return; }
+      if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ g.textContent = 'Format email belum benar (atau kosongkan saja).'; return; }
+      var btn = document.getElementById('dfKirim'); btn.disabled = true; btn.textContent = 'Menyiapkan demo…'; g.textContent = '';
+      var pil = PILIHAN.filter(function(x){ return x.id === v('dfKaryawan'); })[0] || PILIHAN[0];
+      terapkanForm(pil, { nama: nama, wa: wa, email: email, jenis: v('dfJenis'), namaUsaha: v('dfUsaha') });
+    });
+  }
 
   /* ---------- spanduk MODE DEMO ---------- */
   function spanduk(){
@@ -381,9 +464,11 @@ window.PBC_CONFIG = {
       + '#pbcDemoBar b{letter-spacing:.06em}#pbcDemoBar button{background:#fff;color:#7C2D12;border:0;border-radius:6px;padding:5px 10px;font:700 11px system-ui,sans-serif;cursor:pointer}';
     document.head.appendChild(st);
     var d = document.createElement('div'); d.id = 'pbcDemoBar';
-    d.innerHTML = '<span><b>MODE DEMO</b> — data contoh, tersimpan hanya di HP ini</span><span><button type="button" id="pbcDemoReset">Mulai dari awal</button></span>';
+    d.innerHTML = '<span><b>MODE DEMO</b> — data contoh, tersimpan hanya di HP ini</span><span><button type="button" id="pbcDemoWa" style="background:#25D366;color:#073B1E">Hubungi PBC</button> <button type="button" id="pbcDemoReset">Mulai dari awal</button></span>';
     document.body.insertBefore(d, document.body.firstChild);
     document.getElementById('pbcDemoReset').addEventListener('click', window.PBC_DEMO_RESET);
+    document.getElementById('pbcDemoWa').addEventListener('click', function(){ window.open(linkWa(), '_blank'); });
+    if(!profilDemo()) sambutan(); else kirimAntrian();
     document.title = 'DEMO — ' + document.title;
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', spanduk); else spanduk();
@@ -1436,6 +1521,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
   <button class="nav-tab" data-tabkey="mrp" onclick="openMrpPage(event)">🧮 MRP</button>
   <button class="nav-tab" data-tabkey="gudang" onclick="openGudangPage(event)">🏬 Gudang</button>
   <button class="nav-tab" data-tabkey="owner-portal" onclick="openOwnerPortalPage(event)">👤 Owner Portal</button>
+  <button class="nav-tab" data-tabkey="pengunjungdemo" onclick="openPengunjungDemoPage(event)">🧪 Pengunjung Demo</button>
 </div>
 
 <div class="main">
@@ -3168,7 +3254,7 @@ async function loadProjectById(id) {
     setSaveStatus('✓ Dimuat');
     setTimeout(function(){ if(typeof jalankanKirimUlangFoto==='function') jalankanKirimUlangFoto(); }, 1500);
     hideModal('modalProyekList');
-    notif('Proyek "'+state.proyek.nama+'" dimuat!'+(dariSupabase?' (dari Supabase)':' (dari cadangan lokal)'));
+    notif('Proyek "'+state.proyek.nama+'" dimuat!'+(window.PBC_DEMO?' (data contoh demo)':(dariSupabase?' (dari Supabase)':' (dari cadangan lokal)')));
     try{ periksaDurasiTakWajar(); }catch(e){}
   } catch(e) {
     console.error(e);
@@ -10318,7 +10404,7 @@ function hapusMaterial(id){ state.materials = state.materials.filter(function(m)
 /* ===== MODUL HAK AKSES & OWNER PORTAL ===== */
 let currentRole = 'direktur';
 const ROLE_TABS = {
-  direktur: ['dashboard','semuaproyek','boq','schedule','progress','opname','termin','rekap','keuangan','dokumen','purchasing','tenagakerja','vo','qc','mrp','gudang','owner-portal'],
+  direktur: ['dashboard','semuaproyek','boq','schedule','progress','opname','termin','rekap','keuangan','dokumen','purchasing','tenagakerja','vo','qc','mrp','gudang','owner-portal','pengunjungdemo'],
   internal: ['dashboard','semuaproyek','boq','schedule','progress','opname','termin','rekap','dokumen','tenagakerja','vo','qc','owner-portal'],
   lapangan: ['dashboard','progress','opname','tenagakerja','qc','gudang'],
   owner: ['owner-portal']
@@ -10329,7 +10415,7 @@ function applyRoleVisibility(){
   const allowed = ROLE_TABS[currentRole] || ROLE_TABS.direktur;
   document.querySelectorAll('.nav-tab').forEach(function(btn){
     const key = btn.getAttribute('data-tabkey');
-    btn.style.display = allowed.indexOf(key)>-1 ? '' : 'none';
+    btn.style.display = (allowed.indexOf(key)>-1 && !(key==='pengunjungdemo' && window.PBC_DEMO)) ? '' : 'none';
   });
 }
 function onRoleChange(newRole){
@@ -11261,6 +11347,67 @@ function renderKeuangan(){
     if(main) main.appendChild(el);
   }
 })();
+
+/* ===== T10d: PENGUNJUNG DEMO — daftar orang yang mencoba Mode Demo (hanya Direktur; data dari tabel demo_leads) ===== */
+let _pdLeads = [];
+function openPengunjungDemoPage(e){
+  ensurePageExists('page-pengunjungdemo', function(){ return ''
+    + '<div class="sec-head"><div class="sec-title">Pengunjung <span>Demo</span></div>'
+    + '<div class="sec-sub">Orang yang mencoba Mode Demo dan mengisi formulir (mereka sudah diberi tahu bahwa datanya disimpan PBC untuk dihubungi).</div></div>'
+    + '<div class="kpi-row" id="pdStat" style="grid-template-columns:repeat(4,1fr)"></div>'
+    + '<div class="panel" style="margin-top:16px"><div class="panel-title">Rincian</div><div id="pdRincian"></div></div>'
+    + '<div class="toolbar" style="margin-top:16px;flex-wrap:wrap"><button class="btn btn-blue" onclick="muatPengunjungDemo()">🔄 Muat ulang</button> <button class="btn btn-gold" onclick="unduhPengunjungDemoCsv()">📥 Unduh CSV</button></div>'
+    + '<div class="panel" style="margin-top:16px"><div class="panel-title">Daftar Pengunjung</div><div id="pdDaftar" style="overflow-x:auto"></div></div>'; });
+  switchToPage('page-pengunjungdemo', e, muatPengunjungDemo);
+}
+function pdNomorWa(wa){ var d = String(wa||'').replace(/\D/g,''); if(d.indexOf('0')===0) d = '62'+d.slice(1); return d; }
+function pdTgl(iso){ try{ return new Date(iso).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }catch(e){ return iso||''; } }
+async function muatPengunjungDemo(){
+  const dft = document.getElementById('pdDaftar'); if(!dft) return;
+  dft.innerHTML = '<div class="empty">Memuat…</div>';
+  try{
+    const rows = await sbRequest('demo_leads?select=*&order=created_at.desc&limit=1000');
+    _pdLeads = rows || [];
+    renderPengunjungDemo();
+  }catch(err){
+    const m = String(err && err.message || err);
+    _pdLeads = [];
+    document.getElementById('pdStat').innerHTML = '';
+    document.getElementById('pdRincian').innerHTML = '';
+    dft.innerHTML = '<div class="empty">'+(/404|PGRST205|does not exist/i.test(m)
+      ? 'Tabel pengunjung demo belum dibuat di Supabase. Jalankan skrip SQL "sql_demo_leads.sql" sekali di Supabase (SQL Editor), lalu muat ulang halaman ini.'
+      : 'Gagal memuat data: '+pbcEsc(m))+'</div>';
+  }
+}
+function renderPengunjungDemo(){
+  const L = _pdLeads, now = Date.now(), hari = 86400000;
+  const unik = new Set(L.map(function(x){ return x.perangkat_id || x.id; })).size;
+  const h1 = L.filter(function(x){ return now - Date.parse(x.created_at) < hari; }).length;
+  const h7 = L.filter(function(x){ return now - Date.parse(x.created_at) < 7*hari; }).length;
+  document.getElementById('pdStat').innerHTML =
+    '<div class="kpi-card"><div class="kpi-label">Total Pengunjung</div><div class="kpi-val">'+L.length+'</div></div>'
+    + '<div class="kpi-card"><div class="kpi-label">Perangkat Unik</div><div class="kpi-val">'+unik+'</div></div>'
+    + '<div class="kpi-card"><div class="kpi-label">24 Jam Terakhir</div><div class="kpi-val">'+h1+'</div></div>'
+    + '<div class="kpi-card"><div class="kpi-label">7 Hari Terakhir</div><div class="kpi-val">'+h7+'</div></div>';
+  function hitung(f){ const m = {}; L.forEach(function(x){ const k = x[f] || '(kosong)'; m[k] = (m[k]||0)+1; }); return Object.keys(m).sort(function(a,b){ return m[b]-m[a]; }).map(function(k){ return pbcEsc(k)+': <b>'+m[k]+'</b>'; }).join(' · ') || '-'; }
+  document.getElementById('pdRincian').innerHTML = '<div style="font-size:12px;line-height:1.9"><div>Bentuk usaha — '+hitung('jenis_usaha')+'</div><div>Jumlah karyawan — '+hitung('jumlah_karyawan')+'</div></div>';
+  if(!L.length){ document.getElementById('pdDaftar').innerHTML = '<div class="empty">Belum ada pengunjung demo.</div>'; return; }
+  document.getElementById('pdDaftar').innerHTML = '<table class="tbl" style="width:100%;font-size:11px"><thead><tr><th>Tanggal</th><th>Nama</th><th>WhatsApp</th><th>Email</th><th>Usaha</th><th>Karyawan</th></tr></thead><tbody>'
+    + L.map(function(x){
+        const n = pdNomorWa(x.wa);
+        return '<tr><td>'+pbcEsc(pdTgl(x.created_at))+'</td><td>'+pbcEsc(x.nama)+'</td>'
+          + '<td><a href="https://wa.me/'+encodeURIComponent(n)+'?text='+encodeURIComponent('Halo '+(x.nama||'')+', saya dari Pratama Build & Construction. Terima kasih sudah mencoba demo PBC Sistem Terpadu. Ada yang bisa kami bantu?')+'" target="_blank" rel="noopener">💬 '+pbcEsc(x.wa)+'</a></td>'
+          + '<td>'+pbcEsc(x.email||'-')+'</td><td>'+pbcEsc((x.jenis_usaha||'-')+(x.nama_usaha?' · '+x.nama_usaha:''))+'</td><td>'+pbcEsc(x.jumlah_karyawan||'-')+'</td></tr>';
+      }).join('') + '</tbody></table>';
+}
+function unduhPengunjungDemoCsv(){
+  if(!_pdLeads.length){ notif('Belum ada data untuk diunduh','var(--red)'); return; }
+  const q = function(v){ v = String(v==null?'':v); if(/^[=+\-@]/.test(v)) v = "'"+v; return '"'+v.replace(/"/g,'""')+'"'; };
+  const baris = [['Tanggal','Nama','WhatsApp','Email','Bentuk Usaha','Nama Usaha','Jumlah Karyawan'].map(q).join(',')]
+    .concat(_pdLeads.map(function(x){ return [x.created_at,x.nama,x.wa,x.email,x.jenis_usaha,x.nama_usaha,x.jumlah_karyawan].map(q).join(','); }));
+  const b = new Blob(['﻿'+baris.join('\r\n')], { type:'text/csv;charset=utf-8' }), u = URL.createObjectURL(b), a = document.createElement('a');
+  a.href = u; a.download = 'pengunjung-demo-pbc.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(u); }, 3000);
+}
 
 function openOwnerPortalPage(e){
   ensurePageExists('page-owner-portal', function(){ return ''
