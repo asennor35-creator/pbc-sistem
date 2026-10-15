@@ -25,6 +25,372 @@ window.PBC_CONFIG = {
 </script>
 <script>
 /* ===========================================================================
+   T10 — MODE DEMO (dibuka lewat alamat ...?demo=1)
+   Aplikasi SAMA PERSIS dengan yang asli, tetapi:
+   - tanpa login (masuk otomatis sebagai pengguna contoh)
+   - SEMUA permintaan ke Supabase dicegat dan dijawab oleh "server tiruan" di dalam halaman ini
+     (tidak ada satu pun data keluar ke server PBC)
+   - penyimpanan lokal diberi nama sendiri (awalan pbcdemo:: dan database pbc_demo_*), jadi tidak
+     bercampur dengan aplikasi sungguhan di HP yang sama
+   - data awal: satu proyek contoh fiktif (renovasi rumah) dengan tanggal relatif terhadap hari ini
+   Bila alamat TIDAK memakai ?demo=1, blok ini tidak melakukan apa pun.
+   =========================================================================== */
+(function(){
+  var qs = ''; try{ qs = location.search || ''; }catch(e){}
+  if(!/(^|[?&])demo=1(&|$)/.test(qs)) return;
+  window.PBC_DEMO = true;
+
+  var NS = 'pbcdemo::';
+  var DB_BACKEND = 'pbc_demo_backend', DB_APP = 'pbc_demo_storage_db';
+  window.PBC_DEMO_DB_APP = DB_APP;
+  var REAL_URL = (window.PBC_CONFIG && PBC_CONFIG.SUPABASE_URL) || '';
+
+  /* ---------- localStorage bernama sendiri ---------- */
+  var asli = window.localStorage;
+  var ls = {
+    getItem: function(k){ try{ return asli.getItem(NS + k); }catch(e){ return null; } },
+    setItem: function(k, v){ asli.setItem(NS + k, String(v)); },
+    removeItem: function(k){ try{ asli.removeItem(NS + k); }catch(e){} },
+    key: function(i){ var a = this._keys(); return i < a.length ? a[i] : null; },
+    clear: function(){ this._keys().forEach(function(k){ asli.removeItem(NS + k); }); },
+    _keys: function(){ var a = []; try{ for(var i = 0; i < asli.length; i++){ var k = asli.key(i); if(k && k.indexOf(NS) === 0) a.push(k.slice(NS.length)); } }catch(e){} return a; }
+  };
+  Object.defineProperty(ls, 'length', { get: function(){ return this._keys().length; } });
+  try{ Object.defineProperty(window, 'localStorage', { value: ls, configurable: true }); }catch(e){ console.warn('[DEMO] gagal mengganti localStorage', e); }
+
+  /* ---------- data contoh (fiktif) ---------- */
+  function iso(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function hariLalu(n){ var d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - n); return d; }
+  function senin(d){ var x = new Date(d); var w = x.getDay(); x.setDate(x.getDate() - ((w + 6) % 7)); return x; }
+
+  function bangunSeed(){
+    var PID = 'demo_renovasi_rumah';
+    var mulai = senin(hariLalu(35));
+    var DIV = [['A', 'A. Persiapan & Pembongkaran'], ['B', 'B. Pekerjaan Dinding'], ['C', 'C. Lantai & Keramik'], ['D', 'D. Atap & Plafon'], ['E', 'E. Mekanikal & Elektrikal'], ['F', 'F. Pengecatan']];
+    /* [divisi, nama, sat, vol, harga, durasi(hari), terpasang] */
+    var BARIS = [
+      ['A', 'Pembersihan lahan & mobilisasi', 'ls', 1, 6500000, 3, 1],
+      ['A', 'Bongkar dinding & lantai lama', 'm2', 45, 85000, 5, 45],
+      ['A', 'Buang puing keluar lokasi', 'ls', 1, 4500000, 3, 1],
+      ['B', 'Pasang bata ringan', 'm2', 80, 165000, 10, 80],
+      ['B', 'Plester & aci dinding', 'm2', 160, 78000, 12, 60],
+      ['B', 'Kolom praktis beton', 'm3', 2.4, 4200000, 6, 2.4],
+      ['C', 'Urugan pasir & screed lantai', 'm2', 70, 95000, 6, 70],
+      ['C', 'Keramik lantai 60x60', 'm2', 70, 285000, 10, 25],
+      ['C', 'Keramik dinding kamar mandi', 'm2', 38, 265000, 6, 0],
+      ['C', 'Plint keramik', 'm', 60, 38000, 3, 0],
+      ['D', 'Rangka atap baja ringan', 'm2', 90, 245000, 8, 90],
+      ['D', 'Penutup atap genteng metal', 'm2', 90, 185000, 6, 90],
+      ['D', 'Plafon gypsum + rangka', 'm2', 75, 172000, 8, 0],
+      ['D', 'Nok & list plafon', 'm', 35, 95000, 2, 0],
+      ['E', 'Titik lampu', 'ttk', 24, 285000, 6, 12],
+      ['E', 'Stop kontak', 'ttk', 18, 265000, 5, 6],
+      ['E', 'Instalasi pipa air bersih', 'ls', 1, 12500000, 7, 0.3],
+      ['E', 'Sanitair kamar mandi (closet, wastafel)', 'unit', 2, 3850000, 4, 0],
+      ['F', 'Cat dinding dalam', 'm2', 300, 38000, 10, 0],
+      ['F', 'Cat plafon', 'm2', 75, 32000, 4, 0],
+      ['F', 'Cat dinding luar', 'm2', 110, 42000, 5, 0]
+    ];
+    var divisi = DIV.map(function(d){ return { id: 'demo_div_' + d[0], nama: d[1] }; });
+    var items = BARIS.map(function(b, i){
+      return { id: 'demo_item_' + (i + 1), divisiId: 'demo_div_' + b[0], nama: b[1], sat: b[2], vol: b[3], harga: b[4], durasi: Math.max(1, Math.round(b[5] * 0.55)), terpasang: b[6] };
+    });
+    var total = items.reduce(function(s, x){ return s + x.vol * x.harga; }, 0);
+    function termin(n, nama, pct, ket, tglHari, lunas, ret){
+      var nilai = total * pct / 100;
+      return { id: 'demo_termin_' + n, nama: nama, pct: pct, nilai: nilai, milestone: ket, tgl: iso(hariLalu(tglHari)),
+        status: lunas ? 'Lunas' : 'Belum Dibayar', paidAt: lunas ? iso(hariLalu(tglHari)) : null,
+        retensiPct: ret || 0, nilaiRetensi: nilai * (ret || 0) / 100, retensiDicairkanAt: null };
+    }
+    var tarminList = [
+      termin(1, 'Uang Muka (DP)', 30, 'Tanda tangan kontrak', 35, true),
+      termin(2, 'Termin 2', 30, 'Progres fisik 40%', 12, true),
+      termin(3, 'Termin 3', 30, 'Progres fisik 70%', -10, false),
+      termin(4, 'Pelunasan', 10, 'Serah terima (BAST)', -35, false, 5)
+    ];
+    var laporan = [
+      { id: 'demo_lap_4', tgl: iso(hariLalu(1)), cuaca: 'Cerah', tk: '7', div: 'C. Lantai & Keramik', ket: 'Pasang keramik lantai ruang tamu dan koridor, lanjut pemasangan plafon gypsum sisi timur.', kendala: '' },
+      { id: 'demo_lap_3', tgl: iso(hariLalu(4)), cuaca: 'Hujan', tk: '4', div: 'E. Mekanikal & Elektrikal', ket: 'Pekerjaan di dalam ruangan: tarik kabel dan pasang pipa conduit titik lampu.', kendala: 'Hujan sejak pagi, pekerjaan atap dihentikan.' },
+      { id: 'demo_lap_2', tgl: iso(hariLalu(9)), cuaca: 'Berawan', tk: '6', div: 'B. Pekerjaan Dinding', ket: 'Plester dinding kamar utama dan kamar tidur anak.', kendala: 'Pasir terlambat datang setengah hari.' },
+      { id: 'demo_lap_1', tgl: iso(hariLalu(20)), cuaca: 'Cerah', tk: '8', div: 'D. Atap & Plafon', ket: 'Pasang rangka dan penutup atap metal seluruhnya.', kendala: '' }
+    ];
+    var pekerja = [
+      { id: 'demo_pk_1', nama: 'Pak Wayan', peran: 'Kepala Tukang', tarifHarian: 220000, aktif: true },
+      { id: 'demo_pk_2', nama: 'Pak Ketut', peran: 'Tukang', tarifHarian: 190000, aktif: true },
+      { id: 'demo_pk_3', nama: 'Pak Made', peran: 'Tukang', tarifHarian: 190000, aktif: true },
+      { id: 'demo_pk_4', nama: 'Komang', peran: 'Kenek/Pembantu', tarifHarian: 130000, aktif: true },
+      { id: 'demo_pk_5', nama: 'Nyoman', peran: 'Kenek/Pembantu', tarifHarian: 130000, aktif: true }
+    ];
+    var absensi = [], n = 0;
+    for(var h = 7; h >= 1; h--){
+      var d = hariLalu(h); if(d.getDay() === 0) continue;
+      pekerja.forEach(function(p, pi){
+        var st = 'hadir';
+        if(h === 4 && pi === 4) st = 'absen';
+        if(h === 2 && pi === 0) st = 'lembur';
+        absensi.push({ id: 'demo_abs_' + (++n), tanggal: iso(d), pekerjaId: p.id, status: st, dibayar: false });
+      });
+    }
+    var vo = {
+      id: 'demo_vo_1', nomorVo: 'VO-001', tanggal: iso(hariLalu(14)),
+      deskripsiPerubahan: 'Pemilik meminta tambahan kanopi carport di depan rumah.', alasanPerubahan: 'Permintaan pemilik setelah pekerjaan berjalan.',
+      jenisPerubahan: 'tambah_pekerjaan',
+      itemPerubahan: [{ id: 'demo_vor_1', aksi: 'tambah', nama: 'Kanopi carport baja ringan + polycarbonate', sat: 'm2', keterangan: 'Ukuran 3 x 5 m', divisiId: 'demo_div_D', volumeBaru: 15, harga: 620000, nilai: 9300000 }],
+      nilaiPerubahan: 9300000, nilaiKontrakSebelum: total, nilaiKontrakSesudah: total + 9300000, lampiranDokIds: [],
+      status: 'disetujui', diajukanOleh: 'Pengguna Demo', tanggalDiajukan: iso(hariLalu(14)),
+      disetujuiOleh: 'Ibu Ratna (contoh)', tanggalDisetujui: iso(hariLalu(12)), ditolakOleh: null, tanggalDitolak: null, alasanPenolakan: '', tanggalSelesai: null
+    };
+    var inspections = [
+      { id: 'demo_insp_1', tanggal: iso(hariLalu(10)), jenis: 'progress_qc', itemBoqId: 'demo_item_5', dilakukanOleh: 'Pengawas Lapangan', hasil: 'lolos_dengan_catatan', catatanUmum: 'Plester sudah rata, ada beberapa titik di kamar anak yang perlu dirapikan.' },
+      { id: 'demo_insp_2', tanggal: iso(hariLalu(3)), jenis: 'progress_qc', itemBoqId: 'demo_item_7', dilakukanOleh: 'Pengawas Lapangan', hasil: 'lolos', catatanUmum: 'Kemiringan lantai kamar mandi sesuai.' }
+    ];
+    var punchList = [
+      { id: 'demo_pl_1', inspectionId: 'demo_insp_1', sumber: 'progress', itemBoqId: 'demo_item_5', deskripsiTemuan: 'Plester dinding kamar anak bergelombang di dekat jendela', lokasi: 'Kamar anak, sisi jendela', tingkat: 'minor', status: 'selesai', ditemukanOleh: 'Pengawas Lapangan', ditemukanAt: iso(hariLalu(10)), targetSelesai: iso(hariLalu(7)), diselesaikanAt: iso(hariLalu(6)), fotoDokIds: [] },
+      { id: 'demo_pl_2', inspectionId: 'demo_insp_1', sumber: 'progress', itemBoqId: 'demo_item_5', deskripsiTemuan: 'Retak rambut di sudut dinding ruang tamu', lokasi: 'Ruang tamu, sudut kiri', tingkat: 'minor', status: 'terbuka', ditemukanOleh: 'Pengawas Lapangan', ditemukanAt: iso(hariLalu(10)), targetSelesai: iso(hariLalu(-5)), diselesaikanAt: null, fotoDokIds: [] }
+    ];
+    var suppliers = [
+      { id: 'demo_sup_1', nama: 'Toko Bangunan Maju Jaya (contoh)', telp: '0361-000-0001', alamat: 'Denpasar (alamat contoh)' },
+      { id: 'demo_sup_2', nama: 'UD Keramik Sentosa (contoh)', telp: '0361-000-0002', alamat: 'Denpasar (alamat contoh)' }
+    ];
+    var progressLog = [];
+    var pct = 0, totalVol = items.reduce(function(s, x){ return s + x.vol * x.harga; }, 0);
+    var real = items.reduce(function(s, x){ return s + x.terpasang * x.harga; }, 0) / totalVol * 100;
+    [28, 21, 14, 7, 0].forEach(function(k, i){ progressLog.push({ tanggal: iso(hariLalu(k)), kumulatifPct: Math.round(real * (i + 1) / 5 * 10) / 10 }); });
+    var proyek = { id: PID, nama: 'Renovasi Rumah Ibu Ratna (CONTOH)', tipe: 'Renovasi', lokasi: 'Denpasar, Bali (contoh)', owner: 'Ibu Ratna (contoh)', mulai: iso(mulai), durasi: 12,
+      keuangan: { addendum: 9300000, pengeluaranOperasional: 2750000 } };
+    var blob = {
+      proyek: proyek, divisi: divisi, items: items, laporan: laporan, termin: tarminList,
+      kurva: { mulai: iso(mulai), durasi: 12, weeks: [] }, estimasiFaktor: 1, dokumen: [], suppliers: suppliers, materials: [], materialKategori: [], materialSubkategori: [],
+      analisaPekerjaan: [], materialRequests: [], approvalLog: [], purchaseOrders: [], progressLog: progressLog, opnameList: [],
+      pekerja: pekerja, payrollLog: [], payrollSettings: { siklus: 'mingguan', tanggalAwalSiklus: null }, namaEn: {}, variationOrders: [vo], dokumenPdfLog: [],
+      masaGaransi: null, retensiPencairan: [], inspections: inspections, punchList: punchList, fotoHarian: {}
+    };
+    var now = new Date().toISOString();
+    var kv = [];
+    function k(key, val){ kv.push({ key: key, value: val, shared: false, updated_at: now }); }
+    k('pbc_project:' + PID, JSON.stringify(blob));
+    k('pbc_index', JSON.stringify([{ id: PID, nama: proyek.nama, updatedAt: Date.now() }]));
+    k('pbc_absensi:' + PID, JSON.stringify(absensi));
+    return {
+      kv_store: kv,
+      projects: [{ id: PID, nama: proyek.nama, lokasi: proyek.lokasi, owner: proyek.owner, tanggal_mulai: proyek.mulai, durasi_minggu: 12, status: 'aktif', kontrak_id: null, spk_id: null, vo_counter_terakhir: 1, updated_at: now }],
+      divisi: divisi.map(function(d, i){ return { id: d.id, project_id: PID, nama: d.nama, urutan: i }; }),
+      boq_items: items.map(function(x){ return { id: x.id, project_id: PID, divisi_id: x.divisiId, nama: x.nama, satuan: x.sat, volume: x.vol, harga_satuan: x.harga, durasi_hari: x.durasi, terpasang: x.terpasang }; }),
+      profiles: [{ id: 'demo-user', email: 'demo@contoh.demo', nama: 'Pengguna Demo', role: 'direktur', created_at: now }]
+    };
+  }
+
+  /* ---------- penyimpanan server tiruan (IndexedDB sendiri) ---------- */
+  var DB = null, OBJ = {}, siapDb = null;
+  function idb(nama){
+    return new Promise(function(res, rej){
+      var r = indexedDB.open(nama, 1);
+      r.onupgradeneeded = function(e){ e.target.result.createObjectStore('k'); };
+      r.onsuccess = function(e){ res(e.target.result); };
+      r.onerror = function(e){ rej(e.target.error); };
+    });
+  }
+  function idbGet(db, key){ return new Promise(function(res){ var q = db.transaction('k').objectStore('k').get(key); q.onsuccess = function(){ res(q.result); }; q.onerror = function(){ res(undefined); }; }); }
+  function idbPut(db, key, val){ return new Promise(function(res){ var t = db.transaction('k', 'readwrite'); t.objectStore('k').put(val, key); t.oncomplete = function(){ res(); }; t.onerror = function(){ res(); }; }); }
+  var handleDb = null, tunda = null;
+  function simpanTabel(){
+    clearTimeout(tunda);
+    tunda = setTimeout(function(){ if(handleDb) idbPut(handleDb, 'tabel', JSON.stringify(DB)); }, 150);
+  }
+  function mulaiDb(){
+    if(siapDb) return siapDb;
+    siapDb = (async function(){
+      try{
+        handleDb = await idb(DB_BACKEND);
+        var t = await idbGet(handleDb, 'tabel');
+        DB = t ? JSON.parse(t) : null;
+      }catch(e){ DB = null; }
+      if(!DB){ DB = bangunSeed(); try{ if(handleDb) await idbPut(handleDb, 'tabel', JSON.stringify(DB)); }catch(e){} }
+      return true;
+    })();
+    return siapDb;
+  }
+
+  /* ---------- jawaban PostgREST tiruan ---------- */
+  function resp(status, obj, hdr){
+    var h = Object.assign({ 'Content-Type': 'application/json' }, hdr || {});
+    return new Response(obj === null || obj === undefined ? null : (typeof obj === 'string' ? obj : JSON.stringify(obj)), { status: status, headers: h });
+  }
+  function cocok(row, kol, f){
+    var v = row[kol], m = /^(not\.)?(eq|neq|gt|gte|lt|lte|like|ilike|in|is)\.(.*)$/.exec(f);
+    if(!m) return true;
+    var neg = !!m[1], op = m[2], arg = m[3], ok;
+    if(op === 'eq') ok = String(v) === arg;
+    else if(op === 'neq') ok = String(v) !== arg;
+    else if(op === 'gt') ok = v > arg; else if(op === 'gte') ok = v >= arg;
+    else if(op === 'lt') ok = v < arg; else if(op === 'lte') ok = v <= arg;
+    else if(op === 'like' || op === 'ilike'){
+      var re = new RegExp('^' + arg.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', op === 'ilike' ? 'i' : '');
+      ok = re.test(String(v == null ? '' : v));
+    }
+    else if(op === 'in'){ ok = arg.replace(/^\(|\)$/g, '').split(',').map(function(s){ return s.replace(/^"|"$/g, ''); }).indexOf(String(v)) > -1; }
+    else if(op === 'is'){ ok = (arg === 'null') ? (v === null || v === undefined) : String(v) === arg; }
+    return neg ? !ok : ok;
+  }
+  var RESERVED = { select: 1, order: 1, limit: 1, offset: 1, on_conflict: 1, columns: 1 };
+  function saring(rows, sp){
+    var out = rows.filter(function(r){
+      var ok = true;
+      sp.forEach(function(val, kol){ if(ok && !RESERVED[kol] && !cocok(r, kol, val)) ok = false; });
+      return ok;
+    });
+    var ord = sp.get('order');
+    if(ord){
+      var ps = ord.split(',').map(function(s){ var a = s.split('.'); return { c: a[0], d: a[1] === 'desc' ? -1 : 1 }; });
+      out = out.slice().sort(function(a, b){ for(var i = 0; i < ps.length; i++){ var x = a[ps[i].c], y = b[ps[i].c]; if(x === y) continue; return (x > y ? 1 : -1) * ps[i].d; } return 0; });
+    }
+    var off = parseInt(sp.get('offset') || '0', 10), lim = sp.get('limit') ? parseInt(sp.get('limit'), 10) : null;
+    if(off) out = out.slice(off);
+    if(lim !== null) out = out.slice(0, lim);
+    return out;
+  }
+  function proyeksi(rows, sel){
+    if(!sel || sel === '*') return rows;
+    var cols = sel.split(',').map(function(s){ return s.trim(); });
+    return rows.map(function(r){ var o = {}; cols.forEach(function(c){ if(c in r) o[c] = r[c]; }); return o; });
+  }
+  async function bacaBody(init){
+    var b = init && init.body;
+    if(b === undefined || b === null) return null;
+    if(typeof b === 'string'){ try{ return JSON.parse(b); }catch(e){ return null; } }
+    return null;
+  }
+  async function rest(tabel, sp, method, init){
+    if(!DB[tabel]) DB[tabel] = [];
+    var pref = ((init && init.headers && (init.headers.Prefer || init.headers.prefer)) || '');
+    var balik = /return=representation/.test(pref);
+    var rows = DB[tabel];
+    var pk = tabel === 'kv_store' ? 'key' : 'id';
+    if(method === 'GET'){
+      var hasil = saring(rows, sp);
+      return resp(200, proyeksi(hasil, sp.get('select')));
+    }
+    if(method === 'POST'){
+      var b = await bacaBody(init); if(b === null) return resp(400, { message: 'body tidak valid' });
+      var list = Array.isArray(b) ? b : [b], keluar = [], gabung = /merge-duplicates/.test(pref), abaikan = /ignore-duplicates/.test(pref);
+      for(var i = 0; i < list.length; i++){
+        var baru = Object.assign({}, list[i]);
+        if(tabel === 'kv_store' && !baru.updated_at) baru.updated_at = new Date().toISOString();
+        var ada = rows.findIndex(function(r){ return r[pk] === baru[pk]; });
+        if(ada > -1){
+          if(abaikan) continue;
+          if(!gabung) return resp(409, { code: '23505', message: 'duplicate key value violates unique constraint' });
+          rows[ada] = Object.assign({}, rows[ada], baru); keluar.push(rows[ada]);
+        } else { rows.push(baru); keluar.push(baru); }
+      }
+      simpanTabel();
+      return balik ? resp(201, keluar) : resp(201, null);
+    }
+    if(method === 'PATCH'){
+      var p = await bacaBody(init); if(p === null) return resp(400, { message: 'body tidak valid' });
+      var kena = saring(rows, sp);
+      kena.forEach(function(r){ Object.assign(r, p); });
+      simpanTabel();
+      return balik ? resp(200, kena) : resp(204, null);
+    }
+    if(method === 'DELETE'){
+      var hapus = saring(rows, sp);
+      DB[tabel] = rows.filter(function(r){ return hapus.indexOf(r) < 0; });
+      simpanTabel();
+      return balik ? resp(200, hapus) : resp(204, null);
+    }
+    return resp(405, { message: 'metode tidak didukung' });
+  }
+
+  async function objek(path, method, init){
+    /* path: object/<bucket>/<id> */
+    var m = /^object\/(?:public\/|authenticated\/)?([^\/]+)\/(.+)$/.exec(path);
+    if(!m) return resp(404, { message: 'tidak ada' });
+    var key = 'obj:' + m[1] + '/' + decodeURIComponent(m[2]);
+    if(!handleDb) await mulaiDb();
+    if(method === 'POST' || method === 'PUT'){
+      var buf = init && init.body ? await new Response(init.body).arrayBuffer() : new ArrayBuffer(0);
+      var hd = (init && init.headers) || {};
+      var tipe = hd['Content-Type'] || hd['content-type'] || 'application/octet-stream';
+      OBJ[key] = { buf: buf, tipe: tipe };
+      try{ if(handleDb) await idbPut(handleDb, key, OBJ[key]); }catch(e){}
+      return resp(200, { Key: key });
+    }
+    if(method === 'GET'){
+      var o = OBJ[key]; if(!o && handleDb) o = await idbGet(handleDb, key);
+      if(!o) return resp(404, { message: 'Object not found' });
+      OBJ[key] = o;
+      return new Response(o.buf, { status: 200, headers: { 'Content-Type': o.tipe } });
+    }
+    if(method === 'DELETE'){
+      delete OBJ[key];
+      try{ if(handleDb){ var t = handleDb.transaction('k', 'readwrite'); t.objectStore('k').delete(key); } }catch(e){}
+      return resp(200, { message: 'ok' });
+    }
+    return resp(405, { message: 'metode tidak didukung' });
+  }
+
+  /* ---------- pencegat fetch ---------- */
+  var fetchAsli = window.fetch.bind(window);
+  window.PBC_DEMO_PERMINTAAN_KELUAR = [];   /* untuk pengujian: daftar alamat luar yang lolos */
+  window.fetch = async function(input, init){
+    var url = typeof input === 'string' ? input : (input && input.url) || String(input);
+    var metode = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    if(REAL_URL && url.indexOf(REAL_URL) === 0){
+      await mulaiDb();
+      var rel = url.slice(REAL_URL.length);
+      var u = new URL('http://x' + rel);
+      if(u.pathname.indexOf('/rest/v1/') === 0) return rest(u.pathname.slice(9), u.searchParams, metode, init);
+      if(u.pathname.indexOf('/storage/v1/') === 0) return objek(u.pathname.slice(12), metode, init);
+      if(u.pathname.indexOf('/auth/v1/user') === 0) return resp(200, { id: 'demo-user', email: 'demo@contoh.demo' });
+      if(u.pathname.indexOf('/auth/v1/logout') === 0) return resp(204, null);
+      return resp(400, { message: 'Mode demo: fitur akun tidak tersedia' });
+    }
+    if(url.indexOf('api.anthropic.com') > -1){
+      return resp(403, { error: { message: 'Fitur AI tidak tersedia di Mode Demo' } });
+    }
+    if(/^https?:\/\/[^\/]*supabase\.(co|in)/i.test(url)){
+      window.PBC_DEMO_PERMINTAAN_KELUAR.push(url);
+      return resp(403, { message: 'Mode demo: dilarang' });
+    }
+    return fetchAsli(input, init);
+  };
+  /* jaring pengaman: XMLHttpRequest ke Supabase juga dilarang */
+  try{
+    var xo = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(m, u){ if(/supabase\.(co|in)/i.test(String(u))){ window.PBC_DEMO_PERMINTAAN_KELUAR.push(String(u)); throw new Error('Mode demo: dilarang'); } return xo.apply(this, arguments); };
+  }catch(e){}
+
+  /* ---------- mulai dari awal ---------- */
+  window.PBC_DEMO_RESET = function(){
+    if(!confirm('Mulai dari awal?\n\nSemua perubahan yang Anda buat di demo ini akan dihapus dan data contoh dikembalikan. Aplikasi sungguhan tidak terpengaruh.')) return;
+    try{ ls.clear(); }catch(e){}
+    var sisa = 2;
+    function selesai(){ if(--sisa <= 0) location.replace(location.pathname + '?demo=1'); }
+    [DB_BACKEND, DB_APP].forEach(function(n){
+      try{ var r = indexedDB.deleteDatabase(n); r.onsuccess = r.onerror = r.onblocked = selesai; }catch(e){ selesai(); }
+    });
+    setTimeout(function(){ location.replace(location.pathname + '?demo=1'); }, 2500);
+  };
+
+  /* ---------- spanduk MODE DEMO ---------- */
+  function spanduk(){
+    if(document.getElementById('pbcDemoBar')) return;
+    var st = document.createElement('style');
+    st.textContent = '#pbcDemoBar{position:sticky;top:0;z-index:2147483000;background:#B45309;color:#fff;font:600 12px/1.3 system-ui,sans-serif;padding:6px 10px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}'
+      + '#pbcDemoBar b{letter-spacing:.06em}#pbcDemoBar button{background:#fff;color:#7C2D12;border:0;border-radius:6px;padding:5px 10px;font:700 11px system-ui,sans-serif;cursor:pointer}';
+    document.head.appendChild(st);
+    var d = document.createElement('div'); d.id = 'pbcDemoBar';
+    d.innerHTML = '<span><b>MODE DEMO</b> — data contoh, tersimpan hanya di HP ini</span><span><button type="button" id="pbcDemoReset">Mulai dari awal</button></span>';
+    document.body.insertBefore(d, document.body.firstChild);
+    document.getElementById('pbcDemoReset').addEventListener('click', window.PBC_DEMO_RESET);
+    document.title = 'DEMO — ' + document.title;
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', spanduk); else spanduk();
+})();
+</script>
+<script>
+/* ===========================================================================
    LOGIN PENGGUNA (Supabase Auth) — peran diambil dari database, bukan dipilih bebas.
    Set window.PBC_LOGIN_WAJIB = false SEBELUM skrip ini hanya untuk masa transisi
    (sebelum skrip SQL keamanan dijalankan di Supabase).
@@ -133,6 +499,7 @@ window.PBC_CONFIG = {
   }
 
   async function mulai(){
+    if(window.PBC_DEMO){ sembunyiGate(); siap({ id:'demo-user', email:'demo@contoh.demo', nama:'Pengguna Demo', role:'direktur' }); return; }
     if(!aktif){ sembunyiGate(); return; }
     tampilGate('muat');
     var cb = await olahCallback();
@@ -306,6 +673,7 @@ window.PBC_CONFIG = {
     }catch(e){ w.textContent = awal + ' (Tidak dapat memeriksa. Periksa internet Anda.)'; }
   }
   async function keluar(){
+    if(window.PBC_DEMO){ alert('Ini Mode Demo — tidak ada akun. Tutup halaman ini untuk keluar, atau tekan "Mulai dari awal" di bagian atas untuk mengembalikan data contoh.'); return; }
     try{ if(sess) await fetch(URL_ + '/auth/v1/logout', { method:'POST', headers: headers({ 'Content-Type':'application/json' }) }); }catch(e){}
     sess = null; simpanSesi(); simpanProfil(null);
     try{ sessionStorage.removeItem('pbc_reload_once'); }catch(e){}
@@ -354,12 +722,13 @@ window.PBC_CONFIG = {
     _supabaseOk = ok;
     var el = document.getElementById('supabaseStatusBadge');
     if(!el) return;
-    if(ok){ el.textContent = '☁️ Online (tersimpan di cloud)'; el.style.color = '#2ecc71'; }
+    if(window.PBC_DEMO){ el.textContent = '🧪 Mode Demo (tersimpan di HP ini)'; el.style.color = 'var(--gold)'; }
+    else if(ok){ el.textContent = '☁️ Online (tersimpan di cloud)'; el.style.color = '#2ecc71'; }
     else { el.textContent = '⚠️ Offline (pakai cadangan lokal)'; el.style.color = 'var(--gold)'; }
   }
 
   var LS_PREFIX = 'pbc_local:'; /* dipakai sebagai kunci fallback darurat kalau IndexedDB benar2 tidak tersedia */
-  var IDB_NAME = 'pbc_storage_db';
+  var IDB_NAME = window.PBC_DEMO ? 'pbc_demo_storage_db' : 'pbc_storage_db';
   var IDB_STORE = 'kv';
   var _idbPromise = null;
   function idbOpen(){
