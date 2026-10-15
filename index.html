@@ -1569,11 +1569,11 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
 <div class="modal" style="max-width:600px">
   <div class="modal-title">📄 Import RAB/BOQ dari Dokumen</div>
   <div style="font-size:10px;color:var(--muted);margin-bottom:12px;line-height:1.7">
-    Unggah dokumen rincian pekerjaan yang <strong style="color:var(--gold)">SUDAH LENGKAP</strong> (ada nama pekerjaan, satuan, volume, dan harga satuan) — misal RAB, penawaran, atau BOQ dari klien/konsultan. Bisa PDF atau foto/scan. Sistem akan <strong style="color:var(--gold)">menyalin persis</strong> angka yang tertulis (bukan menaksir) langsung ke BOQ proyek ini.
+    Pilih file RAB/penawaran/BOQ yang <strong style="color:var(--gold)">SUDAH LENGKAP</strong> (ada nama pekerjaan, satuan, volume, dan harga satuan). Bisa <strong style="color:var(--gold)">PDF digital</strong> (hasil ekspor Excel/Word), <strong style="color:var(--gold)">Excel</strong>, atau <strong style="color:var(--gold)">CSV</strong>. Dibaca langsung di perangkat ini, lalu ditampilkan sebagai <strong style="color:var(--gold)">pratinjau</strong> untuk Bapak periksa sebelum masuk ke BOQ. Foto/scan belum bisa dibaca.
   </div>
   <div class="form-group" style="margin-bottom:10px">
-    <label class="form-label">Unggah File (maks. 5 file — JPG/PNG/PDF)</label>
-    <input type="file" id="mImportBoqFiles" accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf" multiple class="form-input" onchange="handleImportBoqFileSelect(this)">
+    <label class="form-label">Pilih File (maks. 5 file — PDF / Excel / CSV)</label>
+    <input type="file" id="mImportBoqFiles" accept=".pdf,.xlsx,.xls,.csv,.tsv,application/pdf" multiple class="form-input" onchange="handleImportBoqFileSelect(this)">
   </div>
   <div id="importBoqFileList" style="margin-bottom:10px;font-size:10px;color:var(--muted2)">Belum ada file dipilih</div>
   <div class="form-group" style="margin-bottom:10px">
@@ -1585,7 +1585,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
   <div id="importBoqStatusBox" style="display:none;font-size:11px;color:var(--gold);margin-bottom:10px;padding:10px;border:1px solid var(--border-gold);background:rgba(212,168,50,0.06)"></div>
   <div class="modal-footer">
     <button class="btn btn-gold" onclick="hideModal('modalImportBoq')">Batal</button>
-    <button class="btn btn-blue" id="btnImportBoq" onclick="runImportBoqDariDokumen()">📄 Baca & Import ke BOQ</button>
+    <button class="btn btn-blue" id="btnImportBoq" onclick="runImportBoqDariDokumen()">📄 Baca File &amp; Lihat Pratinjau</button>
   </div>
 </div>
 </div>
@@ -6660,104 +6660,358 @@ function renderImportBoqFileList(){
 
 function removeImportBoqFile(idx){ importBoqSelectedFiles.splice(idx,1); renderImportBoqFileList(); }
 
-async function runImportBoqDariDokumen(){
-  if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!','var(--red)'); return; }
-  if(!importBoqSelectedFiles.length){ notif('Pilih minimal 1 file dokumen RAB/BOQ!','var(--red)'); return; }
-  const statusBox = document.getElementById('importBoqStatusBox');
-  const btn = document.getElementById('btnImportBoq');
-  const timpa = document.getElementById('mImportBoqTimpa').checked;
-  btn.disabled = true;
-  statusBox.style.display = 'block';
-  statusBox.textContent = '⏳ Membaca & mengompres file...';
-  try {
-    const contentBlocks = [];
-    for(let i=0;i<importBoqSelectedFiles.length;i++){
-      const f = importBoqSelectedFiles[i];
-      const dataUrl = await fileToBase64(f);
-      const isPdf = f.type==='application/pdf' || /\.pdf$/i.test(f.name);
-      if(isPdf){
-        const base64 = dataUrl.split(',')[1];
-        contentBlocks.push({ type:'document', source:{ type:'base64', media_type:'application/pdf', data: base64 } });
-      } else {
-        const compressed = await compressImageDataUrl(dataUrl, 1600, 0.9);
-        const mediaType = compressed.indexOf('image/png')>-1 ? 'image/png' : 'image/jpeg';
-        const base64 = compressed.split(',')[1];
-        contentBlocks.push({ type:'image', source:{ type:'base64', media_type: mediaType, data: base64 } });
-      }
+/* ===== T9: IMPORT RAB DARI FILE (PDF digital / Excel / CSV) =====
+   Dibaca LANGSUNG di perangkat ini — tanpa AI, tanpa server, tanpa biaya; isi dokumen tidak keluar dari HP.
+   Hasil bacaan SELALU ditampilkan dulu sebagai pratinjau yang bisa dikoreksi, lengkap dengan pencocokan total dengan dokumen,
+   baru masuk ke BOQ setelah pengguna menekan "Masukkan ke BOQ". Foto/scan (tanpa teks) belum bisa dibaca. */
+const PBC_LIB = {
+  pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  pdfjsWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+  xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+};
+const _pbcSkripMuat = {};
+function pbcMuatSkrip(url){
+  if(_pbcSkripMuat[url]) return _pbcSkripMuat[url];
+  _pbcSkripMuat[url] = new Promise(function(res, rej){
+    const s = document.createElement('script'); s.src = url; s.onload = function(){ res(); };
+    s.onerror = function(){ delete _pbcSkripMuat[url]; rej(new Error('Pustaka pembaca dokumen belum bisa dimuat — periksa koneksi internet lalu coba lagi.')); };
+    document.head.appendChild(s);
+  });
+  return _pbcSkripMuat[url];
+}
+async function pbcSiapkanPdfJs(){
+  await pbcMuatSkrip(PBC_LIB.pdfjs);
+  if(!window.pdfjsLib) throw new Error('Pembaca PDF tidak tersedia.');
+  if(!window.__pbcPdfWorker){
+    const r = await fetch(PBC_LIB.pdfjsWorker); if(!r.ok) throw new Error('Pembaca PDF belum bisa dimuat — periksa koneksi internet.');
+    window.__pbcPdfWorker = URL.createObjectURL(new Blob([await r.text()], { type:'text/javascript' }));
+  }
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = window.__pbcPdfWorker;
+}
+
+/* ---- angka (format Indonesia & Inggris) ---- */
+function pbcEsNumerik(t){ return /^(rp\.?\s*)?-?\d[\d.,\s]*$/i.test(String(t).trim()); }
+function pbcAngkaKandidat(t){
+  /* kembalikan daftar tafsiran angka (yang paling mungkin dulu). "1.250" bisa 1250 (ribuan) atau 1,25 (desimal). */
+  let s = String(t).replace(/^rp\.?\s*/i, '').replace(/\s+/g, '').trim();
+  if(!/^-?\d[\d.,]*$/.test(s)) return [];
+  const neg = s[0] === '-'; if(neg) s = s.slice(1);
+  const out = [];
+  const tambah = function(v){ if(isFinite(v) && out.indexOf(neg ? -v : v) < 0) out.push(neg ? -v : v); };
+  const nDot = (s.match(/\./g) || []).length, nCom = (s.match(/,/g) || []).length;
+  if(!nDot && !nCom) tambah(parseFloat(s));
+  else if(nDot && nCom){ const dec = s.lastIndexOf('.') > s.lastIndexOf(',') ? '.' : ','; const rib = dec === '.' ? ',' : '.'; tambah(parseFloat(s.split(rib).join('').replace(dec, '.'))); }
+  else {
+    const sep = nDot ? '.' : ',', bag = s.split(sep);
+    const ribuan = bag.slice(1).every(function(g){ return g.length === 3; }) && bag[0].length <= 3 && bag[0].length >= 1 && !/^0\d/.test(bag[0]);
+    if(nDot + nCom > 1){ if(ribuan) tambah(parseFloat(bag.join(''))); }
+    else {
+      if(ribuan) tambah(parseFloat(bag.join('')));            /* "1.250" -> 1250 dulu */
+      tambah(parseFloat(bag[0] + '.' + bag[1]));               /* lalu desimal: 1,25 */
     }
-    statusBox.textContent = '📄 Membaca rincian pekerjaan dari dokumen, mohon tunggu...';
+  }
+  return out;
+}
+function pbcAngka(t){ const k = pbcAngkaKandidat(t); return k.length ? k[0] : null; }
 
-    const promptText = 'Kamu bertugas MENYALIN PERSIS rincian pekerjaan dari dokumen RAB/BOQ/penawaran terlampir — JANGAN menaksir, JANGAN membulatkan, JANGAN mengubah angka apapun yang tertulis. '
-      + 'Baca tabel rincian pekerjaan baris demi baris. Untuk SETIAP baris item pekerjaan individual, catat persis seperti tertulis di dokumen: nama pekerjaan, satuan, volume/qty, dan harga satuan (Rp per satuan, angka murni tanpa titik/koma pemisah ribuan). '
-      + 'Kalau dokumen punya pengelompokan/kategori/divisi (contoh: "I. PEKERJAAN PERSIAPAN", "II. PEKERJAAN STRUKTUR"), pakai judul kelompok itu sebagai nama divisi untuk item-item di bawahnya. Kalau dokumen sama sekali tidak punya pengelompokan, kelompokkan semua item ke satu divisi bernama "Item Diimpor". '
-      + 'ABAIKAN baris yang bukan item pekerjaan individual — misalnya baris Subtotal, Total, Grand Total, PPN, judul dokumen, atau catatan kaki. '
-      + 'Kalau salah satu kolom (volume atau harga satuan) tidak ada/tidak terbaca jelas pada suatu baris, tetap sertakan baris itu dengan angka 0 pada kolom yang tidak terbaca, dan tulis di catatan bahwa kolom itu perlu dicek manual. '
-      + 'Balas HANYA dengan JSON array valid, tanpa teks lain, tanpa markdown, format ringkas: '
-      + '[{"d":"Nama Divisi/Kategori","i":"Nama Pekerjaan persis seperti tertulis","v":angka_volume,"s":"satuan seperti tertulis (m2/m3/m/unit/ttk/ls/kg/dll)","h":angka_harga_satuan,"c":"catatan kalau ada kolom yang tidak terbaca, kosongkan kalau lengkap"}].';
-    contentBlocks.push({ type:'text', text: promptText });
+/* ---- peran kolom dari teks judul ---- */
+function pbcPeranKolom(teks){
+  const t = String(teks).toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[.:*]/g, ' ').replace(/\s+/g, ' ').trim();
+  if(!t) return null;
+  if(/^(no|nomor|item no|no urut|#)$/.test(t)) return 'no';
+  if(/(unit rate|harga satuan|harga sat|price|rate|unit price|h\s?s)$/.test(t) || /^harga$/.test(t)) return 'rate';
+  if(/(amount|jumlah harga|jumlah biaya|total harga|sub total|subtotal|total)$/.test(t) || /^jumlah$/.test(t)) return 'amount';
+  if(/(qty|quantity|volume|vol|kuantitas|kuantiti)$/.test(t)) return 'qty';
+  if(/^(unit|satuan|sat|uom)$/.test(t)) return 'unit';
+  if(/(description|uraian|pekerjaan|nama|kegiatan|item of work|work item|keterangan)/.test(t)) return 'desc';
+  return null;
+}
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
-        messages: [ { role:'user', content: contentBlocks } ]
-      })
+/* ---- pembangun baris (dipakai PDF dan Excel/CSV) ----
+   baris = [{f:{no,desc,qty,unit,rate,amount} (teks mentah), judulKolom:false}], judul = teks judul di atas tabel */
+function pbcBangunRab(baris, judul){
+  const hasil = { items: [], totalDok: null, peringatan: [] };
+  let div = (judul && judul.trim()) || 'Item Diimpor', terakhir = null, setelahBaris = false, pra = '';
+  const ADALAH_TOTAL = /grand\s*total|total\s+(addendum|rab|biaya|nilai|keseluruhan|pekerjaan|penawaran|akhir)|^total\b/i;
+  const ADALAH_SUB = /sub\s*-?\s*total|subtotal|sub\s*jumlah|jumlah\s*(bagian|divisi)/i;
+  const ADALAH_JUDUL = /^(([IVXLC]+|[A-Z])[\.\)]\s+\S|[A-Z0-9][A-Z0-9 &\/\-\.,()+']{3,}$)/;
+  for(let i = 0; i < baris.length; i++){
+    const f = baris[i].f, desc = (f.desc || '').trim();
+    const qtyK = pbcAngkaKandidat(f.qty || ''), rateK = pbcAngkaKandidat(f.rate || ''), amtK = pbcAngkaKandidat(f.amount || '');
+    const adaAngka = (qtyK.length ? 1 : 0) + (rateK.length ? 1 : 0) + (amtK.length ? 1 : 0);
+    const teksBaris = (desc + ' ' + (f.no || '')).trim();
+    if(ADALAH_SUB.test(teksBaris) && !qtyK.length){ terakhir = null; setelahBaris = false; continue; }
+    if(ADALAH_TOTAL.test(teksBaris) && !qtyK.length){
+      if(amtK.length) hasil.totalDok = amtK[0];
+      else { const sisa = baris.slice(i + 1, i + 3).map(function(b){ return pbcAngka(b.f.amount || b.f.rate || b.f.desc || ''); }).filter(function(x){ return x != null; }); if(sisa.length) hasil.totalDok = sisa[0]; }
+      if(hasil.items.length) break; else continue;
+    }
+    const barisData = (qtyK.length && (rateK.length || amtK.length)) || (adaAngka >= 2 && desc);
+    if(barisData){
+      /* pilih tafsiran qty/rate yang cocok dengan jumlah */
+      let qty = qtyK.length ? qtyK[0] : 0, rate = rateK.length ? rateK[0] : null, amt = amtK.length ? amtK[0] : null, catatan = [];
+      if(amtK.length){
+        let cocok = null;
+        for(let a = 0; a < Math.max(1, qtyK.length) && !cocok; a++) for(let b = 0; b < Math.max(1, rateK.length) && !cocok; b++) for(let c = 0; c < amtK.length && !cocok; c++){
+          const q = qtyK.length ? qtyK[a] : null, r = rateK.length ? rateK[b] : null;
+          if(q != null && r != null && Math.abs(q * r - amtK[c]) <= Math.max(1, Math.abs(amtK[c]) * 0.0005)) cocok = [q, r, amtK[c]];
+        }
+        if(cocok){ qty = cocok[0]; rate = cocok[1]; amt = cocok[2]; }
+        else if(qtyK.length && rate == null && qty){ rate = amt / qty; catatan.push('harga satuan dihitung dari jumlah ÷ volume'); }
+        else if(qtyK.length && rate != null) catatan.push('volume × harga satuan ≠ jumlah di dokumen — periksa');
+      } else if(rate != null && qty) { amt = qty * rate; }
+      if(rate == null) { rate = 0; catatan.push('harga satuan tidak terbaca'); }
+      hasil.items.push({ divisi: div, nama: (pra ? pra + ' ' : '') + desc, sat: (f.unit || '').trim() || '-', vol: qty || 0, harga: rate || 0, jumlahDok: amt, catatan: catatan });
+      pra = ''; terakhir = hasil.items[hasil.items.length - 1]; setelahBaris = true;
+    } else if(desc && !adaAngka && baris[i + 1] && baris[i].y != null && baris[i + 1].y != null && baris[i].y - baris[i + 1].y > 0 && baris[i].y - baris[i + 1].y < baris[i].h * 1.2 && !ADALAH_JUDUL.test(desc)
+              && ((pbcAngkaKandidat(baris[i + 1].f.qty || '').length && (pbcAngkaKandidat(baris[i + 1].f.rate || '').length || pbcAngkaKandidat(baris[i + 1].f.amount || '').length)) )){
+      pra = (pra ? pra + ' ' : '') + desc;                       /* baris uraian di atas baris angka (sel bertengah vertikal) */
+    } else if(desc && !adaAngka){
+      const noKosong = !(f.no || '').trim() || /^[IVXLCivxlc]+[\.\)]?$|^[A-Za-z][\.\)]$/.test((f.no || '').trim());
+      const mirip = ADALAH_JUDUL.test(((f.no || '') + ' ' + desc).trim());
+      if(terakhir && setelahBaris && !mirip && !(f.no || '').trim()){ terakhir.nama += ' ' + desc; }   /* lanjutan uraian */
+      else if(noKosong || mirip){ div = ((f.no || '').trim() ? (f.no.trim() + ' ') : '') + desc; terakhir = null; setelahBaris = false; }
+    }
+  }
+  hasil.items.forEach(function(it){ it.nama = it.nama.replace(/\s+/g, ' ').trim(); });
+  if(!hasil.items.length) hasil.peringatan.push('Tidak ada baris pekerjaan yang terbaca.');
+  return hasil;
+}
+
+/* ---- PDF digital ---- */
+async function pbcBacaPdfRab(file){
+  await pbcSiapkanPdfJs();
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+  const baris = [];
+  let adaTeks = false, hasilAkhir = null;
+  const semuaBaris = [];
+  for(let p = 1; p <= pdf.numPages; p++){
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    const its = tc.items.filter(function(it){ return it.str && it.str.trim() !== ''; }).map(function(it){
+      return { s: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height || 10 };
     });
-    if(!response.ok){ throw new Error('API error '+response.status); }
-    const data = await response.json();
-    const text = (data.content||[]).map(function(b){ return b.type==='text'?b.text:''; }).join('\n');
-
-    statusBox.textContent = '📦 Memproses hasil pembacaan dokumen...';
-    let jsonStr = text.trim();
-    const startIdx = jsonStr.indexOf('[');
-    const endIdx = jsonStr.lastIndexOf(']');
-    if(startIdx>-1 && endIdx>startIdx) jsonStr = jsonStr.slice(startIdx, endIdx+1);
-    let arr;
-    try { arr = JSON.parse(jsonStr); } catch(e){
-      const matches = jsonStr.match(/\{[^{}]*\}/g);
-      if(matches){ arr = matches.map(function(m){ try{ return JSON.parse(m); }catch(e2){ return null; } }).filter(Boolean); }
-    }
-    if(!arr || !arr.length){ throw new Error('Tidak ada rincian pekerjaan yang bisa dibaca dari dokumen. Coba dengan file yang lebih jelas/tidak buram.'); }
-
-    if(timpa){ state.divisi = []; state.items = []; }
-
-    let countItem = 0, countDivisiBaru = 0, countPerluCek = 0;
-    arr.forEach(function(row){
-      const namaItem = row.i || row.item || row.nama;
-      if(!namaItem) return;
-      const namaDivisi = (row.d || row.divisi || 'Item Diimpor').toString().trim() || 'Item Diimpor';
-      let div = state.divisi.find(function(d){ return d.nama.toLowerCase()===namaDivisi.toLowerCase(); });
-      if(!div){ div = {id:uid(), nama:namaDivisi}; state.divisi.push(div); countDivisiBaru++; }
-      const vol = parseFloat(row.v || row.volume) || 0;
-      const harga = parseFloat(row.h || row.harga) || 0;
-      const sat = (row.s || row.satuan || '-');
-      const perluCek = row.c && String(row.c).trim();
-      if(perluCek) countPerluCek++;
-      state.items.push({
-        id: uid(), divisiId: div.id,
-        nama: namaItem + (perluCek ? ' [⚠️ '+perluCek+']' : ''),
-        sat: sat, vol: vol, harga: harga, durasi: estimateDurasi(namaItem, vol, sat), terpasang: 0
+    if(its.length) adaTeks = true;
+    its.sort(function(a, b){ return b.y - a.y || a.x - b.x; });
+    const garis = [];
+    its.forEach(function(it){
+      const g = garis.length ? garis[garis.length - 1] : null;
+      if(g && Math.abs(g.y - it.y) <= Math.max(2, it.h * 0.5)) g.its.push(it); else garis.push({ y: it.y, h: it.h, its: [it], hal: p });
+    });
+    garis.forEach(function(g){
+      g.its.sort(function(a, b){ return a.x - b.x; });
+      const sel = [];
+      g.its.forEach(function(it){
+        const c = sel.length ? sel[sel.length - 1] : null;
+        if(c && it.x - c.x1 < g.h * 0.6){ c.t += (/\s$/.test(c.t) || /^\s/.test(it.s) ? '' : ' ') + it.s.trim(); c.x1 = it.x + it.w; }
+        else sel.push({ t: it.s.trim(), x0: it.x, x1: it.x + it.w });
       });
-      countItem++;
+      g.sel = sel; semuaBaris.push(g);
     });
+  }
+  if(!adaTeks) throw new Error('PDF ini tidak berisi teks (hasil foto/scan). Foto/scan belum bisa dibaca di versi online — gunakan PDF digital (hasil ekspor dari Excel/Word) atau file Excel/CSV.');
+  /* cari baris judul kolom (boleh dua baris) */
+  let kolom = null, idxJudul = -1;
+  for(let i = 0; i < semuaBaris.length && !kolom; i++){
+    const kandidat = [semuaBaris[i].sel];
+    if(semuaBaris[i + 1] && semuaBaris[i].y - semuaBaris[i + 1].y < semuaBaris[i].h * 2.6 && !semuaBaris[i + 1].sel.some(function(c){ return /\d/.test(c.t); })
+       && semuaBaris[i + 1].sel.every(function(c){ return c.t.length <= 16 || pbcPeranKolom(c.t); })){
+      const gabung = semuaBaris[i].sel.map(function(c){ return { t: c.t, x0: c.x0, x1: c.x1 }; });
+      semuaBaris[i + 1].sel.forEach(function(c){
+        const t = gabung.find(function(g){ const ov = Math.min(g.x1, c.x1) - Math.max(g.x0, c.x0); return ov > 0.3 * Math.min(g.x1 - g.x0, c.x1 - c.x0) || Math.abs((g.x0 + g.x1) / 2 - (c.x0 + c.x1) / 2) < 12; });
+        if(t){ t.t += ' ' + c.t; t.x0 = Math.min(t.x0, c.x0); t.x1 = Math.max(t.x1, c.x1); } else gabung.push({ t: c.t, x0: c.x0, x1: c.x1 });
+      });
+      kandidat.push(gabung);
+    }
+    for(let k = 0; k < kandidat.length && !kolom; k++){
+      const peran = {}; kandidat[k].forEach(function(c){ const r = pbcPeranKolom(c.t); if(r && !peran[r]) peran[r] = c; });
+      const n = Object.keys(peran).length;
+      if(n >= 3 && (peran.qty || peran.amount || peran.rate) && (peran.desc || peran.no)){ kolom = peran; idxJudul = i + (k ? 1 : 0); }
+    }
+  }
+  if(!kolom) throw new Error('Tabel rincian pekerjaan tidak ditemukan di PDF ini (judul kolom seperti No / Uraian / Volume / Satuan / Harga Satuan / Jumlah tidak terbaca). Coba file Excel/CSV, atau tambah item lewat "Tambah Item Massal".');
+  /* judul bagian di atas tabel = divisi bawaan */
+  let judul = '';
+  for(let i = idxJudul - 1; i >= 0; i--){ const t = semuaBaris[i].sel.map(function(c){ return c.t; }).join(' ').trim(); if(t && t === t.toUpperCase() && /[A-Z]{4}/.test(t) && !/@|\||www\./i.test(t)){ judul = t; break; } }
+  const ctr = function(c){ return (c.x0 + c.x1) / 2; };
+  const numerik = ['qty', 'rate', 'amount'].filter(function(r){ return kolom[r]; });
+  const batasDesc = Math.min.apply(null, ['qty', 'unit', 'rate', 'amount'].filter(function(r){ return kolom[r]; }).map(function(r){ return kolom[r].x0; })) - 6;
+  for(let i = idxJudul + 1; i < semuaBaris.length; i++){
+    const f = { no: '', desc: '', qty: '', unit: '', rate: '', amount: '' };
+    semuaBaris[i].sel.forEach(function(c){
+      let role;
+      if(pbcEsNumerik(c.t) && numerik.length){
+        if(kolom.no && !/rp/i.test(c.t) && /^\d{1,3}$/.test(c.t) && ctr(c) < (kolom.desc ? kolom.desc.x0 : batasDesc) ) role = 'no';
+        else { role = numerik.slice().sort(function(a, b){ return Math.abs(ctr(kolom[a]) - ctr(c)) - Math.abs(ctr(kolom[b]) - ctr(c)); })[0]; }
+      } else if(kolom.unit && c.x0 >= kolom.unit.x0 - 14 && c.x0 < kolom.unit.x1 + 30 && c.x0 > batasDesc - 20) role = 'unit';
+      else if(kolom.no && c.x1 < (kolom.desc ? kolom.desc.x0 : batasDesc) - 2 && /^[\dIVXLCivxlcA-Za-z]{1,4}[\.\)]?$/.test(c.t)) role = 'no';
+      else role = (c.x0 < batasDesc || !kolom.unit) ? 'desc' : 'unit';
+      f[role] = (f[role] ? f[role] + ' ' : '') + c.t;
+    });
+    baris.push({ f: f, y: semuaBaris[i].y, h: semuaBaris[i].h });
+  }
+  hasilAkhir = pbcBangunRab(baris, judul);
+  return hasilAkhir;
+}
 
-    hideModal('modalImportBoq');
-    renderBoq();
-    if(state.divisi.length && state.items.length) generateKurva();
-    debounceSave();
-    let pesan = '✅ '+countItem+' item BOQ berhasil diimport ('+countDivisiBaru+' divisi baru)';
-    if(countPerluCek>0) pesan += ' — '+countPerluCek+' item ditandai ⚠️ karena ada kolom yang tidak terbaca jelas, mohon dicek manual';
-    pesan += '. Tetap disarankan cross-check sekilas ke dokumen aslinya, terutama untuk angka harga satuan.';
-    notif(pesan, 'var(--gold)');
+/* ---- Excel / CSV ---- */
+function pbcBarisCsv(teks){
+  const rows = []; let row = [], cur = '', q = false;
+  const cs = teks.split('\n').slice(0, 8).join('\n'), delim = ((cs.match(/;/g) || []).length > (cs.match(/,/g) || []).length) ? ';' : ',';
+  for(let i = 0; i < teks.length; i++){
+    const ch = teks[i];
+    if(q){ if(ch === '"'){ if(teks[i + 1] === '"'){ cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if(ch === '"') q = true;
+    else if(ch === delim){ row.push(cur); cur = ''; }
+    else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && teks[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += ch;
+  }
+  if(cur !== '' || row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+function pbcRabDariGrid(grid){
+  let idx = -1, peranIdx = null;
+  for(let i = 0; i < grid.length && idx < 0; i++){
+    const peran = {}; grid[i].forEach(function(c, j){ const r = pbcPeranKolom(c); if(r && peran[r] == null) peran[r] = j; });
+    if(Object.keys(peran).length >= 3 && (peran.qty != null || peran.amount != null || peran.rate != null) && (peran.desc != null || peran.no != null)){ idx = i; peranIdx = peran; }
+  }
+  if(idx < 0) return null;
+  let judul = '';
+  for(let i = idx - 1; i >= 0; i--){ const t = grid[i].map(function(c){ return String(c).trim(); }).filter(Boolean).join(' '); if(t && t === t.toUpperCase() && /[A-Z]{4}/.test(t)){ judul = t; break; } }
+  const baris = [];
+  for(let i = idx + 1; i < grid.length; i++){
+    const g = function(r){ return peranIdx[r] != null && grid[i][peranIdx[r]] != null ? String(grid[i][peranIdx[r]]).trim() : ''; };
+    let _no = g('no'), _desc = g('desc'); if(!_desc && _no && !/^[\dIVXLCivxlc]{1,4}[\.\)]?$/.test(_no)){ _desc = _no; _no = ''; }
+    baris.push({ f: { no: _no, desc: _desc, qty: g('qty'), unit: g('unit'), rate: g('rate'), amount: g('amount') } });
+  }
+  return pbcBangunRab(baris, judul);
+}
+async function pbcBacaGridRab(file){
+  const nama = file.name.toLowerCase();
+  if(/\.csv$|\.tsv$|\.txt$/.test(nama)){
+    const h = pbcRabDariGrid(pbcBarisCsv(await file.text()));
+    if(!h) throw new Error('Judul kolom (No / Uraian / Volume / Satuan / Harga Satuan / Jumlah) tidak ditemukan di file ini.');
+    return h;
+  }
+  await pbcMuatSkrip(PBC_LIB.xlsx);
+  const wb = window.XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+  const gabung = { items: [], totalDok: null, peringatan: [] };
+  wb.SheetNames.forEach(function(n){
+    const grid = window.XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }).map(function(r){ return r.map(function(c){ return typeof c === 'number' ? String(c) : String(c == null ? '' : c); }); });
+    const h = pbcRabDariGrid(grid); if(!h) return;
+    h.items.forEach(function(it){ gabung.items.push(it); });
+    if(h.totalDok != null) gabung.totalDok = (gabung.totalDok || 0) + h.totalDok;
+  });
+  if(!gabung.items.length) throw new Error('Judul kolom (No / Uraian / Volume / Satuan / Harga Satuan / Jumlah) tidak ditemukan di file Excel ini.');
+  return gabung;
+}
+async function pbcBacaRabFile(file){
+  const n = file.name.toLowerCase();
+  if(/\.pdf$/.test(n) || file.type === 'application/pdf') return pbcBacaPdfRab(file);
+  if(/\.(xlsx|xls|csv|tsv|txt)$/.test(n)) return pbcBacaGridRab(file);
+  throw new Error('Jenis file ini belum bisa dibaca. Gunakan PDF digital, Excel (.xlsx) atau CSV. Foto/scan belum didukung di versi online.');
+}
+
+/* ---- pratinjau & masukkan ke BOQ ---- */
+let _rabHasil = null;
+function pbcEsc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function pbcRabJumlahBaris(it){ return (parseFloat(it.vol) || 0) * (parseFloat(it.harga) || 0); }
+function pbcRabRingkasan(){
+  const aktif = _rabHasil.items.filter(function(it){ return it.pakai; });
+  const total = aktif.reduce(function(s, it){ return s + pbcRabJumlahBaris(it); }, 0);
+  const td = _rabHasil.totalDok;
+  let cek = '';
+  if(td != null){
+    const sel = total - td;
+    cek = Math.abs(sel) <= 1 ? '<span style="color:var(--teal-lt)">✅ Cocok dengan total di dokumen ('+fmtRpPenuh(td)+')</span>'
+      : '<span style="color:var(--red)">⚠ Total di dokumen '+fmtRpPenuh(td)+' — selisih '+fmtRpPenuh(Math.abs(sel))+(sel > 0 ? ' (hasil baca LEBIH BESAR)' : ' (hasil baca LEBIH KECIL)')+'. Ada baris yang belum terbaca/terkoreksi.</span>';
+  } else cek = '<span style="color:var(--orange)">Total di dokumen tidak ditemukan — cocokkan jumlah di bawah dengan dokumen secara manual.</span>';
+  return '<div><b>'+aktif.length+'</b> dari '+_rabHasil.items.length+' baris dipilih · jumlah hasil baca <b style="color:var(--gold)">'+fmtRpPenuh(total)+'</b></div><div style="margin-top:4px">'+cek+'</div>';
+}
+function pbcRabGambarTabel(){
+  const el = document.getElementById('pbcRabBody'); if(!el) return;
+  el.innerHTML = _rabHasil.items.map(function(it, i){
+    const bg = it.catatan.length ? 'background:rgba(230,126,34,0.12)' : '';
+    return '<tr style="'+bg+'"><td><input type="checkbox" '+(it.pakai ? 'checked' : '')+' onchange="pbcRabUbah('+i+',\'pakai\',this.checked)"></td>'
+      + '<td><input class="tbl-input" style="width:100px;text-align:left" value="'+pbcEsc(it.divisi)+'" onchange="pbcRabUbah('+i+',\'divisi\',this.value)"></td>'
+      + '<td><input class="tbl-input" style="width:170px;text-align:left" value="'+pbcEsc(it.nama)+'" onchange="pbcRabUbah('+i+',\'nama\',this.value)">'
+      + (it.catatan.length ? '<div style="font-size:9px;color:var(--orange)">⚠ '+pbcEsc(it.catatan.join('; '))+'</div>' : '')+'</td>'
+      + '<td><input class="tbl-input" style="width:44px" value="'+pbcEsc(it.sat)+'" onchange="pbcRabUbah('+i+',\'sat\',this.value)"></td>'
+      + '<td><input class="tbl-input" type="number" step="0.01" style="width:60px" value="'+it.vol+'" onchange="pbcRabUbah('+i+',\'vol\',this.value)"></td>'
+      + '<td><input class="tbl-input" type="number" style="width:80px" value="'+it.harga+'" onchange="pbcRabUbah('+i+',\'harga\',this.value)"></td>'
+      + '<td style="text-align:right;font-size:10px;white-space:nowrap" id="pbcRabJml'+i+'">'+fmtRpPenuh(pbcRabJumlahBaris(it))+'</td></tr>';
+  }).join('');
+  document.getElementById('pbcRabRingkas').innerHTML = pbcRabRingkasan();
+}
+function pbcRabUbah(i, k, v){
+  const it = _rabHasil.items[i]; if(!it) return;
+  if(k === 'pakai') it.pakai = !!v;
+  else if(k === 'vol' || k === 'harga') it[k] = parseFloat(v) || 0;
+  else it[k] = String(v);
+  const j = document.getElementById('pbcRabJml'+i); if(j) j.textContent = fmtRpPenuh(pbcRabJumlahBaris(it));
+  document.getElementById('pbcRabRingkas').innerHTML = pbcRabRingkasan();
+}
+function pbcRabTampilPratinjau(hasil, namaFile, timpa){
+  _rabHasil = hasil; hasil.items.forEach(function(it){ it.pakai = true; }); hasil.timpa = !!timpa;
+  const lama = document.getElementById('pbcRabOverlay'); if(lama) lama.remove();
+  const el = document.createElement('div'); el.id = 'pbcRabOverlay';
+  el.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:8px';
+  el.innerHTML = '<div style="background:#fff;color:#111;max-width:760px;width:100%;max-height:94vh;overflow:auto;border-radius:10px;padding:12px;font:13px/1.5 sans-serif">'
+    + '<div style="font:bold 15px sans-serif">Pratinjau hasil baca: '+pbcEsc(namaFile)+'</div>'
+    + '<div style="font-size:11px;color:#555;margin:4px 0 8px">Periksa angkanya dengan dokumen. Ubah yang salah langsung di tabel, hilangkan centang untuk baris yang tidak ingin dimasukkan. Belum ada yang masuk ke BOQ sebelum Bapak menekan tombol hijau.'+(timpa ? ' <b style="color:#b00020">Mode TIMPA aktif: BOQ lama proyek ini akan dihapus.</b>' : '')+'</div>'
+    + '<div id="pbcRabRingkas" style="padding:8px;border:1px solid #ccc;border-radius:6px;margin-bottom:8px;font-size:12px"></div>'
+    + '<div style="overflow:auto"><table style="border-collapse:collapse;width:100%;font-size:11px"><thead><tr style="text-align:left;color:#555"><th></th><th>Divisi</th><th>Pekerjaan</th><th>Sat</th><th>Volume</th><th>Harga</th><th style="text-align:right">Jumlah</th></tr></thead><tbody id="pbcRabBody"></tbody></table></div>'
+    + '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end"><button id="pbcRabBatal" style="padding:12px;border:1px solid #888;border-radius:8px;background:#fff;font:14px sans-serif">Batal</button>'
+    + '<button id="pbcRabMasuk" style="padding:12px;background:#0a7d3b;color:#fff;border:0;border-radius:8px;font:bold 14px sans-serif">Masukkan ke BOQ</button></div></div>';
+  document.body.appendChild(el);
+  el.querySelector('#pbcRabBatal').onclick = function(){ el.remove(); };
+  el.querySelector('#pbcRabMasuk').onclick = function(){ pbcRabMasukkan(); };
+  pbcRabGambarTabel();
+}
+function pbcRabMasukkan(){
+  const aktif = _rabHasil.items.filter(function(it){ return it.pakai && String(it.nama).trim(); });
+  if(!aktif.length){ notif('Tidak ada baris yang dipilih.', 'var(--red)'); return; }
+  if(_rabHasil.timpa && !confirm('BOQ lama proyek ini akan DIHAPUS dan diganti hasil import ('+aktif.length+' baris). Lanjutkan?')) return;
+  if(_rabHasil.timpa){ state.divisi = []; state.items = []; }
+  let divBaru = 0;
+  aktif.forEach(function(it){
+    const nd = (String(it.divisi || '').trim() || 'Item Diimpor');
+    let d = state.divisi.find(function(x){ return x.nama.toLowerCase() === nd.toLowerCase(); });
+    if(!d){ d = { id: uid(), nama: nd }; state.divisi.push(d); divBaru++; }
+    const sat = String(it.sat || '-').trim() || '-', vol = parseFloat(it.vol) || 0;
+    state.items.push({ id: uid(), divisiId: d.id, nama: String(it.nama).trim(), sat: sat, vol: vol, harga: parseFloat(it.harga) || 0, durasi: estimateDurasi(it.nama, vol, sat), terpasang: 0 });
+  });
+  const o = document.getElementById('pbcRabOverlay'); if(o) o.remove();
+  hideModal('modalImportBoq');
+  renderBoq();
+  if(state.divisi.length && state.items.length) generateKurva();
+  debounceSave();
+  notif('✅ '+aktif.length+' item masuk ke BOQ ('+divBaru+' divisi baru). Total BOQ kini '+fmtRpPenuh(grandTotal())+'.', 'var(--gold)');
+}
+async function runImportBoqDariDokumen(){
+  if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!', 'var(--red)'); return; }
+  if(!importBoqSelectedFiles.length){ notif('Pilih file RAB/BOQ terlebih dahulu!', 'var(--red)'); return; }
+  const statusBox = document.getElementById('importBoqStatusBox'), btn = document.getElementById('btnImportBoq');
+  const timpa = document.getElementById('mImportBoqTimpa').checked;
+  btn.disabled = true; statusBox.style.display = 'block'; statusBox.textContent = '⏳ Membaca file di perangkat ini...';
+  try {
+    const gabung = { items: [], totalDok: null, peringatan: [] }, nama = [];
+    for(let i = 0; i < importBoqSelectedFiles.length; i++){
+      const f = importBoqSelectedFiles[i], h = await pbcBacaRabFile(f);
+      h.items.forEach(function(it){ gabung.items.push(it); });
+      if(h.totalDok != null) gabung.totalDok = (gabung.totalDok || 0) + h.totalDok; else gabung.totalDok = gabung.totalDok;
+      nama.push(f.name);
+    }
+    if(!gabung.items.length) throw new Error('Tidak ada baris pekerjaan yang terbaca dari file ini.');
+    if(importBoqSelectedFiles.length > 1 && gabung.totalDok != null && importBoqSelectedFiles.length > 0){ /* total gabungan dari semua file */ }
+    statusBox.textContent = '✅ '+gabung.items.length+' baris terbaca. Periksa di pratinjau.';
+    pbcRabTampilPratinjau(gabung, nama.join(', '), timpa);
   } catch(e){
     console.error(e);
-    statusBox.textContent = '❌ Gagal: '+e.message+'. Coba kurangi jumlah file atau gunakan foto/scan yang lebih jelas.';
-  } finally {
-    btn.disabled = false;
-  }
+    statusBox.textContent = '❌ '+(e && e.message ? e.message : e);
+  } finally { btn.disabled = false; }
 }
+
 
 function updateRowCalc(id) {
   const gt = grandTotal();
