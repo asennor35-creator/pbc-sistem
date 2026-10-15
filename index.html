@@ -2800,6 +2800,7 @@ async function loadProjectById(id) {
     setTimeout(function(){ if(typeof jalankanKirimUlangFoto==='function') jalankanKirimUlangFoto(); }, 1500);
     hideModal('modalProyekList');
     notif('Proyek "'+state.proyek.nama+'" dimuat!'+(dariSupabase?' (dari Supabase)':' (dari cadangan lokal)'));
+    try{ periksaDurasiTakWajar(); }catch(e){}
   } catch(e) {
     console.error(e);
     notif('Gagal memuat proyek','var(--red)');
@@ -6281,6 +6282,12 @@ function fallbackRateBySat(sat){
   return 5;
 }
 
+/* T8c: batas wajar durasi satu pekerjaan. Tanpa batas, volume besar/salah ketik menghasilkan durasi puluhan ribu hari (pernah 44.275 hari) dan merusak Kurva S & jadwal. */
+const DURASI_MAKS_HARI = 730;
+function periksaDurasiTakWajar(){
+  const buruk = (state.items||[]).filter(function(i){ return (i.durasi||0) > DURASI_MAKS_HARI; });
+  if(buruk.length) notif('⚠ '+buruk.length+' pekerjaan punya durasi tidak wajar (>'+DURASI_MAKS_HARI+' hari), mis. "'+buruk[0].nama+'" = '+buruk[0].durasi+' hari. Periksa kolom durasi agar Kurva S benar.','var(--orange)');
+}
 function estimateDurasi(nama, vol, sat){
   const f = getFaktor();
   const match = matchProduktivitas(nama);
@@ -6297,7 +6304,7 @@ function estimateDurasi(nama, vol, sat){
     }
   }
   workingDays = Math.max(1, workingDays);
-  return Math.max(1, Math.ceil(workingDays * 7/6));
+  return Math.min(DURASI_MAKS_HARI, Math.max(1, Math.ceil(workingDays * 7/6)));
 }
 
 function updateModalDurasiEstimate(){
@@ -6317,7 +6324,7 @@ function tambahItem() {
     sat: document.getElementById('mItemSat').value,
     vol: parseFloat(document.getElementById('mItemVol').value)||0,
     harga: parseRupiah(document.getElementById('mItemHarga').value),
-    durasi: parseFloat(document.getElementById('mItemDurasi').value)||7,
+    durasi: Math.min(DURASI_MAKS_HARI, Math.max(1, parseFloat(document.getElementById('mItemDurasi').value)||7)),
     terpasang: 0
   });
   hideModal('modalItem');
@@ -6350,7 +6357,7 @@ function hitungRingan(id){
   const item = state.items.find(function(i){ return i.id===id; });
   const gt = grandTotal();
   const a = document.getElementById('boqTotalDisplay'), b = document.getElementById('boqGrandTotal');
-  if(a) a.textContent = fmtRp(gt); if(b) b.textContent = fmtRp(gt);
+  if(a) a.textContent = fmtRpPenuh(gt); if(b) b.textContent = fmtRpPenuh(gt);
   const jml = document.getElementById('jml_'+id); if(jml && item) jml.textContent = fmtRp(itemTotal(item));
   if(item){
     const dItems = state.items.filter(function(i){ return i.divisiId===item.divisiId; });
@@ -6380,7 +6387,10 @@ function onVolChange(id, val) {
 }
 function onDurasiChange(id, val) {
   const item = state.items.find(function(i){ return i.id===id; });
-  if(item){ item.durasi = Math.max(1, parseFloat(val)||1); hitungRingan(id); debounceSave(); hitungBeratNanti(id); }
+  if(item){
+    let d = Math.max(1, parseFloat(val)||1);
+    if(d > DURASI_MAKS_HARI){ d = DURASI_MAKS_HARI; notif('Durasi dibatasi maksimal '+DURASI_MAKS_HARI+' hari. Periksa kembali angkanya.','var(--orange)'); }
+    item.durasi = d; hitungRingan(id); debounceSave(); hitungBeratNanti(id); }
 }
 
 let bulkDivisiId = null;
@@ -6751,8 +6761,8 @@ async function runImportBoqDariDokumen(){
 
 function updateRowCalc(id) {
   const gt = grandTotal();
-  document.getElementById('boqTotalDisplay').textContent = fmtRp(gt);
-  document.getElementById('boqGrandTotal').textContent = fmtRp(gt);
+  document.getElementById('boqTotalDisplay').textContent = fmtRpPenuh(gt);
+  document.getElementById('boqGrandTotal').textContent = fmtRpPenuh(gt);
   const schedule = getCachedSchedule(); /* dihitung sekali saja (memakai cache Fase A), dipakai untuk semua item & header ruler di bawah */
   const gridInfo = timelineGridInfo(schedule);
   const headerCell = document.getElementById('distribusiHeaderCell');
@@ -6782,8 +6792,8 @@ function updateRowCalc(id) {
 
 function renderBoq() {
   const gt = grandTotal();
-  document.getElementById('boqTotalDisplay').textContent = fmtRp(gt);
-  document.getElementById('boqGrandTotal').textContent = fmtRp(gt);
+  document.getElementById('boqTotalDisplay').textContent = fmtRpPenuh(gt);
+  document.getElementById('boqGrandTotal').textContent = fmtRpPenuh(gt);
   refreshItemDivisiSelect();
 
   const tbody = document.getElementById('boqBody');
@@ -6829,7 +6839,7 @@ function renderBoq() {
       + '<td class="bobot-cell">'+(gt?(sub/gt*100).toFixed(2):0)+'%</td><td></td><td></td></tr>';
   });
   html += '<tr class="total-row"><td colspan="5" style="padding:10px 10px">'+(pbcBoqBhs()==='en'?'GRAND TOTAL':'TOTAL KESELURUHAN')+'</td>'
-    + '<td class="readonly">'+fmtRp(gt)+'</td>'
+    + '<td class="readonly">'+fmtRpPenuh(gt)+'</td>'
     + '<td class="bobot-cell" style="color:var(--gold-lt)">100.000%</td>'
     + '<td style="font-size:8px;color:var(--muted2)">'+modeInfo+'</td><td></td></tr>';
   tbody.innerHTML = html;
@@ -8131,12 +8141,12 @@ function refreshDashboard() {
     else statusLabel = 'Lebih Cepat';
   }
 
-  document.getElementById('kpiKontrak').textContent = fmtRp(gt);
+  document.getElementById('kpiKontrak').textContent = fmtRpPenuh(gt);
   document.getElementById('kpiItem').textContent = state.items.length;
   document.getElementById('kpiProgres').innerHTML = realPct.toFixed(1)+'<span class="kpi-unit">%</span>';
   document.getElementById('kpiRencana').textContent = rencanaPct.toFixed(1)+'%';
-  document.getElementById('kpiPaid').textContent = fmtRp(paid);
-  document.getElementById('kpiSisa').textContent = fmtRp(gt-paid);
+  document.getElementById('kpiPaid').textContent = fmtRpPenuh(paid);
+  document.getElementById('kpiSisa').textContent = fmtRpPenuh(gt-paid);
   if(deviasi!==null){
     document.getElementById('kpiDeviasi').textContent = (deviasi>=0?'+':'')+deviasi.toFixed(1)+'%';
     document.getElementById('kpiDeviasi').style.color = deviasi>=-1?'var(--teal-lt)':'var(--red)';
