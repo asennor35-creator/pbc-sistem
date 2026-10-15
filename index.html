@@ -2212,7 +2212,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
       <option value="gambar_kerja">Gambar Kerja</option>
       <option value="shop_drawing">Shop Drawing</option>
       <option value="revisi_gambar">Revisi Gambar</option>
-      <option value="foto_progress">Foto Progress</option>
+      <option value="foto_progress">Foto Progress</option><option value="foto_owner">Foto Laporan Owner</option>
       <option value="invoice">Invoice</option>
       <option value="bast">BAST</option>
       <option value="dokumen_owner">Dokumen Owner</option>
@@ -4354,10 +4354,16 @@ async function exportProposalPdfLama(){
    Satu mesin untuk semua dokumen: isi boleh beda, tampilan tidak pernah berubah.
    =========================================================================== */
 const PBC_DOK_DEFAULT = { alamat:'Jl. Penarukan No.7, Kab. Tabanan', email:'pratama.buildconstruction@gmail.com', telp:'+62 857-3733-2566',
-  bank:'BCA - 6485708441 a/n Norasen', ttdNama:'Norasen', ttdJabatan:'Managing Director' };
+  bank:'', /* nomor rekening TIDAK ditulis di kode (kode ini publik) — diisi Direktur sekali di Owner Portal > Pengaturan Laporan & Invoice */
+  ttdNama:'Norasen', ttdJabatan:'Managing Director' };
 function pbcDokPref(){ try{ return JSON.parse(localStorage.getItem('pbc_dok_pref')||'{}')||{}; }catch(e){ return {}; } }
 function pbcDokSimpanPref(o){ try{ localStorage.setItem('pbc_dok_pref', JSON.stringify(Object.assign(pbcDokPref(), o))); }catch(e){} }
-function pbcDokProfil(){ return Object.assign({}, PBC_DOK_DEFAULT, pbcDokPref().profil||{}); }
+function pbcDokProfil(){
+  const p = Object.assign({}, PBC_DOK_DEFAULT, pbcDokPref().profil||{});
+  if(window.PBC_DEMO){ const r = pbcRekBawaan(); p.bank = r.bank+' - '+r.no+' '+r.an; return p; } /* Mode Demo: tidak pernah memakai rekening asli */
+  if(!p.bank){ const r = pbcRekening(); if(r.bank && r.no) p.bank = r.bank+' - '+r.no+(r.an?' a/n '+r.an:''); }
+  return p;
+}
 function pbcRp(n){ return (n<0?'-':'')+'Rp'+String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
 function pbcQty(n){ return String(+(+n).toFixed(2)); }
 function pbcTerbilangEn(n){
@@ -4728,7 +4734,7 @@ function pbcDokCetak(){
   const v = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ''; };
   const bhs = v('dokBhs') || 'en', L = PBC_DOK_L[bhs];
   const prof = { nama:'PRATAMA BUILD & CONSTRUCTION', alamat:v('dokAlamat')||PBC_DOK_DEFAULT.alamat, email:v('dokEmail')||PBC_DOK_DEFAULT.email, telp:v('dokTelp')||PBC_DOK_DEFAULT.telp,
-                 bank:v('dokBank')||PBC_DOK_DEFAULT.bank, ttdNama:v('dokTtdNama')||PBC_DOK_DEFAULT.ttdNama, ttdJabatan:v('dokTtdJab')||PBC_DOK_DEFAULT.ttdJabatan };
+                 bank:v('dokBank')||pbcDokProfil().bank, ttdNama:v('dokTtdNama')||PBC_DOK_DEFAULT.ttdNama, ttdJabatan:v('dokTtdJab')||PBC_DOK_DEFAULT.ttdJabatan };
   pbcDokSimpanPref({ bahasa:bhs, profil:{ alamat:prof.alamat, email:prof.email, telp:prof.telp, bank:prof.bank, ttdNama:prof.ttdNama, ttdJabatan:prof.ttdJabatan } });
   try{
     const t = pbcDokTeks(Object.assign({}, d, {prof:prof}), bhs);
@@ -10596,7 +10602,7 @@ function openKeuanganPage(e){ switchToPage('page-keuangan', e, renderKeuangan); 
 const DOK_KATEGORI = [
   {key:'kontrak', label:'Kontrak'}, {key:'addendum', label:'Addendum'}, {key:'gambar_kerja', label:'Gambar Kerja'},
   {key:'shop_drawing', label:'Shop Drawing'}, {key:'revisi_gambar', label:'Revisi Gambar'},
-  {key:'foto_progress', label:'Foto Progress'}, {key:'foto_qc', label:'Foto QC Material'}, {key:'invoice', label:'Invoice'},
+  {key:'foto_progress', label:'Foto Progress'}, {key:'foto_owner', label:'Foto Laporan Owner'}, {key:'foto_qc', label:'Foto QC Material'}, {key:'invoice', label:'Invoice'},
   {key:'bast', label:'BAST'}, {key:'dokumen_owner', label:'Dokumen Owner'}, {key:'dokumen_lainnya', label:'Dokumen Lainnya'}
 ];
 let dokFilterAktif = 'semua';
@@ -12237,6 +12243,7 @@ function unduhPengunjungDemoCsv(){
 let _pbcRek = null;
 /* bawaan diambil dari data resmi PBC yang sudah ada (PBC_DOK_DEFAULT); bila Direktur mengisi sendiri di pengaturan, isian itu yang dipakai */
 function pbcRekBawaan(){
+  if(window.PBC_DEMO) return { bank:'BANK', no:'0000000000', an:'(contoh, bukan rekening asli)', ppn:0, ttd:'Direktur', jabatan:'Direktur Utama' };
   const d = (typeof PBC_DOK_DEFAULT!=='undefined') ? PBC_DOK_DEFAULT : {}, m = String(d.bank||'').match(/^(.*?)\s*-\s*(\d+)\s*a\/n\s*(.*)$/i);
   return { bank: m?m[1]:'', no: m?m[2]:'', an: m?m[3]:'', ppn:0, ttd: d.ttdNama||'', jabatan:'Direktur Utama' };
 }
@@ -12245,6 +12252,7 @@ async function pbcMuatRekening(){
   try { const r = await window.storage.get('pbc_rekening', false); if(r && r.value){ _pbcRek = Object.assign(pbcRekBawaan(), JSON.parse(r.value)); } } catch(e){}
   return pbcRekening();
 }
+if(!window.PBC_DEMO) setTimeout(function(){ try{ pbcMuatRekening(); }catch(e){} }, 4000); /* muat rekening tersimpan di awal agar dokumen penawaran/RAB juga memakainya */
 function pbcSimpanRek(k, v){
   const r = Object.assign({}, pbcRekening()); r[k] = (k==='ppn') ? (parseFloat(v)||0) : String(v);
   _pbcRek = r;
@@ -12315,14 +12323,10 @@ function pbcOwnerData(){
     const m0 = (idx+1)*7, m1 = (idx+2)*7;
     schedule.forEach(function(s){ if(s.startDay < m1 && s.endDay > m0 && itemPct(s.item) < 99.9){ const dv = state.divisi.find(function(d){ return d.id===s.item.divisiId; }); D.rencanaDepan.push({ nama:s.item.nama, div: dv ? dv.nama : '' }); } });
   }
-  /* foto */
-  const fh = state.fotoHarian || {}, semuaFoto = [];
-  Object.keys(fh).forEach(function(t){ Object.keys(fh[t]||{}).forEach(function(k){ const e = fh[t][k]; if(e && e.docId) semuaFoto.push({ tgl:t, label:e.label||'', docId:e.docId }); }); });
-  semuaFoto.sort(function(x,y){ return String(y.tgl).localeCompare(String(x.tgl)); });
-  const fMinggu = a ? semuaFoto.filter(function(f){ return f.tgl>=a && f.tgl<=z; }) : [];
-  const ketFoto = (state.catatanOwner && state.catatanOwner.ketFoto) || {}, sembunyi = (state.catatanOwner && state.catatanOwner.fotoSembunyi) || {};
-  D.fotoPilih = (fMinggu.length ? fMinggu : semuaFoto).slice(0,12).map(function(f){ return { tgl:f.tgl, docId:f.docId, label:f.label, ket: (ketFoto[f.docId]!==undefined ? ketFoto[f.docId] : f.label), sembunyi: !!sembunyi[f.docId] }; });
-  D.foto = D.fotoPilih.filter(function(f){ return !f.sembunyi; }).slice(0,6); D.fotoTerbaru = !fMinggu.length;
+  /* foto laporan owner: 10 bingkai, masing-masing dengan keterangan tulis sendiri */
+  const fo = (state.catatanOwner && state.catatanOwner.fotoOwner) || {};
+  D.fotoSlot = []; for(let i=0;i<10;i++){ const e = fo[i]; D.fotoSlot.push({ idx:i, docId: e && e.docId || '', ket: e && e.ket || '' }); }
+  D.foto = D.fotoSlot.filter(function(f){ return f.docId; }); D.fotoTerbaru = false; D.fotoPilih = D.foto;
   /* termin, opname, VO, mutu, material, tenaga kerja */
   D.termin = (state.termin||[]).map(function(t){ return { nama:t.nama, milestone:t.milestone||'-', pct:t.pct||0, nilai:t.nilai||0, status:t.status||'', tgl:t.tgl||'' }; });
   D.terbayar = D.termin.filter(function(t){ return t.status==='Lunas'; }).reduce(function(s,t){ return s+t.nilai; },0);
@@ -12486,7 +12490,10 @@ function renderOwnerPortal(){
     + '<div class="op-k"><i>TENAGA KERJA</i><b>'+D.pekerjaRata+' org</b><small>rata-rata hadir/hari · '+D.hariKerja+' hari kerja</small></div>'
     + '<div class="op-k" style="border-color:'+(D.punchTerbuka?'#C0392B':'#1A8C7A')+'"><i>TEMUAN MUTU TERBUKA</i><b>'+D.punchTerbuka+'</b><small>'+(D.punchMajor?D.punchMajor+' perlu perhatian khusus':'dalam penyelesaian')+'</small></div></div></div>';
   /* 9. foto */
-  h += '<div class="op-sec"><h3>9. Foto Progres'+(D.fotoTerbaru&&D.fotoPilih.length?' (terbaru)':' Minggu Ini')+'</h3><div style="font:11px Arial;color:#6a7185;margin:-4px 0 8px">Keterangan foto bisa dihapus dan ditulis ulang. Maksimal 6 foto tampil di PDF.</div><div id="opFotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px"></div></div>';
+  h += '<div class="op-sec"><h3>9. Foto Progres</h3><div style="font:11px Arial;color:#6a7185;margin:-4px 0 8px">10 bingkai foto untuk owner. Ketuk bingkai untuk memilih foto, lalu tulis keterangan di bawahnya (misal "Keramik ruang tamu"). Keterangan bisa dihapus dan ditulis ulang.</div>'
+    + '<div style="margin-bottom:8px"><button type="button" onclick="pbcOpIsiDariHarian()" style="padding:7px 10px;font:12px Arial;border:1px solid #1A8C7A;border-radius:6px;background:#fff;color:#0B6B58;cursor:pointer">📥 Isi bingkai kosong dari foto Progres Harian terbaru</button></div>'
+    + '<input type="file" accept="image/*" id="opFotoInput" style="display:none" onchange="pbcOpFotoDipilih(this)">'
+    + '<div id="opFotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div></div>';
   const R = D.rek;
   h += '<div class="op-sec"><h3>Pengaturan Laporan &amp; Invoice <span style="font:11px Arial;color:#6a7185;font-weight:400">(diisi sekali)</span></h3>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">'
@@ -12494,20 +12501,84 @@ function renderOwnerPortal(){
       .map(function(f){ return '<label style="font:11px Arial;color:#6a7185">'+f[1]+'<input class="op-in" style="display:block;width:100%;padding:7px;margin-top:2px;font:13px Arial;border:1px solid #cfd5e2;border-radius:6px;color:#1a1d24;background:#fff" value="'+pbcEsc(f[2])+'" placeholder="'+f[3]+'" oninput="pbcSimpanRek(\''+f[0]+'\',this.value)"></label>'; }).join('')
     + '</div></div>';
   body.innerHTML = h;
-  /* foto dimuat belakangan */
-  const g = document.getElementById('opFotoGrid');
-  if(g){
-    if(!D.fotoPilih.length) g.innerHTML = '<div class="empty" style="grid-column:1/-1">Belum ada foto progres</div>';
-    D.fotoPilih.forEach(function(f){
-      const box = document.createElement('div'); box.style.cssText = 'background:#f1f2f4;border-radius:6px;overflow:hidden;font:11px Arial;color:#444;'+(f.sembunyi?'opacity:.45':'');
+  pbcOpGambarFoto(D);
+}
+function pbcOpGambarFoto(D){
+  const g = document.getElementById('opFotoGrid'); if(!g) return;
+  D = D || pbcOwnerData(); g.textContent = '';
+  D.fotoSlot.forEach(function(f){
+    const box = document.createElement('div'); box.style.cssText = 'background:#f1f2f4;border-radius:8px;overflow:hidden;font:11px Arial;color:#444;border:1px solid #dfe3ec';
+    const fr = document.createElement('div'); fr.style.cssText = 'position:relative;height:115px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:'+(f.docId?'#e9edf5':'#fafbfd')+';'+(f.docId?'':'border-bottom:1px dashed #b8c0d2');
+    if(f.docId){
+      if(!(f.docId in fotoHarianCache) && typeof muatThumbFoto==='function') muatThumbFoto(f.docId);
       const src = fotoHarianCache[f.docId];
-      box.innerHTML = (src ? '<img src="'+src+'" style="width:100%;height:110px;object-fit:cover;display:block">' : '<div style="height:110px;display:flex;align-items:center;justify-content:center">memuat…</div>')
-        + '<div style="padding:5px 6px"><div style="color:#6a7185;margin-bottom:3px">'+pbcEsc(f.tgl)+'</div>'
-        + '<input type="text" value="'+pbcEsc(f.ket)+'" placeholder="Tulis keterangan foto…" style="width:100%;padding:5px;font:12px Arial;border:1px solid #cfd5e2;border-radius:5px;color:#1a1d24;background:#fff" oninput="pbcSimpanKetFoto(\''+f.docId+'\',this.value)">'
-        + '<label style="display:flex;align-items:center;gap:5px;margin-top:5px;font-size:11px;cursor:pointer"><input type="checkbox" '+(f.sembunyi?'':'checked')+' onchange="pbcFotoSembunyi(\''+f.docId+'\',!this.checked);this.closest(\'div[style]\').parentNode.style.opacity=this.checked?1:.45"> Tampilkan di laporan</label></div>';
-      g.appendChild(box); if(!src && typeof muatThumbFoto==='function') muatThumbFoto(f.docId);
-    });
-  }
+      if(src){ const im = document.createElement('img'); im.src = src; im.alt = 'Foto '+(f.idx+1); im.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block'; fr.appendChild(im); }
+      else { const ph = document.createElement('div'); ph.textContent = fotoHarianGagal[f.docId] ? 'foto belum bisa dimuat' : 'memuat…'; fr.appendChild(ph); if(!fotoHarianGagal[f.docId]) setTimeout(function(){ if(document.getElementById('opFotoGrid')===g) pbcOpGambarFoto(); }, 900); }
+      const x = document.createElement('div'); x.textContent = '✕'; x.title = 'Hapus foto'; x.style.cssText = 'position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(192,57,43,.92);color:#fff;text-align:center;line-height:22px;font-size:12px';
+      x.addEventListener('click', function(ev){ ev.stopPropagation(); pbcOpHapusFoto(f.idx); }); fr.appendChild(x);
+    } else {
+      fr.innerHTML = '<div style="text-align:center;color:#6a7185"><div style="font-size:26px">📷</div>Foto '+(f.idx+1)+'</div>';
+    }
+    fr.addEventListener('click', function(){ pbcOpKlikFoto(f.idx); });
+    box.appendChild(fr);
+    const w = document.createElement('div'); w.style.cssText = 'padding:5px 6px';
+    const inp = document.createElement('input'); inp.type = 'text'; inp.value = f.ket; inp.placeholder = 'Foto di area mana…'; inp.id = 'opKet'+f.idx;
+    inp.style.cssText = 'width:100%;padding:6px;font:12px Arial;border:1px solid #cfd5e2;border-radius:5px;color:#1a1d24;background:#fff;box-sizing:border-box';
+    inp.addEventListener('input', function(){ pbcOpSimpanKet(f.idx, inp.value); });
+    w.appendChild(inp); box.appendChild(w); g.appendChild(box);
+  });
+}
+function pbcOpData(){ if(!state.catatanOwner) state.catatanOwner = {}; if(!state.catatanOwner.fotoOwner) state.catatanOwner.fotoOwner = {}; return state.catatanOwner.fotoOwner; }
+function pbcOpSimpanKet(idx, v){ const d = pbcOpData(); d[idx] = d[idx] || { docId:'', ket:'' }; d[idx].ket = String(v); debounceSave(); }
+let _opSlotAktif = null;
+function pbcOpKlikFoto(idx){
+  if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!','var(--red)'); return; }
+  _opSlotAktif = idx; const inp = document.getElementById('opFotoInput'); if(!inp) return; inp.value = ''; inp.click();
+}
+function pbcOpBacaGambar(file){
+  return new Promise(function(res, rej){
+    const r = new FileReader();
+    r.onerror = function(){ rej(new Error('baca')); };
+    r.onload = function(){ const im = new Image(); im.onerror = function(){ rej(new Error('bukan gambar')); };
+      im.onload = function(){ let w = im.width, h = im.height; const mx = 1100; if(w>mx){ h = h*(mx/w); w = mx; }
+        const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(im,0,0,w,h); res(c.toDataURL('image/jpeg',0.72)); };
+      im.src = r.result; };
+    r.readAsDataURL(file);
+  });
+}
+async function pbcOpFotoDipilih(input){
+  const file = input.files && input.files[0]; if(!file || _opSlotAktif===null) return;
+  const idx = _opSlotAktif;
+  let url; try{ url = await pbcOpBacaGambar(file); }catch(e){ notif('File yang dipilih bukan gambar yang valid','var(--red)'); return; }
+  const id = uid(); let hasil;
+  try{ hasil = await window.storage.set('pbc_doc:'+id, url, false); }catch(e){ notif('Gagal menyimpan foto — coba foto yang lebih kecil','var(--red)'); return; }
+  const d = pbcOpData(), lama = d[idx];
+  if(lama && lama.docId) await pbcOpBuangDoc(lama.docId);
+  state.dokumen = state.dokumen || [];
+  state.dokumen.push({ id:id, kategori:'foto_owner', namaFile:'Foto laporan owner '+(idx+1)+' — '+today()+'.jpg', fileType:'image/jpeg', ukuran:url.length*0.75, uploadedAt:Date.now() });
+  d[idx] = { docId:id, ket: lama ? lama.ket : '' };
+  fotoHarianCache[id] = url; debounceSave(); pbcOpGambarFoto();
+  if(hasil && hasil.tersimpanServer===false){ notif('Foto baru tersimpan di HP ini, belum terunggah ke server. Akan dikirim saat tersambung internet.','var(--orange)'); if(typeof jadwalkanKirimUlangFoto==='function') jadwalkanKirimUlangFoto(); }
+  else notif('Foto '+(idx+1)+' tersimpan — tulis keterangannya di bawah foto');
+}
+/* hanya hapus berkas yang diunggah dari sini (kategori foto_owner); foto Progres Harian yang dipakai bersama TIDAK disentuh */
+async function pbcOpBuangDoc(docId){
+  const dk = (state.dokumen||[]).find(function(x){ return x.id===docId; });
+  if(dk && dk.kategori==='foto_owner'){ state.dokumen = state.dokumen.filter(function(x){ return x.id!==docId; }); try{ await window.storage.delete('pbc_doc:'+docId, false); }catch(e){} }
+}
+async function pbcOpHapusFoto(idx){
+  const d = pbcOpData(), e = d[idx]; if(!e || !e.docId) return;
+  if(!confirm('Hapus foto '+(idx+1)+' dari laporan owner?')) return;
+  await pbcOpBuangDoc(e.docId); d[idx] = { docId:'', ket:e.ket }; debounceSave(); pbcOpGambarFoto();
+}
+function pbcOpIsiDariHarian(){
+  const d = pbcOpData(), fh = state.fotoHarian || {}, pakai = {}, semua = [];
+  for(let i=0;i<10;i++){ if(d[i] && d[i].docId) pakai[d[i].docId] = true; }
+  Object.keys(fh).sort().reverse().forEach(function(t){ Object.keys(fh[t]||{}).forEach(function(k){ const e = fh[t][k]; if(e && e.docId && !pakai[e.docId]) semua.push({ docId:e.docId, label:e.label||'' }); }); });
+  let n = 0;
+  for(let i=0;i<10 && semua.length;i++){ if(!(d[i] && d[i].docId)){ const s = semua.shift(); d[i] = { docId:s.docId, ket: (d[i] && d[i].ket) || s.label }; n++; } }
+  debounceSave(); pbcOpGambarFoto();
+  notif(n ? n+' foto dimasukkan dari Progres Harian — silakan ubah keterangannya' : 'Tidak ada foto Progres Harian yang bisa dimasukkan', n?undefined:'var(--orange)');
 }
 function pbcSimpanKetFoto(docId, v){
   if(!state.catatanOwner) state.catatanOwner = {}; if(!state.catatanOwner.ketFoto) state.catatanOwner.ketFoto = {};
@@ -12662,21 +12733,21 @@ async function exportOwnerPortalPdf(){
 
     /* ===== HALAMAN 5 — foto ===== */
     y = baru();
-    y = pdfSectionTitle(doc, y, '9. Foto Progres '+(D.fotoTerbaru && D.foto.length ? '(terbaru)' : 'Minggu Ini'));
-    set(7.5,false,PDF.gray); doc.text('Foto diambil dari Progres Harian lapangan, diurutkan menurut tanggal.', 12, y-2.5); y += 2;
+    y = pdfSectionTitle(doc, y, '9. Foto Progres');
+    set(7.5,false,PDF.gray); doc.text('Dokumentasi foto progres pekerjaan di lapangan.', 12, y-2.5); y += 2;
     const gambar = async function(f, x, yy, bw, bh){
       doc.setFillColor(233,237,245); doc.rect(x,yy,bw,bh,'F');
       const src = fotoHarianCache[f.docId];
       if(src){ const d = await pbcUkuranGambar(src); if(d){ const sc = Math.min(bw/d.w, bh/d.h), w = d.w*sc, h = d.h*sc; try{ doc.addImage(src, /^data:image\/png/i.test(src)?'PNG':'JPEG', x+(bw-w)/2, yy+(bh-h)/2, w, h); }catch(e){} } }
       else { set(8,false,PDF.gray); doc.text('foto tidak tersedia', x+bw/2, yy+bh/2, {align:'center'}); }
-      set(7.5,false,PDF.dark); doc.text(f.tgl+(f.ket?' - '+f.ket:''), x, yy+bh+4, {maxWidth:bw});
+      set(8,true,PDF.dark); const kt = String(f.ket||'').trim(); if(kt) doc.text(doc.splitTextToSize(kt, bw).slice(0,2), x, yy+bh+4);
     };
     if(!D.foto.length){ set(9,false,PDF.gray); doc.text('Belum ada foto progres.', 12, y+4); y += 10; }
     const bw = (W-24-6)/2, bh = 56;
     for(let i=0;i<D.foto.length;i++){
-      const col = i%2; if(col===0){ y = perlu(y, bh+9); }
+      const col = i%2; if(col===0){ y = perlu(y, bh+14); }
       await gambar(D.foto[i], 12+col*(bw+6), y, bw, bh);
-      if(col===1 || i===D.foto.length-1) y += bh+9;
+      if(col===1 || i===D.foto.length-1) y += bh+14;
     }
 
     /* ===== LAMPIRAN INVOICE ===== */
