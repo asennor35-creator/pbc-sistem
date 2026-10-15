@@ -6516,6 +6516,7 @@ async function initApp() {
     const last = await window.storage.get('pbc_last', false);
     if(last && last.value) { await loadProjectById(last.value); return; }
   } catch(e) { /* belum ada proyek tersimpan */ }
+  if(window.PBC_DEMO){ try{ await loadProjectById('demo_renovasi_rumah'); return; }catch(e){} } /* Mode Demo: proyek contoh terbuka otomatis */
   setSaveStatus('Belum ada proyek');
 }
 
