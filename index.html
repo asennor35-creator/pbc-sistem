@@ -538,7 +538,40 @@ window.PBC_CONFIG = {
   }
   window.PBC_DEMO_SELESAI = selesaiDemo;
 
+  /* ---------- layar perkenalan: keunggulan + tanya jawab, SEBELUM formulir ---------- */
   function sambutan(){
+    if(document.getElementById('pbcDemoSambut')) return;
+    var o = document.createElement('div'); o.id = 'pbcDemoSambut';
+    o.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(10,20,40,.94);display:flex;align-items:flex-start;justify-content:center;padding:12px;font-family:system-ui,sans-serif;overflow:auto';
+    var wa = 'https://wa.me/' + WA_NOMOR + '?text=' + encodeURIComponent('Halo PBC, saya tertarik dengan PBC Sistem Terpadu dan ingin bertanya.');
+    var ck = function(t){ return '<li style="display:flex;gap:9px;margin:0 0 9px;font-size:14px;line-height:1.4;color:#223"><span style="flex:none;width:20px;height:20px;border-radius:50%;background:#1FA855;color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:1px">&#10003;</span><span>' + t + '</span></li>'; };
+    var qa = function(q, a){ return '<details style="border:1px solid #D6DEEC;border-radius:10px;margin:0 0 8px;background:#F8FAFE"><summary style="cursor:pointer;padding:11px 12px;font-weight:700;font-size:13.5px;color:#0B2A5B;list-style:none">' + q + '</summary><div style="padding:0 12px 12px;font-size:13px;line-height:1.5;color:#334">' + a + '</div></details>'; };
+    o.innerHTML = '<div id="pbcDemoIntro" style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:18px;margin:auto">'
+      + '<div style="font-weight:800;font-size:12px;letter-spacing:.12em;color:#B45309">PRATAMA BUILD &amp; CONSTRUCTION</div>'
+      + '<div style="font-weight:800;font-size:21px;color:#0B2A5B;margin:4px 0 6px;line-height:1.2">Kenalan dulu dengan PBC Sistem Terpadu</div>'
+      + '<p style="margin:0 0 14px;color:#334;font-size:13.5px;line-height:1.5">Aplikasi pengelola proyek konstruksi yang dibuat oleh kontraktor dan dipakai tim PBC sendiri.</p>'
+      + '<div style="font-weight:800;font-size:14px;color:#0B2A5B;margin:0 0 8px">Keunggulannya</div><ul style="list-style:none;padding:0;margin:0 0 14px">'
+      + ck('<b>Input BOQ sekali.</b> Kurva S, Dashboard, dan Termin ikut menyesuaikan.')
+      + ck('<b>Progres harian + foto lokasi</b> sebagai bukti untuk owner.')
+      + ck('<b>Termin &amp; invoice</b> sesuai progres, cashflow dan estimasi laba terlihat.')
+      + ck('<b>Kebutuhan material</b> dihitung dari volume pekerjaan.')
+      + ck('<b>Laporan PDF owner</b> dan dokumen resmi dua bahasa (Indonesia &amp; English).')
+      + ck('<b>Akses sesuai peran:</b> Direktur, Internal, Lapangan.') + '</ul>'
+      + '<div style="font-weight:800;font-size:14px;color:#0B2A5B;margin:0 0 8px">Pertanyaan yang sering diajukan</div>'
+      + qa('Perlu unduh dari Play Store?', '<b>Tidak perlu.</b> Dibuka lewat Chrome, lalu bisa dipasang ke layar utama seperti aplikasi biasa. Sistem baru kami uji di Chrome, jadi browser lain belum kami jamin.')
+      + qa('Apakah harus selalu online?', 'Data utama tersimpan di server cloud, dengan salinan di perangkat sebagai cadangan bila koneksi bermasalah. Untuk menyimpan ke cloud tetap perlu internet.')
+      + qa('Siapa yang bisa membuka data?', 'Setiap orang masuk dengan akunnya sendiri. Direktur memberi peran: Direktur (akses penuh), Internal (tanpa keuangan), Lapangan (progres, absensi, QC, opname).')
+      + qa('Bagaimana cadangan data?', '<b>Sudah ada:</b> cadangan manual per proyek berupa berkas. <b>Belum ada:</b> cadangan otomatis terjadwal (dalam rencana).')
+      + qa('Apakah sudah diaudit?', 'Sudah ada audit internal pada struktur data dan keamanan. <b>Audit oleh pihak independen belum dilakukan</b> dan masuk dalam rencana kami.')
+      + qa('Untuk siapa, dan berapa biayanya?', 'Kontraktor kecil sampai menengah dengan tim lapangan yang bekerja dari HP. <b>Demo ini bisa dicoba gratis.</b> Sistem masih tahap uji bersama kontraktor dan belum punya harga umum; hubungi kami lewat WhatsApp. Belum mencakup akuntansi penuh/pajak dan penggajian terkait BPJS.')
+      + qa('Apa batasan demo?', 'Demo memakai aplikasi yang sama dengan proyek contoh fiktif. Anda bebas menulis, mengubah, dan menghapus data. Ekspor (PDF, Excel/CSV, cadangan) dan menyalin teks hanya ada di versi lengkap. Data yang Anda ubah hanya tersimpan di HP Anda.')
+      + '<button type="button" id="pbcDemoLanjut" style="display:block;width:100%;margin-top:14px;padding:14px;border:0;border-radius:10px;background:#B45309;color:#fff;font:800 15px system-ui,sans-serif;cursor:pointer">Lanjut Coba Demo</button>'
+      + '<a href="' + wa + '" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin-top:9px;padding:12px;border-radius:10px;background:#E8EEF9;color:#0B2A5B;font:700 14px system-ui,sans-serif">Tanya dulu lewat WhatsApp</a></div>';
+    document.body.appendChild(o);
+    document.getElementById('pbcDemoLanjut').addEventListener('click', function(){ o.remove(); formSambutan(); });
+  }
+
+  function formSambutan(){
     if(document.getElementById('pbcDemoSambut')) return;
     var o = document.createElement('div'); o.id = 'pbcDemoSambut';
     o.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(10,20,40,.94);display:flex;align-items:flex-start;justify-content:center;padding:12px;font-family:system-ui,sans-serif;overflow:auto';
