@@ -532,9 +532,14 @@ window.PBC_CONFIG = {
       + '<p style="margin:10px 0 4px;color:#334;font-size:14px;line-height:1.5">Anda sudah keluar dari <b>PBC Sistem Terpadu (Demo)</b>. Ingin sistem seperti ini untuk usaha Anda? Tim PBC siap mendampingi.</p>'
       + '<a id="pbcDemoSelesaiWa" href="' + linkWa() + '" target="_blank" rel="noopener" style="' + tb + 'background:#1FA855;color:#fff">Hubungi PBC lewat WhatsApp</a>'
       + '<button type="button" id="pbcDemoSelesaiKembali" style="' + tb + 'background:#E8EEF9;color:#0B2A5B">Kembali ke Demo</button>'
-      + '<p style="font-size:12px;color:#667;margin:14px 0 0">Untuk menutup, cukup tutup halaman ini.</p></div>';
+      + '<button type="button" id="pbcDemoSelesaiKeluar" style="' + tb + 'background:#0B2A5B;color:#fff">Keluar dari Demo</button>'
+      + '<p style="font-size:12px;color:#667;margin:14px 0 0">Tombol <b>Keluar dari Demo</b> menutup demo dan membuka pratamabuild.id.</p></div>';
     document.body.appendChild(o);
     document.getElementById('pbcDemoSelesaiKembali').addEventListener('click', function(){ o.remove(); });
+    document.getElementById('pbcDemoSelesaiKeluar').addEventListener('click', function(){
+      try{ window.close(); }catch(e){}                                  /* HP/Chrome biasanya menolak menutup tab sendiri, maka dialihkan */
+      setTimeout(function(){ location.href = 'https://pratamabuild.id'; }, 250);
+    });
   }
   window.PBC_DEMO_SELESAI = selesaiDemo;
 
@@ -546,17 +551,82 @@ window.PBC_CONFIG = {
     var wa = 'https://wa.me/' + WA_NOMOR + '?text=' + encodeURIComponent('Halo PBC, saya tertarik dengan PBC Sistem Terpadu dan ingin bertanya.');
     var ck = function(t){ return '<li style="display:flex;gap:9px;margin:0 0 9px;font-size:14px;line-height:1.4;color:#223"><span style="flex:none;width:20px;height:20px;border-radius:50%;background:#1FA855;color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:1px">&#10003;</span><span>' + t + '</span></li>'; };
     var qa = function(q, a){ return '<details style="border:1px solid #D6DEEC;border-radius:10px;margin:0 0 8px;background:#F8FAFE"><summary style="cursor:pointer;padding:11px 12px;font-weight:700;font-size:13.5px;color:#0B2A5B;list-style:none">' + q + '</summary><div style="padding:0 12px 12px;font-size:13px;line-height:1.5;color:#334">' + a + '</div></details>'; };
+    var sblm = [
+      ['hitung semen, pasir, keramik, besi satu per satu pakai kalkulator.', 'isi volume pekerjaan, kebutuhan material &amp; jumlah beli (sak, dus, kg) keluar sendiri.'],
+      ['rekap belanja ditulis manual di buku atau chat, sering ada yang terlewat.', 'seluruh item digabung jadi satu daftar belanja, lalu diajukan ke Purchasing sekali klik.'],
+      ['stok gudang tidak jelas, tukang menunggu material.', 'stok vs kebutuhan terlihat, kekurangan ketahuan sebelum dipakai.'],
+      ['jadwal dan Kurva S dibuat ulang di Excel tiap minggu.', 'jadwal dan Kurva S terbentuk dari BOQ, progres harian mengisinya otomatis.'],
+      ['laporan ke owner disusun manual berjam-jam.', 'laporan PDF lengkap dengan foto dan invoice termin, satu klik.']
+    ];
+    var grup = [
+      ['Material &amp; belanja', [
+        ['Kebutuhan material otomatis dari volume', 'Tidak perlu hitung manual bahan per bahan.'],
+        ['18 jenis pekerjaan punya rumus bawaan', 'Beton &amp; besi, batu kali, bata/hebel, plester &amp; acian, keramik, plafon, partisi, rockwool, vinyl, epoxy, rubber mat, panel kayu/OSB, rangka kayu, cat.'],
+        ['Dikonversi ke satuan beli + cadangan susut', 'Hasilnya langsung berupa sak, dus, kg, atau pcs yang siap dibelanjakan.'],
+        ['Setiap angka berlabel sumber dan rumusnya terlihat', 'Anda tahu mana hitungan ukuran dan mana perkiraan umum yang perlu dicek.'],
+        ['Tidak menebak', 'Bila pekerjaan tidak punya rumus atau satuannya tidak cocok, sistem memberi peringatan, bukan angka asal.'],
+        ['Parameter bisa disesuaikan per item', 'Ukuran, tebal, dan cadangan bisa diubah sesuai kondisi proyek.'],
+        ['MRP: total kebutuhan gabungan seluruh item', 'Satu daftar belanja untuk seluruh proyek, tidak terpecah-pecah.'],
+        ['Estimasi biaya tenaga kerja &amp; margin per item', 'Terlihat item mana yang tipis labanya.'],
+        ['Ajukan ke Permintaan Material sekali klik', 'Alur: permintaan, persetujuan, purchase order, pembelian, material datang, dipakai.'],
+        ['Master supplier &amp; katalog material per kategori', 'Data supplier dan material tertata, tidak mencari ulang tiap proyek.'],
+        ['Gudang: stok saat ini, riwayat pemakaian, stok awal isi massal, koreksi manual', 'Kekurangan material ketahuan sebelum pekerjaan berhenti.'],
+        ['Analisis deviasi material: anggaran vs aktual', 'Pemborosan terlihat lebih dini di Dashboard.']
+      ], '#B45309'],
+      ['BOQ &amp; penawaran', [
+        ['BOQ Master per divisi dan item', 'Volume, harga satuan, dan bobot pekerjaan dihitung otomatis.'],
+        ['Impor RAB klien (PDF digital, Excel, CSV)', 'Tidak mengetik ulang. Total hasil baca dibandingkan dengan total di dokumen. (Foto dan PDF hasil scan belum bisa dibaca.)'],
+        ['Nama pekerjaan dua bahasa: Indonesia &amp; English', 'Terjemahan otomatis sebagai draf, tetap bisa Anda ubah sebelum cetak.'],
+        ['Cetak RAB, penawaran, dan addendum ke PDF', 'Format tetap PBC, siap dikirim ke klien.']
+      ], '#0B2A5B'],
+      ['Jadwal &amp; Kurva S', [
+        ['Jadwal terbentuk dari BOQ', 'Tanggal mulai dan selesai berdasarkan bobot pekerjaan, durasi proyek bisa diatur.'],
+        ['Kurva S rencana vs realisasi', 'Terlihat jelas proyek terlambat atau sesuai rencana.'],
+        ['Deviasi per periode dan per divisi', 'Tahu persis divisi mana yang tertinggal.'],
+        ['Indikator kinerja jadwal', 'Status tepat waktu atau terlambat langsung tampil di Dashboard.']
+      ], '#1F5FBF'],
+      ['Lapangan harian', [
+        ['Update progres per item BOQ', 'Progres fisik dan Kurva S ikut berubah otomatis.'],
+        ['Foto dokumentasi 10 sudut tetap', 'Bukti rutin dari lokasi, tidak ada lagi &quot;fotonya menyusul&quot;.'],
+        ['Riwayat laporan harian', 'Cuaca, jumlah tukang, kegiatan, dan kendala tercatat per hari.'],
+        ['Opname dan Berita Acara Opname', 'Pekerjaan terverifikasi sebelum ditagih.'],
+        ['Quality Control: inspeksi dan punch list', 'Temuan dan statusnya dilacak, cacat ketahuan sebelum serah terima.'],
+        ['Tenaga kerja: master pekerja, absensi (hadir/lembur), rekap dan penggajian', 'Gaji yang dibayar otomatis tercatat sebagai pengeluaran proyek.']
+      ], '#14804A'],
+      ['Tagihan &amp; keuangan', [
+        ['Termin dibuat otomatis dari BOQ', 'Persentase dan nilai termin langsung terhitung, status lunas atau belum jelas.'],
+        ['Cetak BAP (Berita Acara Pembayaran)', 'Dokumen tagihan siap cetak.'],
+        ['Retensi, masa garansi, dan pencairan retensi', 'Dana yang ditahan tidak terlupa.'],
+        ['Dashboard keuangan: nilai kontrak, addendum, pengeluaran, sisa tagihan, estimasi laba kotor', 'Tahu posisi uang proyek kapan saja.'],
+        ['Cashflow proyek', 'Terlihat uang masuk dari termin dibanding pengeluaran.'],
+        ['Variation Order (tambah kerja)', 'Yang disetujui memperbarui BOQ, nilai kontrak, Dashboard, dan Kurva S sekaligus.']
+      ], '#7B4FC9'],
+      ['Laporan untuk owner', [
+        ['Owner Portal dengan 9 bagian laporan', 'Ringkasan, Kurva S, progres per item, opname dan termin, invoice, keputusan, kegiatan, kendala, material dan mutu, foto.'],
+        ['Laporan mingguan PDF satu klik', 'Hemat waktu menyusun laporan manual.'],
+        ['Invoice termin terbit otomatis', 'Rekening dan penanda tangan diisi sekali saja.'],
+        ['10 bingkai foto progres dengan keterangan', 'Owner melihat area mana yang dikerjakan.'],
+        ['Rekapitulasi untuk owner', 'Ringkasan proyek dalam satu halaman.'],
+        ['Peran Owner dengan akses terbatas', 'Owner hanya melihat progres, tanpa BOQ detail dan keuangan internal.']
+      ], '#B42318'],
+      ['Kerja bersama &amp; keamanan data', [
+        ['Akun sendiri untuk tiap orang, dengan peran', 'Direktur, Internal, Lapangan, Owner. Akun baru menunggu persetujuan Direktur.'],
+        ['Deteksi bentrok edit', 'Bila dua orang mengubah proyek yang sama, Anda diminta memilih versi, data tidak ditimpa diam-diam.'],
+        ['Perlindungan saat sinyal jelek', 'Data lama tidak terhapus oleh data kosong saat gagal dimuat.'],
+        ['Data di cloud + salinan di perangkat', 'Tetap aman bila koneksi bermasalah.'],
+        ['Cadangan manual per proyek dan dokumen proyek', 'Kontrak dan berkas penting tersimpan rapi per proyek.']
+      ], '#334155']
+    ];
     o.innerHTML = '<div id="pbcDemoIntro" style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:18px;margin:auto">'
       + '<div style="font-weight:800;font-size:12px;letter-spacing:.12em;color:#B45309">PRATAMA BUILD &amp; CONSTRUCTION</div>'
       + '<div style="font-weight:800;font-size:21px;color:#0B2A5B;margin:4px 0 6px;line-height:1.2">Kenalan dulu dengan PBC Sistem Terpadu</div>'
       + '<p style="margin:0 0 14px;color:#334;font-size:13.5px;line-height:1.5">Aplikasi pengelola proyek konstruksi yang dibuat oleh kontraktor dan dipakai tim PBC sendiri.</p>'
-      + '<div style="font-weight:800;font-size:14px;color:#0B2A5B;margin:0 0 8px">Keunggulannya</div><ul style="list-style:none;padding:0;margin:0 0 14px">'
-      + ck('<b>Input BOQ sekali.</b> Kurva S, Dashboard, dan Termin ikut menyesuaikan.')
-      + ck('<b>Progres harian + foto lokasi</b> sebagai bukti untuk owner.')
-      + ck('<b>Termin &amp; invoice</b> sesuai progres, cashflow dan estimasi laba terlihat.')
-      + ck('<b>Kebutuhan material</b> dihitung dari volume pekerjaan.')
-      + ck('<b>Laporan PDF owner</b> dan dokumen resmi dua bahasa (Indonesia &amp; English).')
-      + ck('<b>Akses sesuai peran:</b> Direktur, Internal, Lapangan.') + '</ul>'
+      + '<div style="font-weight:800;font-size:15px;color:#0B2A5B;margin:0 0 8px">Keunggulannya</div>'
+      + '<div style="background:#FFF7E6;border:1.5px solid #F4B61E;border-radius:12px;padding:12px;margin:0 0 14px">'
+      + '<div style="font-weight:800;font-size:13.5px;color:#7C4A03;margin-bottom:8px">Biasanya pusing, di sini jadi mudah</div>' + sblm.map(function(x){ return '<div style="font-size:12.5px;line-height:1.45;color:#334;margin:0 0 7px"><span style="color:#B42318;font-weight:700">Biasanya:</span> ' + x[0] + '<br><span style="color:#14804A;font-weight:700">Di sini:</span> ' + x[1] + '</div>'; }).join('') + '</div>'
+      + '<div style="font-weight:800;font-size:15px;color:#0B2A5B;margin:0 0 4px">Semua fitur &amp; manfaatnya</div>'
+      + '<p style="margin:0 0 10px;font-size:12.5px;color:#556;line-height:1.45">Terhubung dalam satu sistem: semua modul membaca BOQ yang sama, jadi satu perubahan ikut memperbarui yang lain.</p>'
+      + grup.map(function(g, gi){ return '<details' + (gi < 2 ? ' open' : '') + ' style="border:1.5px solid #B8C6E6;border-radius:12px;margin:0 0 10px;background:#fff"><summary style="cursor:pointer;padding:12px;font-weight:800;font-size:14px;color:#fff;background:' + g[2] + ';border-radius:10px;list-style:none;display:flex;justify-content:space-between;gap:8px"><span>' + g[0] + '</span><span style="font-weight:600;font-size:12px;opacity:.9;white-space:nowrap">' + g[1].length + ' fitur</span></summary><ul style="list-style:none;padding:12px 12px 4px;margin:0">' + g[1].map(function(f){ return ck('<b>' + f[0] + '</b><br><span style="color:#556;font-size:12.5px">' + f[1] + '</span>'); }).join('') + '</ul></details>'; }).join('')
       + '<div style="font-weight:800;font-size:14px;color:#0B2A5B;margin:0 0 8px">Pertanyaan yang sering diajukan</div>'
       + qa('Perlu unduh dari Play Store?', '<b>Tidak perlu.</b> Dibuka lewat Chrome, lalu bisa dipasang ke layar utama seperti aplikasi biasa. Sistem baru kami uji di Chrome, jadi browser lain belum kami jamin.')
       + qa('Apakah harus selalu online?', 'Data utama tersimpan di server cloud, dengan salinan di perangkat sebagai cadangan bila koneksi bermasalah. Untuk menyimpan ke cloud tetap perlu internet.')
