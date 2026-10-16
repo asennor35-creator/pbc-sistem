@@ -5188,58 +5188,40 @@ async function cetakKurvaLengkapPdf(){
     const stTxt = bhs==='en' ? (stEn[kd.status.t]||kd.status.t) : kd.status.t;
     const fgS = (function(h){ h=String(h||''); return (h.charAt(0)==='#'&&h.length===7)?[parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]:C.g5; })(kd.status.fg);
     const U7 = PBC_UANG_TERBUKA(), gimg = kurvaLapGambar(periode, dataChart, aktualPct, U7, 'mingguan') || { img:img, rasio:600/1500 };
+    const TT = function(i, e){ return bhs==='en' ? e : i; }, KK = kurvaLap2Data(periode, dataChart, aktualPct, kd, 'Minggu');
+    const pp = function(v){ return v===null||v===undefined ? '-' : (+v.toFixed(1)+'%').replace('.',','); }, sg = function(v){ return v===null ? '-' : ((v>=0?'+':'-')+(+Math.abs(v).toFixed(1)+'').replace('.',',')); };
+    const rpp = function(v){ return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); };
+    /* 4 kartu */
+    { const k4 = kurvaLap2Kartu(KK), n4 = k4.length, g4 = 6, w4 = (c.TW-(n4-1)*g4)/n4; c.pastikan(56);
+      const kt = bhs==='en' ? ['CUMULATIVE PLAN','CUMULATIVE ACTUAL','VARIANCE','REMAINING WORK'] : null;
+      k4.forEach(function(k,i){ const x = c.FX+i*(w4+g4); c.doc.setFillColor(246,248,252); c.doc.roundedRect(x,c.y,w4,46,3,3,'F');
+        const cl = k[3] ? [parseInt(k[3].substr(1,2),16),parseInt(k[3].substr(3,2),16),parseInt(k[3].substr(5,2),16)] : null; c.doc.setFillColor.apply(c.doc, cl||[201,142,18]); c.doc.rect(x,c.y+5,2.5,36,'F');
+        c.doc.setFont('helvetica','bold'); c.doc.setFontSize(7); c.doc.setTextColor(85,85,85); c.doc.text(kt?kt[i]:k[0], x+9, c.y+13);
+        let fs = 16; c.doc.setFontSize(fs); while(fs>8 && c.doc.getTextWidth(String(k[1])) > w4-16){ fs -= .5; c.doc.setFontSize(fs); } const cc = cl||[10,42,90]; c.doc.setTextColor(cc[0],cc[1],cc[2]); c.doc.text(String(k[1]), x+9, c.y+29);
+        if(k[2]){ c.doc.setFont('helvetica','normal'); c.doc.setFontSize(8); c.doc.setTextColor(cl?cc[0]:85,cl?cc[1]:85,cl?cc[2]:85); c.doc.text(String(k[2]), x+9, c.y+40); } });
+      c.y += 56; }
     c.bar(R.kurva);
-    { const gw = c.TW*0.78, gh = gw*gimg.rasio; c.pastikan(gh+6); c.doc.addImage(gimg.img,'PNG',c.FX+(c.TW-gw)/2,c.y,gw,gh); c.y += gh+8; }
-    { const tb = kurvaTabelBaris(periode, dataChart, U7, gt, bhs==='en'?'Weekly':'Mingguan'), N = periode.length, CH = 13;
-      for(let a0=0; a0<N; a0+=CH){
-        const idxs = []; for(let i=a0;i<Math.min(N,a0+CH);i++) idxs.push(i);
-        c.tabel([{l:R.minggu1, w:U7?3.2:2.6, a:'l'}].concat(idxs.map(function(i){ return { l:String(i+1), w:1, a:'r' }; })), tb.map(function(r){ return [r[0]].concat(idxs.map(function(i){ return r[i+1]; })); }), {});
-      } }
-    { const k4 = kurvaKartu4(aktualPct, kd, gt, U7), n4 = k4.length, g4 = 6, w4 = (c.TW-(n4-1)*g4)/n4; c.pastikan(48);
-      k4.forEach(function(k,i){ const x = c.FX+i*(w4+g4); c.doc.setFillColor(241,242,244); c.doc.roundedRect(x,c.y,w4,40,3,3,'F');
-        c.doc.setFont('helvetica','bold'); c.doc.setFontSize(7); c.doc.setTextColor(85,85,85); c.doc.text(k[0], x+8, c.y+12);
-        let fs = 14; c.doc.setFontSize(fs); while(fs>7 && c.doc.getTextWidth(String(k[1])) > w4-14){ fs -= .5; c.doc.setFontSize(fs); } const cl = k[3]||[10,42,90]; c.doc.setTextColor(cl[0],cl[1],cl[2]); c.doc.text(String(k[1]), x+8, c.y+26);
-        if(k[2]){ c.doc.setFont('helvetica','normal'); c.doc.setFontSize(8); c.doc.setTextColor(k[3]?cl[0]:85,k[3]?cl[1]:85,k[3]?cl[2]:85); c.doc.text(String(k[2]), x+8, c.y+36); } });
-      c.y += 50; }
-    /* ringkasan per divisi */
+    { const gw = c.TW*0.52, gh = gw*gimg.rasio; c.pastikan(gh+6); c.doc.addImage(gimg.img,'PNG',c.FX+(c.TW-gw)/2,c.y,gw,gh); c.y += gh+8; }
+    /* analisis + penyebab deviasi */
+    c.pastikan(70); c.bar(TT('ANALISIS PROGRES','PROGRESS ANALYSIS')); c.y += 6;
+    c.teks(KK.analisis.judul, 10, 'bold', (function(h){ return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]; })((KL_TONE[KK.analisis.tone]||KL_TONE.abu)[1]));
+    c.teks(KK.analisis.teks, 9);
+    if(KK.penyebab.length) c.tabel([{l:TT('Pekerjaan','Work item'),w:5,wrap:true},{l:TT('Bobot (%)','Weight (%)'),w:1,a:'r'},{l:TT('Rencana (%)','Plan (%)'),w:1,a:'r'},{l:TT('Realisasi (%)','Actual (%)'),w:1,a:'r'},{l:TT('Deviasi (%)','Variance (%)'),w:1,a:'r'}],
+      KK.penyebab.map(function(i){ return [i.nama, pp(i.bobot), pp(i.plan), pp(i.real), {t:'-'+(+Math.abs(i.dev).toFixed(1)+'').replace('.',','), warna:C.red, b:true}]; }), {title:TT('PEKERJAAN YANG MEMPENGARUHI DEVIASI','WORK ITEMS AFFECTING VARIANCE')});
     c.baru();
-    const hari = kd.hari, sch = getCachedSchedule(), sMap = {}; sch.forEach(function(s){ sMap[s.item.id] = s; });
-    const baris = [];
-    state.divisi.forEach(function(div){
-      const its = state.items.filter(function(i){ return i.divisiId===div.id; }); const tot = its.reduce(function(s,i){ return s+itemTotal(i); },0);
-      if(!its.length || !tot) return;
-      let pl=0, ac=0;
-      its.forEach(function(i){ const s = sMap[i.id]; let fr = 0; if(s && hari!==null){ fr = Math.max(0, Math.min(1,(hari-s.startDay)/Math.max(0.0001,(s.endDay-s.startDay)))); } pl += itemTotal(i)*fr; ac += itemTotal(i)*itemPct(i)/100; });
-      baris.push({ div:div, its:its, bobot:tot/gt*100, plan:pl/tot*100, akt:ac/tot*100 });
-    });
-    c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.divisi,w:4,wrap:true},{l:R.bobot,w:1.2,a:'r'},{l:R.tgtHari,w:1.6,a:'r'},{l:R.akt,w:1.6,a:'r'},{l:R.selisih,w:1.4,a:'r'},{l:R.prog,w:3}],
-      baris.map(function(b,i){ const sel = b.akt-b.plan; return [String(i+1), pbcNamaTampil(b.div.id,b.div.nama), b.bobot.toFixed(2), b.plan.toFixed(1)+'%', b.akt.toFixed(1)+'%',
-        {t:(sel>=0?'+':'')+sel.toFixed(1), warna:sel>=-0.05?C.teal:C.red, b:true}, {pct:b.akt, warna:b.akt>=b.plan-0.05?C.teal:C.gold}]; }), {title:R.ringkasDiv});
-    /* status tiap item */
-    let no = 0; const rows = [];
-    baris.forEach(function(b){
-      rows.push({_grp: pbcNamaTampil(b.div.id,b.div.nama)});
-      b.its.forEach(function(i){
-        no++; const s = sMap[i.id], p = itemPct(i); let st = R.stBelum, wr = C.g5;
-        if(p>=99.95){ st = R.stSelesai; wr = C.teal; }
-        else if(hari!==null && s && hari>=s.endDay){ st = R.stTelat; wr = C.red; }
-        else if(p>0){ st = R.stJalan; wr = C.gold; }
-        rows.push([String(no), pbcNamaTampil(i.id,i.nama), (s?s.bobotTotal:itemTotal(i)/gt*100).toFixed(2), s?pbcLapTgl(mulai,s.startDay,bhs):'-', s?pbcLapTgl(mulai,s.endDay-1,bhs):'-', {pct:p, warna:p>=99.95?C.teal:C.gold}, {t:st, warna:wr, b:true}]);
-      });
-      rows.push({_sub:true, cells:['', R.subDiv+' — '+pbcNamaTampil(b.div.id,b.div.nama), b.bobot.toFixed(2), '', '', {pct:b.akt, warna:C.teal}, '']});
-    });
-    c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.uraian,w:5,wrap:true},{l:R.bobot,w:1,a:'r'},{l:R.mulaiK,w:1.5,a:'c'},{l:R.selesaiK,w:1.5,a:'c'},{l:R.prog,w:2.4},{l:R.status,w:1.4,a:'c'}], rows, {title:R.statusItem});
-    /* rekap mingguan */
-    const aktSeri = kurvaAktualSeries(periode, dataChart);
-    const wk = periode.map(function(pp,i){ const awal = i>0?periode[i-1].akhirHari+1:0, a = aktSeri[i];
-      return [pp.label.replace('Minggu',R.minggu1), pbcLapTgl(mulai,awal,bhs)+' – '+pbcLapTgl(mulai,pp.akhirHari,bhs), dataChart[i].bobot.toFixed(2)+'%', dataChart[i].rencana.toFixed(1)+'%', a===null?'-':a.toFixed(1)+'%',
-        a===null?'-':{t:((a-dataChart[i].rencana>=0?'+':'')+(a-dataChart[i].rencana).toFixed(1)+' '+R.poin), warna:a-dataChart[i].rencana>=0?C.teal:C.red, b:true}]; });
-    c.tabel([{l:R.minggu1,w:1,a:'l'},{l:R.rentang,w:3},{l:R.rcPer,w:1.5,a:'r'},{l:R.rcKum,w:1.5,a:'r'},{l:R.akKum,w:1.5,a:'r'},{l:R.deviasi,w:1.5,a:'r'}], wk, {title:R.rekapMg});
-    /* catatan */
-    let cat = (bhs==='en'?'As of ':'Per ')+pbcLapTgl(today(),0,bhs)+(bhs==='en'?', physical progress reached ':', progres fisik terpasang mencapai ')+aktualPct.toFixed(1)+'%'+(bhs==='en'?' of the total scope':' dari seluruh lingkup pekerjaan');
-    if(kd.plan!==null && kd.hari>=0) cat += (bhs==='en'?', against a planned '+kd.plan.toFixed(1)+'% today (variance '+(kd.dev>=0?'+':'')+kd.dev.toFixed(1)+' pts, status: '+stTxt+').':', sedangkan target jadwal hari ini '+kd.plan.toFixed(1)+'% (deviasi '+(kd.dev>=0?'+':'')+kd.dev.toFixed(1)+' poin, status: '+stTxt+').'); else cat += '.';
-    if(kd.proyeksi!=='—' && kd.proyeksi!=='Selesai') cat += (bhs==='en'?' At the current pace the projected completion is ':' Dengan laju saat ini, proyeksi penyelesaian adalah ')+kd.proyeksi+'.';
-    c.pastikan(40); c.bar(R.catatan); c.y += 6; c.teks(cat, 9);
+    /* tabel progres mingguan */
+    { const cols = [{l:R.minggu1,w:1,a:'c'},{l:TT('Rencana (%)','Plan (%)'),w:1.3,a:'r'},{l:TT('Realisasi (%)','Actual (%)'),w:1.3,a:'r'},{l:TT('Rencana Kum. (%)','Cum. Plan (%)'),w:1.5,a:'r'},{l:TT('Realisasi Kum. (%)','Cum. Actual (%)'),w:1.6,a:'r'},{l:TT('Deviasi (%)','Variance (%)'),w:1.3,a:'r'}]
+        .concat(U7 ? [{l:TT('Nilai Rencana (Rp)','Planned Value (Rp)'),w:2,a:'r'},{l:TT('Nilai Realisasi (Rp)','Actual Value (Rp)'),w:2,a:'r'}] : []);
+      c.tabel(cols, KK.rows.map(function(r){ const dv = r.dev===null ? '-' : {t:sg(r.dev), warna:r.dev>=0?C.teal:C.red, b:true};
+        return { _sub: r.sekarang, cells:[r.label, pp(r.renD), pp(r.aktD), pp(r.kumR), pp(r.kumA), dv].concat(U7 ? [rpp(r.nilaiR), r.nilaiA===null?'-':rpp(r.nilaiA)] : []) }; }),
+        {title: TT('TABEL PROGRES MINGGUAN','WEEKLY PROGRESS TABLE')}); }
+    /* ringkasan per divisi */
+    { const drows = KK.divisi.map(function(d,i){ const col = d.dev>=-0.5 ? C.teal : (d.dev>=-7 ? C.gold : C.red); return [String(i+1), d.nama, pp(d.bobot), pp(d.plan), pp(d.real), {t:sg(d.dev), warna:d.dev>=0?C.teal:C.red, b:true}, {t:d.status, warna:col, b:true}]; });
+      drows.push({ _sub:true, cells:['', 'TOTAL', pp(KK.divisi.reduce(function(a,d){ return a+d.bobot; },0)), KK.plan===null?'-':pp(KK.plan), pp(KK.aktualPct), KK.dev===null?'-':sg(KK.dev), ''] });
+      c.tabel([{l:R.no,w:.5,a:'c'},{l:R.divisi,w:4,wrap:true},{l:TT('Bobot (%)','Weight (%)'),w:1.2,a:'r'},{l:TT('Rencana (%)','Plan (%)'),w:1.3,a:'r'},{l:TT('Realisasi (%)','Actual (%)'),w:1.3,a:'r'},{l:TT('Deviasi (%)','Variance (%)'),w:1.3,a:'r'},{l:'Status',w:2,a:'c'}], drows, {title:TT('RINGKASAN PROGRES PER DIVISI','PROGRESS SUMMARY BY DIVISION')}); }
+    c.pastikan(30); c.doc.setFont('helvetica','normal'); c.doc.setFontSize(8); const okc = KK.cek.ok; c.doc.setTextColor(okc?26:192, okc?140:57, okc?122:43);
+    c.doc.splitTextToSize(okc ? TT('Terverifikasi dari BOQ: total bobot '+pp(KK.cek.sumBobot)+', '+KK.cek.nItem+' item di '+KK.cek.nDivisi+' divisi, total rencana seluruh periode = 100%, total nilai divisi = nilai kontrak.', 'Verified against BOQ: total weight '+pp(KK.cek.sumBobot)+', '+KK.cek.nItem+' items in '+KK.cek.nDivisi+' divisions, total plan = 100%, total division value = contract value.') : TT('Periksa data BOQ: ','Check BOQ data: ')+KK.cek.gagal.join('; ')+'.', c.TW).forEach(function(l){ c.doc.text(l, c.FX, c.y+9); c.y += 11; });
+    c.y += 8;
     c.ttd(R.dibuat, 'PT Pratama Build & Construction', R.mengetahui, state.proyek.owner||R.pemilik);
     c.selesai('Laporan_KurvaS');
     notif(bhs==='en'?'S-Curve PDF created':'PDF Kurva S berhasil dibuat');
@@ -9498,7 +9480,8 @@ function renderChartSCurve(){
   canvas.parentNode.style.height = (window.innerWidth<600 ? 360 : 460)+'px';
   if(_chartSCurveInstance) _chartSCurveInstance.destroy();
   _chartSCurveInstance = new Chart(canvas.getContext('2d'), built.config);
-  dashHosts(['', kurvaLapTabelHtml(periode, dataChart), kurvaLapKpiHtml(aktualPct)]);
+  const K2 = kurvaLap2Data(periode, dataChart, aktualPct);
+  dashHosts([kurvaLap2KartuHtml(K2), kurvaLap2TabelHtml(K2)+kurvaLap2AnalisisHtml(K2)+kurvaLap2DivisiHtml(K2), kurvaLap2CekHtml(K2)]);
 }
 function renderChartAlokasiBiaya(){
   const canvas = document.getElementById('chartAlokasiBiaya');
@@ -12665,7 +12648,8 @@ function renderOwnerPortal(){
     + '</div><div class="op-note" style="margin-top:12px"><b>Ringkasan '+D.lblIni+'.</b> '+pbcEsc(D.ringkasan)+'</div></div>';
   /* 2. kurva */
   const kx = pbcOwnerKurvaImg(D);
-  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? '<img src="'+kx.img+'" style="width:100%;height:auto;display:block">'+'<div class="op-tw">'+(D.mode==='mingguan' ? kurvaLapTabelHtml(kx.periode, kx.dataChart, !D.uang) : pbcOpTabelPeriode(D, kx))+'</div>'+pbcOpKartu4Html(D) : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
+  const KK = kx ? kurvaLap2Data(kx.periode, kx.dataChart, D.aktualPct, D.kd, D.mode==='harian'?'Tanggal':(D.mode==='bulanan'?'Bulan':'Minggu')) : null;
+  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? kurvaLap2KartuHtml(KK)+'<img src="'+kx.img+'" style="width:100%;height:auto;display:block">'+kurvaLap2TabelHtml(KK)+kurvaLap2AnalisisHtml(KK)+kurvaLap2DivisiHtml(KK)+kurvaLap2CekHtml(KK) : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
   if(D.sec.boq){
     /* rekap per minggu (bulanan) */
   if(D.sec.rekap){
@@ -12908,7 +12892,7 @@ async function exportOwnerPortalPdf(){
     const cards = [['RENCANA KUMULATIF', kd&&kd.plan!==null?P1(kd.plan):'-', U&&kd&&kd.plan!==null?pbcRpPdf(kd.plan*D.gt/100):'target hari ini', null],
       ['REALISASI KUMULATIF', P1(D.aktualPct), U?pbcRpPdf(D.aktualPct*D.gt/100):'terpasang di lapangan', null],
       ['DEVIASI', kd&&kd.dev!==null?sgn(kd.dev):'-', U&&kd&&kd.dev!==null?((kd.dev>=0?'+':'-')+pbcRpPdf(Math.abs(kd.dev)*D.gt/100)):'terhadap rencana', kd&&kd.dev!==null&&kd.dev<0?[192,57,43]:[26,140,122]],
-      ['STATUS JADWAL', kd?kd.status.t:'-', kd&&kd.spi!==null?('SPI '+kd.spi.toFixed(2).replace('.',',')):'', kd?pbcHexRgb2(kd.status.fg):null]];
+      ['SISA PEKERJAAN', P1(Math.max(0,100-D.aktualPct)), U?pbcRpPdf(Math.max(0,100-D.aktualPct)*D.gt/100):'belum terpasang', null]];
     const cw = (W-24-9)/4;
     cards.forEach(function(c,i){ const x = 12+i*(cw+3); doc.setFillColor(246,248,252); doc.roundedRect(x,y,cw,18,2,2,'F'); doc.setFillColor.apply(doc, c[3]||PDF.gold); doc.rect(x,y+2,1.2,14,'F');
       set(6.5,false,PDF.gray); doc.text(c[0], x+4, y+5); let fs = 12; set(fs,true,c[3]||NAV); while(fs>6.5 && doc.getTextWidth(String(c[1])) > cw-7){ fs -= .5; doc.setFontSize(fs); } doc.text(String(c[1]), x+4, y+11.5);
@@ -12919,28 +12903,31 @@ async function exportOwnerPortalPdf(){
     y = pdfSectionTitle(doc, y+2, sn()+'. Kurva S - '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu'));
     if(kx){
       const ih = 186*kx.rasio; doc.addImage(kx.img,'PNG',12,y-2,186,ih); y += ih+3;
-      const per = kx.periode, dc = kx.dataChart, N = per.length, CH = D.mode==='harian' ? 14 : 12;
-      for(let a=0; a<N; a+=CH){
-        const idxs = []; for(let i=a;i<Math.min(N,a+CH);i++) idxs.push(i);
-        const cols = [{label: D.mode==='harian'?'Tanggal':(D.mode==='bulanan'?'Bulan':'Minggu ke-'), w:2.6}].concat(idxs.map(function(i){ return { label: D.mode==='mingguan' ? String(i+1) : String(per[i].label).replace(/\.$/,''), w:1, align:'right' }; }));
-        const rows = [];
-        const delta = function(arr,i){ return Math.max(0, (arr[i]||0)-(i>0?(arr[i-1]||0):0)); };
-        const akt = kurvaAktualSeries(per, dc);
-        const aktD = akt.map(function(v,i){ if(v===null) return null; let pr = 0; for(let k=i-1;k>=0;k--){ if(akt[k]!==null){ pr = akt[k]; break; } } return Math.max(0,v-pr); });
-        const renD = dc.map(function(d,i){ return Math.max(0, d.rencana-(i>0?dc[i-1].rencana:0)); });
-        if(U){ rows.push(['Rencana (Rp jt)'].concat(idxs.map(function(i){ return String(+(renD[i]*D.gt/100/1e6).toFixed(1)).replace('.',','); })));
-               rows.push(['Realisasi (Rp jt)'].concat(idxs.map(function(i){ return aktD[i]===null?'-':String(+(aktD[i]*D.gt/100/1e6).toFixed(1)).replace('.',','); }))); }
-        else { rows.push(['Rencana (%)'].concat(idxs.map(function(i){ return String(+renD[i].toFixed(1)).replace('.',','); })));
-               rows.push(['Realisasi (%)'].concat(idxs.map(function(i){ return aktD[i]===null?'-':String(+aktD[i].toFixed(1)).replace('.',','); }))); }
-        rows.push(['Kum. Rencana'].concat(idxs.map(function(i){ return Math.round(dc[i].rencana)+'%'; })));
-        rows.push(['Kum. Realisasi'].concat(idxs.map(function(i){ return akt[i]===null?'-':Math.round(akt[i])+'%'; })));
-        y = pdfTable(doc, perlu(y, 34), cols, rows, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
+      const KK = kurvaLap2Data(kx.periode, kx.dataChart, D.aktualPct, kd, D.mode==='harian'?'Tanggal':(D.mode==='bulanan'?'Bulan':'Minggu'));
+      const pp = function(v){ return v===null||v===undefined ? '-' : P1(v); };
+      const tcol = [{label:KK.unit, w:1.1}, {label:'Rencana', w:1.2, align:'right'}, {label:'Realisasi', w:1.2, align:'right'}, {label:'Rencana Kum.', w:1.4, align:'right'}, {label:'Realisasi Kum.', w:1.5, align:'right'}, {label:'Deviasi', w:1.2, align:'right'}]
+        .concat(U ? [{label:'Nilai Rencana (Rp)', w:2, align:'right'}, {label:'Nilai Realisasi (Rp)', w:2, align:'right'}] : []);
+      y = perlu(y, 30); set(9,true,NAV); doc.text('TABEL PROGRES '+(KK.unit==='Tanggal'?'HARIAN':(KK.unit==='Bulan'?'BULANAN':'MINGGUAN')), 12, y); y += 3;
+      y = pdfTable(doc, y, tcol, KK.rows.map(function(r){ return [r.label, pp(r.renD), pp(r.aktD), pp(r.kumR), pp(r.kumA), r.dev===null?'-':((r.dev>=0?'+':'-')+P1(Math.abs(r.dev)).replace('%',''))]
+        .concat(U ? [String(Math.round(r.nilaiR)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'), r.nilaiA===null?'-':String(Math.round(r.nilaiA)).replace(/\B(?=(\d{3})+(?!\d))/g,'.')] : []); }),
+        {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, fontSize:7, rowFn:function(row, ri){ return KK.rows[ri].sekarang ? {fill:[255,243,209], bold:true} : null; }}) + 5;
+      const tn = KL_TONE[KK.analisis.tone] || KL_TONE.abu, tcol3 = pbcHexRgb2(tn[1]);
+      y = perlu(y, 40); set(9,true,NAV); doc.text('ANALISIS PROGRES', 12, y); y += 3;
+      set(10,true,tcol3); const jl = KK.analisis.judul, tl = doc.splitTextToSize(KK.analisis.teks, W-24-8); const hb = 9+tl.length*4.4;
+      doc.setFillColor.apply(doc, pbcHexRgb2(tn[0])); doc.roundedRect(12,y,W-24,hb,2,2,'F'); set(9.5,true,tcol3); doc.text(jl, 16, y+5.5); set(8.5,false,PDF.dark); doc.text(tl, 16, y+10.5); y += hb+5;
+      if(KK.penyebab.length){
+        y = perlu(y, 30); set(9,true,NAV); doc.text('PEKERJAAN YANG MEMPENGARUHI DEVIASI', 12, y); y += 3;
+        y = pdfTable(doc, y, [{label:'Pekerjaan',w:4},{label:'Bobot',w:1,align:'right'},{label:'Rencana',w:1,align:'right'},{label:'Realisasi',w:1,align:'right'},{label:'Deviasi',w:1,align:'right'}],
+          KK.penyebab.map(function(i){ return [i.nama, P1(i.bobot), P1(i.plan), P1(i.real), '-'+P1(Math.abs(i.dev)).replace('%','')]; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 5;
       }
-      const k4 = kurvaKartu4(D.aktualPct, kd, D.gt, U), n4 = k4.length, w4 = (W-24-(n4-1)*3)/n4;
-      y = perlu(y, 22);
-      k4.forEach(function(c,i){ const x = 12+i*(w4+3); doc.setFillColor(241,242,244); doc.roundedRect(x,y,w4,19,2,2,'F');
-        set(6.5,true,PDF.gray); doc.text(c[0], x+3, y+5); let fs = 11; set(fs,true,c[3]||NAV); while(fs>6.5 && doc.getTextWidth(String(c[1])) > w4-6){ fs -= .5; doc.setFontSize(fs); } doc.text(String(c[1]), x+3, y+11.5);
-        if(c[2]){ set(6.5,false,c[3]||PDF.dark); doc.text(String(c[2]), x+3, y+16); } });
+      if(KK.divisi.length){
+        y = perlu(y, 40); set(9,true,NAV); doc.text('RINGKASAN PROGRES PER DIVISI', 12, y); y += 3;
+        const drows = KK.divisi.map(function(d,i){ return [String(i+1), d.nama, P1(d.bobot), P1(d.plan), P1(d.real), (d.dev>=0?'+':'-')+P1(Math.abs(d.dev)).replace('%',''), d.status]; });
+        drows.push(['', 'TOTAL', P1(KK.divisi.reduce(function(a,d){ return a+d.bobot; },0)), KK.plan===null?'-':P1(KK.plan), P1(KK.aktualPct), KK.dev===null?'-':((KK.dev>=0?'+':'-')+P1(Math.abs(KK.dev)).replace('%','')), '']);
+        y = pdfTable(doc, y, [{label:'No.',w:.5},{label:'Divisi',w:3.5},{label:'Bobot',w:1,align:'right'},{label:'Rencana',w:1,align:'right'},{label:'Realisasi',w:1,align:'right'},{label:'Deviasi',w:1,align:'right'},{label:'Status',w:1.8}], drows,
+          {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, rowFn:function(row, ri){ return ri===drows.length-1 ? {fill:[255,248,225], bold:true} : null; }}) + 3;
+      }
+      set(7.5,false, KK.cek.ok ? [26,140,122] : [192,57,43]); const cl = doc.splitTextToSize(KK.cek.ok ? ('Terverifikasi dari BOQ: total bobot '+P1(KK.cek.sumBobot)+', '+KK.cek.nItem+' item di '+KK.cek.nDivisi+' divisi, total rencana seluruh periode = 100%, total nilai divisi = nilai kontrak.') : ('Periksa data BOQ: '+KK.cek.gagal.join('; ')+'.'), W-24); y = perlu(y, 10); doc.text(cl, 12, y); y += cl.length*3.6+2;
       y += 24;
     } else { set(9,false,PDF.gray); doc.text('Belum ada data Kurva S (isi tanggal mulai dan BOQ).', 12, y+4); y += 10; }
 
@@ -13901,6 +13888,125 @@ function kurvaLaporanConfig(periode, dataChart, aktualPct, paksaLebar){
   cfg.plugins.push(kurvaEndLabels);
   return built;
 }
+/* ===== T21: Laporan Kurva S bentuk baru — SATU sumber data untuk layar Kurva S, Dashboard, Owner Portal & PDF ===== */
+function kurvaLap2Data(periode, dataChart, aktualPct, kdOv, unitOv){
+  const gt = grandTotal(), uang = PBC_UANG_TERBUKA();
+  const kd = kdOv || kurvaKpiData(aktualPct);
+  const S = kurvaSeriesRp(periode, dataChart), hari = kurvaHariIni();
+  let cur = -1; periode.forEach(function(p,i){ if(cur<0 && hari!==null && hari>=0 && p.akhirHari>=hari) cur = i; });
+  const num = function(l){ l = String(l); return /\d+/.test(l) ? l.replace(/^\D+/,'').replace(/\.$/,'') : l.replace(/\.$/,''); };
+  const rows = dataChart.map(function(d,i){
+    const renD = Math.max(0, d.rencana-(i>0?dataChart[i-1].rencana:0)), a = S.aktual[i];
+    return { label: (unitOv==='Tanggal'||unitOv==='Bulan') ? String(d.label).replace(/\.$/,'') : num(d.label), renD:renD, aktD: S.realRp[i]===null ? null : S.realRp[i]/gt*100, kumR:d.rencana, kumA:a, dev: a===null ? null : a-d.rencana,
+             nilaiR: S.rencanaRp[i], nilaiA: S.realRp[i], sekarang: i===cur };
+  });
+  /* divisi + penyebab deviasi (dari BOQ & jadwal nyata) */
+  const sch = getCachedSchedule(), sMap = {}; sch.forEach(function(s){ sMap[s.item.id] = s; });
+  const divisi = [], items = [];
+  state.divisi.forEach(function(dv){
+    const its = state.items.filter(function(i){ return i.divisiId===dv.id; }), tot = its.reduce(function(a,i){ return a+itemTotal(i); },0);
+    if(!tot) return;
+    let pl = 0, ac = 0;
+    its.forEach(function(i){
+      const s = sMap[i.id]; let fr = 0; if(s && hari!==null){ fr = Math.max(0, Math.min(1,(hari-s.startDay)/Math.max(0.0001,(s.endDay-s.startDay)))); }
+      pl += itemTotal(i)*fr; ac += itemTotal(i)*itemPct(i)/100;
+      items.push({ nama:i.nama, div:dv.nama, bobot: gt ? itemTotal(i)/gt*100 : 0, plan:fr*100, real:itemPct(i) });
+    });
+    const p = pl/tot*100, a = ac/tot*100, dev = a-p;
+    divisi.push({ nama: dv.nama.replace(/^[IVXLC]+\.\s*/,''), nilai:tot, bobot: gt ? tot/gt*100 : 0, plan:p, real:a, dev:dev,
+      status: dev>0.5 ? 'Lebih Cepat' : (dev>=-0.5 ? 'Sesuai' : (dev>=-7 ? 'Sedikit Tertinggal' : 'Tertinggal')) });
+  });
+  const penyebab = items.filter(function(i){ return (i.real-i.plan) < -0.05; }).map(function(i){ return Object.assign({}, i, { dev: i.real-i.plan, kontribusi:(i.real-i.plan)*i.bobot/100 }); })
+    .sort(function(a,b){ return a.kontribusi-b.kontribusi; }).slice(0,3);
+  /* analisis otomatis */
+  const plan = kd ? kd.plan : null, dev = kd ? kd.dev : null;
+  let judul = 'Belum ada data jadwal', teks = 'Isi tanggal mulai proyek dan BOQ agar analisis dapat dihitung.', tone = 'abu';
+  if(plan!==null && dev!==null){
+    const spi = plan>0 ? aktualPct/plan : null, a1 = Math.abs(dev).toFixed(1).replace('.',',');
+    const lagging = divisi.filter(function(d){ return d.dev < -0.5; }).sort(function(a,b){ return a.dev-b.dev; }).slice(0,2).map(function(d){ return d.nama; });
+    if(plan<=0){ judul = 'Proyek belum memasuki jadwal pekerjaan'; teks = 'Rencana kumulatif saat ini 0%. Realisasi akan dibandingkan begitu pekerjaan pertama dijadwalkan.'; tone = 'biru'; }
+    else if(dev>=0){ judul = 'Proyek sesuai / lebih cepat dari rencana'; teks = 'Realisasi proyek berada '+a1+' poin persentase di atas rencana. Pertahankan ritme kerja saat ini.'; tone = 'hijau'; }
+    else { judul = spi>=0.9 ? 'Proyek sedikit terlambat dari rencana' : 'Proyek terlambat dari rencana'; tone = spi>=0.9 ? 'kuning' : 'merah';
+      teks = 'Realisasi proyek berada '+a1+' poin persentase di bawah rencana.'+(lagging.length ? ' Disarankan mempercepat pekerjaan pada divisi '+lagging.join(' dan ')+' yang masih tertinggal dari jadwal.' : ''); }
+  }
+  /* verifikasi: angka laporan harus cocok dengan BOQ & jadwal */
+  const am = agregasiMingguan(), gagal = [];
+  const sumBobot = state.items.reduce(function(a,i){ return a+(gt ? itemTotal(i)/gt*100 : 0); },0);
+  if(Math.abs(sumBobot-100) > 0.05) gagal.push('total bobot item '+sumBobot.toFixed(2)+'% (seharusnya 100%)');
+  const sumRen = am.reduce(function(a,r){ return a+r.bobot; },0);
+  if(am.length && Math.abs(sumRen-100) > 0.1) gagal.push('total rencana seluruh minggu '+sumRen.toFixed(2)+'% (seharusnya 100%)');
+  const sumDiv = divisi.reduce(function(a,d){ return a+d.nilai; },0);
+  if(Math.abs(sumDiv-gt) > 1) gagal.push('total nilai divisi tidak sama dengan nilai kontrak');
+  const nTanpaDiv = state.items.filter(function(i){ return !state.divisi.some(function(d){ return d.id===i.divisiId; }); }).length;
+  if(nTanpaDiv) gagal.push(nTanpaDiv+' item BOQ tanpa divisi');
+  const cek = { ok: !gagal.length && gt>0, gagal:gagal, nItem: state.items.length, nDivisi: divisi.length, sumBobot:sumBobot };
+  return { uang:uang, gt:gt, aktualPct:aktualPct, kd:kd, plan:plan, dev:dev, sisa: Math.max(0,100-aktualPct), rows:rows, divisi:divisi, penyebab:penyebab, analisis:{ judul:judul, teks:teks, tone:tone }, cek:cek,
+           unit: unitOv || (kurvaUnitPeriode()==='Hari' ? 'Tanggal' : kurvaUnitPeriode()) };
+}
+const KL_TONE = { hijau:['#E4F4F0','#1A8C7A'], kuning:['#FFF3D6','#96650F'], merah:['#FCE4E4','#C0392B'], biru:['#E7EEFC','#1E50B4'], abu:['#EEF0F4','#5A6275'] };
+const KL_CHIP = { 'Lebih Cepat':['#E4F4F0','#1A8C7A'], 'Sesuai':['#E4F4F0','#1A8C7A'], 'Sedikit Tertinggal':['#FFF3D6','#96650F'], 'Tertinggal':['#FCE4E4','#C0392B'] };
+function kurvaLap2P(v){ return String(+(v||0).toFixed(1)).replace('.',',')+'%'; }
+function kurvaLap2Rp(v){ return 'Rp '+String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+function kurvaLap2Kartu(K){
+  const out = [];
+  out.push(['RENCANA KUMULATIF', K.plan===null ? '-' : kurvaLap2P(K.plan), (K.uang && K.plan!==null) ? kurvaLap2Rp(K.plan*K.gt/100) : 'dari total pekerjaan', null]);
+  out.push(['REALISASI KUMULATIF', kurvaLap2P(K.aktualPct), K.uang ? kurvaLap2Rp(K.aktualPct*K.gt/100) : 'terpasang di lapangan', null]);
+  out.push(['DEVIASI', K.dev===null ? '-' : ((K.dev>=0?'+':'-')+kurvaLap2P(Math.abs(K.dev))), (K.uang && K.dev!==null) ? ((K.dev>=0?'+':'-')+kurvaLap2Rp(Math.abs(K.dev)*K.gt/100)) : 'terhadap rencana', K.dev===null ? null : (K.dev>=0 ? '#1A8C7A' : '#C0392B')]);
+  out.push(['SISA PEKERJAAN', kurvaLap2P(K.sisa), K.uang ? kurvaLap2Rp(K.sisa*K.gt/100) : 'belum terpasang', null]);
+  return out;
+}
+function kurvaLap2KartuHtml(K){
+  return '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px">'+kurvaLap2Kartu(K).map(function(c){
+    const col = c[3] || '#0E2A5A';
+    return '<div style="flex:1 1 150px;background:#fff;border:1px solid #e3e6ee;border-left:4px solid '+(c[3]||'#B8923A')+';border-radius:8px;padding:12px 14px;color:#1a1d24"><div style="font:600 10.5px Arial,sans-serif;letter-spacing:.5px;color:#5a6275">'+c[0]+'</div><div style="font:800 26px Arial,sans-serif;color:'+col+';line-height:1.25">'+pbcEsc(c[1])+'</div><div style="font:12.5px Arial,sans-serif;color:'+(c[3]||'#2b3345')+'">'+pbcEsc(c[2])+'</div></div>';
+  }).join('')+'</div>';
+}
+function kurvaLap2TabelHtml(K){
+  const th = 'background:#0E2A5A;color:#fff;padding:7px 8px;font-weight:700;text-align:center;white-space:nowrap;border:1px solid #0a1f45;position:sticky;top:0;z-index:2';
+  const td = 'padding:6px 8px;text-align:center;white-space:nowrap;border:1px solid #d9dce3;color:#1a1d24';
+  const p = function(v){ return v===null||v===undefined ? '-' : kurvaLap2P(v); };
+  let h = '<div style="margin-top:16px;font:800 13px Arial,sans-serif;letter-spacing:.4px;color:#fff;background:#0E2A5A;padding:8px 12px;border-radius:6px 6px 0 0">TABEL PROGRES '+pbcEsc(K.unit==='Tanggal'?'HARIAN':(K.unit==='Bulan'?'BULANAN':'MINGGUAN'))+'</div>'
+    + '<div style="overflow:auto;max-height:430px;border:1px solid #d9dce3"><table style="border-collapse:collapse;font:12px Arial,sans-serif;min-width:100%"><thead><tr>'
+    + '<th style="'+th+';left:0;z-index:3">'+pbcEsc(K.unit)+'</th><th style="'+th+'">Rencana (%)</th><th style="'+th+'">Realisasi (%)</th><th style="'+th+'">Rencana Kum. (%)</th><th style="'+th+'">Realisasi Kum. (%)</th><th style="'+th+'">Deviasi (%)</th>'
+    + (K.uang ? '<th style="'+th+'">Nilai Rencana (Rp)</th><th style="'+th+'">Nilai Realisasi (Rp)</th>' : '')+'</tr></thead><tbody>';
+  K.rows.forEach(function(r){
+    const bg = r.sekarang ? '#FFF3D1' : '#fff', dc = r.dev===null ? '#1a1d24' : (r.dev>=0 ? '#1A8C7A' : '#C0392B');
+    h += '<tr style="background:'+bg+(r.sekarang?';font-weight:700':'')+'"><td style="'+td+';font-weight:700;position:sticky;left:0;background:'+bg+'">'+pbcEsc(r.label)+'</td><td style="'+td+'">'+p(r.renD)+'</td><td style="'+td+'">'+p(r.aktD)+'</td><td style="'+td+'">'+p(r.kumR)+'</td><td style="'+td+'">'+p(r.kumA)+'</td>'
+      + '<td style="'+td+';color:'+dc+';font-weight:700">'+(r.dev===null?'-':((r.dev>=0?'+':'-')+kurvaLap2P(Math.abs(r.dev)).replace('%','')))+'</td>'
+      + (K.uang ? '<td style="'+td+'">'+kurvaLap2Rp(r.nilaiR).replace('Rp ','')+'</td><td style="'+td+'">'+(r.nilaiA===null?'-':kurvaLap2Rp(r.nilaiA).replace('Rp ',''))+'</td>' : '')+'</tr>';
+  });
+  return h+'</tbody></table></div>';
+}
+function kurvaLap2AnalisisHtml(K){
+  const t = KL_TONE[K.analisis.tone] || KL_TONE.abu, A = K.analisis;
+  let h = '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:16px"><div style="flex:1 1 280px"><div style="font:800 13px Arial,sans-serif;letter-spacing:.4px;color:#fff;background:#0E2A5A;padding:8px 12px;border-radius:6px 6px 0 0">ANALISIS PROGRES</div>'
+    + '<div style="background:'+t[0]+';border:1px solid '+t[1]+'33;border-top:0;padding:12px 14px;border-radius:0 0 6px 6px"><div style="font:800 14px Arial,sans-serif;color:'+t[1]+'">'+pbcEsc(A.judul)+'</div><div style="font:13px/1.55 Arial,sans-serif;color:#2b3345;margin-top:4px">'+pbcEsc(A.teks)+'</div></div></div>';
+  h += '<div style="flex:1 1 320px"><div style="font:800 13px Arial,sans-serif;letter-spacing:.4px;color:#fff;background:#0E2A5A;padding:8px 12px;border-radius:6px 6px 0 0">PEKERJAAN YANG MEMPENGARUHI DEVIASI</div>'
+    + (K.penyebab.length ? '<div style="overflow-x:auto"><table style="border-collapse:collapse;font:12px Arial,sans-serif;width:100%"><thead><tr style="background:#f1f2f4"><th style="padding:6px 8px;text-align:left">Pekerjaan</th><th style="padding:6px 8px">Bobot</th><th style="padding:6px 8px">Rencana</th><th style="padding:6px 8px">Realisasi</th><th style="padding:6px 8px">Deviasi</th></tr></thead><tbody>'
+      + K.penyebab.map(function(i){ return '<tr><td style="padding:6px 8px;border-bottom:1px solid #e3e6ee">'+pbcEsc(i.nama)+'</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee">'+kurvaLap2P(i.bobot)+'</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee">'+kurvaLap2P(i.plan)+'</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee">'+kurvaLap2P(i.real)+'</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee;color:#C0392B;font-weight:700">-'+kurvaLap2P(Math.abs(i.dev)).replace('%','')+'</td></tr>'; }).join('')
+      + '</tbody></table></div>' : '<div style="padding:12px 14px;font:13px Arial,sans-serif;color:#1A8C7A;border:1px solid #e3e6ee;border-top:0">Tidak ada pekerjaan yang tertinggal dari jadwal.</div>')
+    + '</div></div>';
+  return h;
+}
+function kurvaLap2DivisiHtml(K){
+  if(!K.divisi.length) return '';
+  let h = '<div style="margin-top:16px;font:800 13px Arial,sans-serif;letter-spacing:.4px;color:#fff;background:#0E2A5A;padding:8px 12px;border-radius:6px 6px 0 0">RINGKASAN PROGRES PER DIVISI</div><div style="overflow-x:auto;border:1px solid #d9dce3"><table style="border-collapse:collapse;font:12px Arial,sans-serif;min-width:100%"><thead><tr style="background:#f1f2f4"><th style="padding:7px 8px">No.</th><th style="padding:7px 8px;text-align:left">Divisi</th><th style="padding:7px 8px">Bobot (%)</th><th style="padding:7px 8px">Rencana (%)</th><th style="padding:7px 8px">Realisasi (%)</th><th style="padding:7px 8px">Deviasi (%)</th><th style="padding:7px 8px">Status</th></tr></thead><tbody>';
+  K.divisi.forEach(function(d,i){
+    const c = KL_CHIP[d.status] || KL_CHIP['Sesuai'], dc = d.dev>=0 ? '#1A8C7A' : '#C0392B';
+    h += '<tr><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee">'+(i+1)+'</td><td style="padding:6px 8px;border-bottom:1px solid #e3e6ee">'+pbcEsc(d.nama)+'<div style="display:flex;gap:3px;margin-top:4px"><span style="flex:'+Math.max(1,d.plan)+';max-width:'+Math.max(1,d.plan)+'%;height:5px;border-radius:3px;background:#9DB2D6"></span></div><div style="display:flex;gap:3px;margin-top:2px"><span style="flex:'+Math.max(1,d.real)+';max-width:'+Math.max(1,d.real)+'%;height:5px;border-radius:3px;background:#B8923A"></span></div></td>'
+      + '<td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee">'+kurvaLap2P(d.bobot)+'</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee">'+kurvaLap2P(d.plan)+'</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee">'+kurvaLap2P(d.real)+'</td>'
+      + '<td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee;color:'+dc+';font-weight:700">'+(d.dev>=0?'+':'-')+kurvaLap2P(Math.abs(d.dev)).replace('%','')+'</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e3e6ee"><span style="background:'+c[0]+';color:'+c[1]+';padding:2px 9px;border-radius:9px;font-size:11px;font-weight:700;white-space:nowrap">'+pbcEsc(d.status)+'</span></td></tr>';
+  });
+  const tp = K.plan, ta = K.aktualPct, td = K.dev;
+  h += '<tr style="background:#FFF8E1;font-weight:800"><td></td><td style="padding:7px 8px">TOTAL</td><td style="padding:7px 8px;text-align:center">'+kurvaLap2P(K.divisi.reduce(function(a,d){ return a+d.bobot; },0))+'</td><td style="padding:7px 8px;text-align:center">'+(tp===null?'-':kurvaLap2P(tp))+'</td><td style="padding:7px 8px;text-align:center">'+kurvaLap2P(ta)+'</td><td style="padding:7px 8px;text-align:center;color:'+(td!==null&&td<0?'#C0392B':'#1A8C7A')+'">'+(td===null?'-':((td>=0?'+':'-')+kurvaLap2P(Math.abs(td)).replace('%','')))+'</td><td></td></tr>';
+  return h+'</tbody></table></div><div style="font:11px Arial,sans-serif;color:#6a7185;margin-top:4px">Batang biru = rencana hari ini, batang emas = realisasi.</div>';
+}
+function kurvaLap2CekHtml(K){
+  const c = K.cek;
+  return '<div style="margin-top:12px;padding:9px 12px;border-radius:8px;font:12px/1.5 Arial,sans-serif;'+(c.ok?'background:#E4F4F0;color:#0B6B58':'background:#FCE4E4;color:#C0392B')+'">'
+    + (c.ok ? '✓ <b>Terverifikasi dari BOQ:</b> total bobot '+kurvaLap2P(c.sumBobot)+' · '+c.nItem+' item di '+c.nDivisi+' divisi · total rencana seluruh periode = 100% · total nilai divisi = nilai kontrak.'
+            : '⚠ <b>Periksa data BOQ:</b> '+pbcEsc(c.gagal.join('; '))+'.')+'</div>';
+}
 function kurvaLapHeadHtml(tanpaJudul){
   const p = state.proyek || {}, L = (document.querySelector('.logo-img')||{}).src || '';
   const kd = kurvaKpiData(0), mulai = state.kurva.mulai ? fmtTglId(new Date(state.kurva.mulai)) : '—';
@@ -13961,9 +14067,10 @@ function kurvaLapKpiHtml(aktualPct){
 function kurvaLaporanRender(periode, dataChart, aktualPct){
   _kurvaLast = { periode:periode, dataChart:dataChart, aktualPct:aktualPct };
   const set = function(id, html){ const e = document.getElementById(id); if(e) e.innerHTML = html; };
-  set('kurvaLapHead', kurvaLapHeadHtml());
-  set('kurvaLapTabel', kurvaLapTabelHtml(periode, dataChart));
-  set('kurvaLapKpi', kurvaLapKpiHtml(aktualPct));
+  const K = kurvaLap2Data(periode, dataChart, aktualPct);
+  set('kurvaLapHead', kurvaLap2KartuHtml(K));
+  set('kurvaLapTabel', kurvaLap2TabelHtml(K)+kurvaLap2AnalisisHtml(K)+kurvaLap2DivisiHtml(K));
+  set('kurvaLapKpi', kurvaLap2CekHtml(K));
 }
 
 function renderKurvaChartsPro(periode, dataChart, aktualPct){
