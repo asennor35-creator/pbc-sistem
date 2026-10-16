@@ -7167,7 +7167,7 @@ function generateBulkItems() {
 
 function recalcAllDurasi(){
   if(!state.items.length){ notif('Belum ada item BOQ','var(--red)'); return; }
-  state.items.forEach(function(it){ it.durasi = estimateDurasi(it.nama, it.vol, it.sat); });
+  state.items.forEach(function(it){ it.durasi = estimateDurasi(it.nama, it.vol, it.sat); delete it.mulaiManual; });
   renderBoq();
   debounceSave();
   notif('Durasi '+state.items.length+' item dihitung ulang otomatis berdasarkan jenis & volume pekerjaan');
@@ -7952,7 +7952,12 @@ function boqGanttCellHtml(item, sMap, g){
   let bar = '';
   if(s){
     const left = s.startDay/7*g.lebar, w = Math.max(6, (s.endDay-s.startDay)/7*g.lebar), pct = itemPct(item);
-    bar = '<div title="'+pbcEsc('Mulai hari ke-'+(Math.round(s.startDay)+1)+' · durasi '+Math.round(s.endDay-s.startDay)+' hari · progres '+Math.round(pct)+'%')+'" style="position:absolute;left:'+left+'px;width:'+w+'px;top:50%;height:16px;margin-top:-8px;border-radius:3px;background:#B9C0CE;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+(pct>=100?'#1FB89A':'#2F6FD1')+'"></div></div>';
+    const dur = Math.round(s.endDay-s.startDay), manual = (typeof item.mulaiManual==='number');
+    const lbl = dur+' hari';
+    const muat = w >= 44;
+    bar = '<div onclick="bukaModalBar(\''+item.id+'\')" title="'+pbcEsc('Ketuk untuk atur · Mulai hari ke-'+(Math.round(s.startDay)+1)+' · durasi '+dur+' hari · progres '+Math.round(pct)+'%'+(manual?' · diatur manual':''))+'" style="cursor:pointer;position:absolute;left:'+left+'px;width:'+w+'px;top:50%;height:20px;margin-top:-10px;border-radius:4px;background:#B9C0CE;overflow:hidden;'+(manual?'box-shadow:0 0 0 2px #C9A24B;':'')+'"><div style="width:'+pct+'%;height:100%;background:'+(pct>=100?'#1FB89A':'#2F6FD1')+'"></div>'
+      + (muat?'<span style="position:absolute;left:0;right:0;top:0;line-height:20px;text-align:center;font-size:10px;font-weight:700;color:#0F1B3D;white-space:nowrap;pointer-events:none;text-shadow:0 0 2px rgba(255,255,255,.8)">'+lbl+'</span>':'')+'</div>'
+      + (muat?'':'<span onclick="bukaModalBar(\''+item.id+'\')" style="cursor:pointer;position:absolute;left:'+(left+w+3)+'px;top:50%;margin-top:-7px;font-size:10px;font-weight:700;color:#0F1B3D;white-space:nowrap">'+lbl+'</span>');
   }
   return '<div style="position:relative;height:100%;min-height:46px;width:'+g.lebarTotal+'px;background-image:'+grid+'">'+bar+boqGanttGaris(g)+'</div>';
 }
@@ -8164,6 +8169,7 @@ function buildItemSchedule(){
       });
       if(maxConstraint!==null) startVal = Math.max(0, maxConstraint);
     }
+    if(typeof item.mulaiManual==='number' && isFinite(item.mulaiManual)) startVal = Math.max(0, item.mulaiManual); /* geser manual dari bar timeline BOQ */
     visiting[item.id] = false;
     resolved[item.id] = startVal;
     return startVal;
@@ -8189,7 +8195,7 @@ let _dailyBobotCacheKey = null, _dailyBobotCacheValue = null;
 function _scheduleFingerprint(){
   let fp = state.items.length+'|'+(state.kurva.mulai||'')+'|'+state.divisi.length;
   state.items.forEach(function(it){
-    fp += '|'+it.id+':'+it.vol+':'+it.harga+':'+(it.durasi||0)+':'+it.divisiId;
+    fp += '|'+it.id+':'+it.vol+':'+it.harga+':'+(it.durasi||0)+':'+it.divisiId+((typeof it.mulaiManual==='number')?(':m'+it.mulaiManual):'');
     if(it.predecessors && it.predecessors.length){
       fp += ':'+it.predecessors.map(function(p){ return p.predId+p.type+(p.lag||0); }).join(',');
     }
@@ -8279,6 +8285,47 @@ function agregasiBulanan(){
 }
 /* ===== Pengelolaan Relasi Antar Pekerjaan (FS/SS/FF/Parallel) ===== */
 const RELASI_LABEL = { FS:'FS (Selesai → Mulai)', SS:'SS (Mulai bersama)', FF:'FF (Selesai bersama)', Parallel:'Paralel' };
+/* ===== Atur bar timeline BOQ: ketuk bar -> ubah "mulai hari ke-" & durasi. Durasi AI tetap default; ini hanya penyesuaian manual. ===== */
+function bukaModalBar(itemId){
+  const item = state.items.find(function(i){ return i.id===itemId; }); if(!item) return;
+  const sc = getCachedSchedule().find(function(x){ return x.item.id===itemId; });
+  const mulai = sc ? Math.round(sc.startDay)+1 : 1;
+  let ov = document.getElementById('modalBarOv'); if(ov) ov.remove();
+  ov = document.createElement('div'); ov.id='modalBarOv'; ov.className='modal-overlay active'; ov.style.display='flex';
+  ov.innerHTML = '<div class="modal" style="max-width:420px"><div class="modal-title">⏱ Atur Jadwal Pekerjaan</div>'
+    +'<div style="font-size:12px;margin-bottom:10px;font-weight:600">'+pbcEsc(item.nama)+'</div>'
+    +'<div class="form-row"><div class="form-group"><label class="form-label">Mulai hari ke-</label><input class="form-input" id="mBarMulai" type="number" min="1" value="'+mulai+'"></div>'
+    +'<div class="form-group"><label class="form-label">Durasi (hari)</label><input class="form-input" id="mBarDur" type="number" min="1" value="'+Math.max(1,item.durasi||1)+'"></div></div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:8px"><button class="btn btn-sm" type="button" onclick="barGeser(-1)">◀ Maju 1 hari</button><button class="btn btn-sm" type="button" onclick="barGeser(1)">Mundur 1 hari ▶</button></div>'
+    +'<div style="font-size:10.5px;color:var(--muted2);margin-bottom:10px">Selesai hari ke-<b id="mBarSelesai"></b>. Durasi hasil hitung AI tetap jadi patokan awal; di sini Bapak menyesuaikan kalau di lapangan beda.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-primary" type="button" onclick="simpanModalBar(\''+itemId+'\')">Simpan</button>'
+    +((typeof item.mulaiManual==='number')?'<button class="btn" type="button" onclick="resetModalBar(\''+itemId+'\')">Kembalikan otomatis</button>':'')
+    +'<button class="btn" type="button" onclick="document.getElementById(\'modalBarOv\').remove()">Batal</button></div></div>';
+  document.body.appendChild(ov);
+  const upd = function(){ const m=Math.max(1,parseInt(document.getElementById('mBarMulai').value)||1), d=Math.max(1,parseInt(document.getElementById('mBarDur').value)||1); document.getElementById('mBarSelesai').textContent = m+d-1; };
+  document.getElementById('mBarMulai').oninput = upd; document.getElementById('mBarDur').oninput = upd; upd();
+}
+function barGeser(n){ const e=document.getElementById('mBarMulai'); e.value = Math.max(1,(parseInt(e.value)||1)+n); e.oninput&&e.oninput(); }
+function barTerapkan(itemId){
+  const it = state.items.find(function(i){ return i.id===itemId; });
+  const el = document.querySelector('input[oninput*="onDurasiChange(\''+itemId+'\'"]'); if(el && it) el.value = it.durasi||0;
+  hitungRingan(itemId); debounceSave(); hitungBeratNanti(itemId);
+}
+function simpanModalBar(itemId){
+  const item = state.items.find(function(i){ return i.id===itemId; }); if(!item) return;
+  let m = Math.max(1, parseInt(document.getElementById('mBarMulai').value)||1);
+  let d = Math.max(1, parseInt(document.getElementById('mBarDur').value)||1);
+  if(d > DURASI_MAKS_HARI){ d = DURASI_MAKS_HARI; notif('Durasi dibatasi maksimal '+DURASI_MAKS_HARI+' hari.','var(--orange)'); }
+  item.durasi = d; item.mulaiManual = m-1;
+  document.getElementById('modalBarOv').remove();
+  barTerapkan(itemId); notif('Jadwal diperbarui: mulai hari ke-'+m+', '+d+' hari. Kurva S ikut menyesuaikan.');
+}
+function resetModalBar(itemId){
+  const item = state.items.find(function(i){ return i.id===itemId; }); if(!item) return;
+  delete item.mulaiManual;
+  document.getElementById('modalBarOv').remove();
+  barTerapkan(itemId); notif('Mulai dikembalikan ke jadwal otomatis.');
+}
 function bukaModalRelasi(itemId){
   const item = state.items.find(function(i){ return i.id===itemId; });
   if(!item) return;
@@ -8570,6 +8617,7 @@ function pbcAturDurasiProyek(minggu, diam){
     if(Math.ceil(total / 7) === minggu && k > 0) break;
     f *= (target - 0.5) / total;
     dasar.forEach(function(b){
+      if(typeof b.it.mulaiManual==='number'){ if(b.m0===undefined) b.m0=b.it.mulaiManual; b.it.mulaiManual = Math.round(b.m0 * f); }
       b.it.durasi = Math.max(1, Math.round(b.d * f));
       (b.it.predecessors || []).forEach(function(p, i){ p.lag = Math.round(b.lag[i] * f); });
     });
