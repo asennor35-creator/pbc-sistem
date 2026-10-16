@@ -5147,6 +5147,7 @@ function pbcLapBuat(o){
       doc.text((P.nama||'PRATAMA BUILD & CONSTRUCTION')+' — '+(o.footer||R.dok), FX, H-24);
       doc.text(R.hal+' '+i+' '+R.dari+' '+np, W-FX, H-24, {align:'right'});
     }
+    if(typeof window.__PBC_TEST_PDF==='function'){ window.__PBC_TEST_PDF(doc); return; }
     doc.save(fileNameFor(namaFile));
   };
   return c;
@@ -5183,15 +5184,23 @@ async function cetakKurvaLengkapPdf(){
     const kd = kurvaKpiData(aktualPct), img = kurvaChartImage(periode, dataChart, aktualPct);
     const c = pbcLapBuat({ judul:R.kurvaJudul, sub:state.proyek.nama, land:true, bhs:bhs });
     const C = c.C, mulai = state.kurva.mulai;
-    pbcLapInfoProyek(c, R, bhs);
     const stEn = { 'Sesuai / lebih cepat':'On track / ahead','Waspada':'Watch','Terlambat':'Delayed','Selesai':'Completed','Belum dimulai':'Not started','Awal proyek':'Early stage','Melewati jadwal':'Past schedule' };
     const stTxt = bhs==='en' ? (stEn[kd.status.t]||kd.status.t) : kd.status.t;
     const fgS = (function(h){ h=String(h||''); return (h.charAt(0)==='#'&&h.length===7)?[parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)]:C.g5; })(kd.status.fg);
-    c.kpi([[R.aktual, aktualPct.toFixed(1)+'%'], [R.target, kd.plan===null?'-':kd.plan.toFixed(1)+'%'],
-           [R.deviasi, kd.dev===null?'-':((kd.dev>=0?'+':'')+kd.dev.toFixed(1)+' '+R.poin), kd.dev===null?null:(kd.dev>=0?C.teal:C.red), true],
-           [R.statusJadwal, stTxt, fgS, true], [R.proyeksi, kd.proyeksi==='Selesai'?(bhs==='en'?'Completed':'Selesai'):(kd.proyeksi==='—'?'-':kd.proyeksi)], [R.sisa, kd.sisa.replace('hari',R.hari).replace('Lewat','Over')]]);
+    const U7 = PBC_UANG_TERBUKA(), gimg = kurvaLapGambar(periode, dataChart, aktualPct, U7, 'mingguan') || { img:img, rasio:600/1500 };
     c.bar(R.kurva);
-    c.gambar(img, c.TW, c.TW*600/1500);
+    { const gw = c.TW*0.78, gh = gw*gimg.rasio; c.pastikan(gh+6); c.doc.addImage(gimg.img,'PNG',c.FX+(c.TW-gw)/2,c.y,gw,gh); c.y += gh+8; }
+    { const tb = kurvaTabelBaris(periode, dataChart, U7, gt, bhs==='en'?'Weekly':'Mingguan'), N = periode.length, CH = 13;
+      for(let a0=0; a0<N; a0+=CH){
+        const idxs = []; for(let i=a0;i<Math.min(N,a0+CH);i++) idxs.push(i);
+        c.tabel([{l:R.minggu1, w:U7?3.2:2.6, a:'l'}].concat(idxs.map(function(i){ return { l:String(i+1), w:1, a:'r' }; })), tb.map(function(r){ return [r[0]].concat(idxs.map(function(i){ return r[i+1]; })); }), {});
+      } }
+    { const k4 = kurvaKartu4(aktualPct, kd, gt, U7), n4 = k4.length, g4 = 6, w4 = (c.TW-(n4-1)*g4)/n4; c.pastikan(48);
+      k4.forEach(function(k,i){ const x = c.FX+i*(w4+g4); c.doc.setFillColor(241,242,244); c.doc.roundedRect(x,c.y,w4,40,3,3,'F');
+        c.doc.setFont('helvetica','bold'); c.doc.setFontSize(7); c.doc.setTextColor(85,85,85); c.doc.text(k[0], x+8, c.y+12);
+        let fs = 14; c.doc.setFontSize(fs); while(fs>7 && c.doc.getTextWidth(String(k[1])) > w4-14){ fs -= .5; c.doc.setFontSize(fs); } const cl = k[3]||[10,42,90]; c.doc.setTextColor(cl[0],cl[1],cl[2]); c.doc.text(String(k[1]), x+8, c.y+26);
+        if(k[2]){ c.doc.setFont('helvetica','normal'); c.doc.setFontSize(8); c.doc.setTextColor(k[3]?cl[0]:85,k[3]?cl[1]:85,k[3]?cl[2]:85); c.doc.text(String(k[2]), x+8, c.y+36); } });
+      c.y += 50; }
     /* ringkasan per divisi */
     c.baru();
     const hari = kd.hari, sch = getCachedSchedule(), sMap = {}; sch.forEach(function(s){ sMap[s.item.id] = s; });
@@ -12418,8 +12427,8 @@ function pbcOwnerData(){
   D.rencanaMg = idx>=0 ? Math.max(0, tw[idx].rencana - prevRen) : null;
   D.realMg = idx>=0 ? Math.max(0, aktualPct - prevReal) : null;
   D.posisiLalu = false;
-  D.sec = { boq: mode!=='harian', opname: mode!=='harian', invoice: mode!=='harian', keputusan: mode!=='harian', rekap: mode==='bulanan' };
-  D.boqRingkas = mode==='bulanan';
+  D.sec = { boq: true, opname: mode!=='harian', invoice: mode!=='harian', keputusan: mode!=='harian', rekap: mode==='bulanan' };
+  D.boqRingkas = false;
   if(mode !== 'mingguan' && hE !== null && adaJadwal){
     const pEnd = kurvaRencanaPadaHari(hE), pBef = hS>0 ? kurvaRencanaPadaHari(hS-1) : 0;
     D.rencanaKum = pEnd; D.rencanaMg = Math.max(0, pEnd - pBef);
@@ -12530,9 +12539,56 @@ function pbcOwnerData(){
 const PBC_WARNA_ST = { 'Selesai':['#e4f4f0','#1A8C7A'], 'Berjalan':['#e7eefc','#1E50B4'], 'Terlambat':['#fce4e4','#C0392B'], 'Terlambat mulai':['#fff3d6','#96650F'], 'Belum mulai':['#eceef3','#5a6275'] };
 function pbcChipSt(st){ const c = PBC_WARNA_ST[st] || PBC_WARNA_ST['Belum mulai']; return '<span style="background:'+c[0]+';color:'+c[1]+';padding:1px 8px;border-radius:9px;font-size:10px;font-weight:700;white-space:nowrap">'+pbcEsc(st)+'</span>'; }
 function pbcPct1(v){ return String(+(v||0).toFixed(1)).replace('.',',')+'%'; }
-function pbcRp(D, v){ return D.uang ? fmtRpPenuh(v) : ''; }
 
 /* grafik Kurva S untuk laporan owner: Rp + % bila uang terbuka, selain itu persen saja */
+/* gambar Kurva S bentuk laporan (batang Rp + garis kumulatif %), dipakai Owner Portal + PDF owner + PDF Kurva S */
+function kurvaLapGambar(periode, dataChart, aktualPct, uang, md){
+  if(typeof Chart==='undefined') return null;
+  const _vm = kurvaViewMode; if(md) kurvaViewMode = md;
+  let built; try{ built = uang ? kurvaLaporanConfig(periode, dataChart, aktualPct, true) : kurvaMainConfig(periode, dataChart, aktualPct, true); } finally { kurvaViewMode = _vm; }
+  const lg = built.config.options.plugins.legend.labels;
+  lg.filter = function(it){ return it.text!=='Proyeksi selesai' && it.text!=='Opname terverifikasi'; };
+  if(built.config.options.plugins.todayLine) built.config.options.plugins.todayLine.pos = null;
+  const CW = uang ? 900 : 1500, CH = uang ? 400 : 640;
+  const holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:'+CW+'px;height:'+CH+'px;background:#fff';
+  const cvs = document.createElement('canvas'); cvs.width = CW; cvs.height = CH; holder.appendChild(cvs); document.body.appendChild(holder);
+  if(uang){ built.config.options.responsive = false; built.config.options.animation = false; built.config.options.devicePixelRatio = 3; }
+  try { const ch = new Chart(cvs.getContext('2d'), built.config); const img = ch.toBase64Image('image/png',1); ch.destroy(); return { img:img, rasio:CH/CW }; }
+  catch(e){ console.error(e); return null; }
+  finally { holder.remove(); }
+}
+/* baris tabel Kurva S: 4 baris, tiap baris = [label, sel per periode...] */
+function kurvaTabelBaris(periode, dataChart, uang, gt, mode){
+  const akt = kurvaAktualSeries(periode, dataChart);
+  const aktD = akt.map(function(v,i){ if(v===null) return null; let pr = 0; for(let k=i-1;k>=0;k--){ if(akt[k]!==null){ pr = akt[k]; break; } } return Math.max(0,v-pr); });
+  const renD = dataChart.map(function(d,i){ return Math.max(0, d.rencana-(i>0?dataChart[i-1].rencana:0)); });
+  const f1 = function(v){ return String(+v.toFixed(1)).replace('.',','); };
+  const rp = function(v){ return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); };
+  const M = mode || 'Mingguan';
+  const rows = [];
+  if(uang){
+    rows.push(['Rencana '+M+' (Rp)'].concat(renD.map(function(v){ return rp(v*gt/100); })));
+    rows.push(['Realisasi '+M+' (Rp)'].concat(aktD.map(function(v){ return v===null?'-':rp(v*gt/100); })));
+  } else {
+    rows.push(['Rencana '+M+' (%)'].concat(renD.map(function(v){ return f1(v); })));
+    rows.push(['Realisasi '+M+' (%)'].concat(aktD.map(function(v){ return v===null?'-':f1(v); })));
+  }
+  rows.push(['Kumulatif Rencana (%)'].concat(dataChart.map(function(d){ return Math.round(d.rencana)+'%'; })));
+  rows.push(['Kumulatif Realisasi (%)'].concat(akt.map(function(v){ return v===null?'-':Math.round(v)+'%'; })));
+  return rows;
+}
+/* 4 kartu di bawah Kurva S: [label, nilai, sub, warna|null] */
+function kurvaKartu4(aktualPct, kd, gt, uang){
+  const P = function(v){ return String(+(v||0).toFixed(1)).replace('.',',')+'%'; };
+  const rp = function(v){ return 'Rp '+String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); };
+  const plan = kd ? kd.plan : null, dev = kd ? kd.dev : null;
+  const out = [];
+  if(uang) out.push(['NILAI KONTRAK', rp(gt), '', null]);
+  out.push(['REALISASI SAAT INI', P(aktualPct), uang ? rp(aktualPct*gt/100) : '', null]);
+  out.push(['RENCANA SAAT INI', plan===null ? '-' : P(plan), (uang && plan!==null) ? rp(plan*gt/100) : '', null]);
+  out.push(['DEVIASI', dev===null ? '-' : ((dev>=0?'+':'-')+P(Math.abs(dev))), (uang && dev!==null) ? ((dev>=0?'+':'-')+rp(Math.abs(dev)*gt/100)) : '', dev===null ? null : (dev>=0 ? [26,140,122] : [192,57,43])]);
+  return out;
+}
 function pbcOwnerKurvaImg(D){
   if(typeof Chart==='undefined' || !D.adaJadwal) return null;
   const md = D.mode || 'mingguan';
@@ -12544,15 +12600,8 @@ function pbcOwnerKurvaImg(D){
     periode = all.slice(a, z+1).map(function(r){ const d = new Date(m0); d.setDate(d.getDate()+r.akhirHari); return Object.assign({}, r, { label: d.getDate()+'/'+(d.getMonth()+1)+'.' }); });
   }
   const dataChart = periode.map(function(row){ return { label:row.label, bobot:row.bobot, rencana:row.kumulatif, realisasi:cariRealisasiPadaHari(row.akhirHari) }; });
-  const _vm = kurvaViewMode; kurvaViewMode = md;
-  let built; try{ built = D.uang ? kurvaLaporanConfig(periode, dataChart, D.aktualPct, true) : kurvaMainConfig(periode, dataChart, D.aktualPct, true); } finally { kurvaViewMode = _vm; }
-  const CW = D.uang ? 900 : 1500, CH = D.uang ? 400 : 640;
-  const holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:'+CW+'px;height:'+CH+'px;background:#fff';
-  const cvs = document.createElement('canvas'); cvs.width = CW; cvs.height = CH; holder.appendChild(cvs); document.body.appendChild(holder);
-  if(D.uang){ built.config.options.responsive = false; built.config.options.animation = false; built.config.options.devicePixelRatio = 3; }
-  try { const ch = new Chart(cvs.getContext('2d'), built.config); const img = ch.toBase64Image('image/png',1); ch.destroy(); return { img:img, periode:periode, dataChart:dataChart, rasio:CH/CW }; }
-  catch(e){ console.error(e); return null; }
-  finally { holder.remove(); }
+  const g = kurvaLapGambar(periode, dataChart, D.aktualPct, D.uang, md);
+  return g ? { img:g.img, periode:periode, dataChart:dataChart, rasio:g.rasio } : null;
 }
 
 function openOwnerPortalPage(e){
@@ -12616,7 +12665,7 @@ function renderOwnerPortal(){
     + '</div><div class="op-note" style="margin-top:12px"><b>Ringkasan '+D.lblIni+'.</b> '+pbcEsc(D.ringkasan)+'</div></div>';
   /* 2. kurva */
   const kx = pbcOwnerKurvaImg(D);
-  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? '<img src="'+kx.img+'" style="width:100%;height:auto;display:block">'+'<div class="op-tw">'+(D.mode==='mingguan' ? kurvaLapTabelHtml(kx.periode, kx.dataChart, !D.uang) : pbcOpTabelPeriode(D, kx))+'</div>' : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
+  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? '<img src="'+kx.img+'" style="width:100%;height:auto;display:block">'+'<div class="op-tw">'+(D.mode==='mingguan' ? kurvaLapTabelHtml(kx.periode, kx.dataChart, !D.uang) : pbcOpTabelPeriode(D, kx))+'</div>'+pbcOpKartu4Html(D) : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
   if(D.sec.boq){
     /* rekap per minggu (bulanan) */
   if(D.sec.rekap){
@@ -12703,6 +12752,13 @@ function renderOwnerPortal(){
     + '</div></div>';
   body.innerHTML = h;
   pbcOpGambarFoto(D);
+}
+function pbcOpKartu4Html(D){
+  const k = kurvaKartu4(D.aktualPct, D.kd, D.gt, D.uang);
+  return '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">'+k.map(function(c){
+    const col = c[3] ? 'rgb('+c[3].join(',')+')' : '#0E2A5A';
+    return '<div style="flex:1 1 170px;background:#f1f2f4;border-radius:8px;padding:12px 14px;color:#1a1d24"><div style="font:600 11px Arial,sans-serif;letter-spacing:.4px;color:#2b3345">'+c[0]+'</div><div style="font:800 21px Arial,sans-serif;color:'+col+';line-height:1.3">'+pbcEsc(c[1])+'</div>'+(c[2]?'<div style="font:13px Arial,sans-serif;color:'+(c[3]?col:'#2b3345')+'">'+pbcEsc(c[2])+'</div>':'')+'</div>';
+  }).join('')+'</div>';
 }
 function pbcOpTabelPeriode(D, kx){
   const per = kx.periode, dc = kx.dataChart, akt = kurvaAktualSeries(per, dc);
@@ -12880,6 +12936,12 @@ async function exportOwnerPortalPdf(){
         rows.push(['Kum. Realisasi'].concat(idxs.map(function(i){ return akt[i]===null?'-':Math.round(akt[i])+'%'; })));
         y = pdfTable(doc, perlu(y, 34), cols, rows, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
       }
+      const k4 = kurvaKartu4(D.aktualPct, kd, D.gt, U), n4 = k4.length, w4 = (W-24-(n4-1)*3)/n4;
+      y = perlu(y, 22);
+      k4.forEach(function(c,i){ const x = 12+i*(w4+3); doc.setFillColor(241,242,244); doc.roundedRect(x,y,w4,19,2,2,'F');
+        set(6.5,true,PDF.gray); doc.text(c[0], x+3, y+5); let fs = 11; set(fs,true,c[3]||NAV); while(fs>6.5 && doc.getTextWidth(String(c[1])) > w4-6){ fs -= .5; doc.setFontSize(fs); } doc.text(String(c[1]), x+3, y+11.5);
+        if(c[2]){ set(6.5,false,c[3]||PDF.dark); doc.text(String(c[2]), x+3, y+16); } });
+      y += 24;
     } else { set(9,false,PDF.gray); doc.text('Belum ada data Kurva S (isi tanggal mulai dan BOQ).', 12, y+4); y += 10; }
 
     /* ===== HALAMAN 2 — progres BOQ ===== */
