@@ -15097,16 +15097,16 @@ function pahHargaBahan(nama){
 function pahItemBoq(){
   if(!state || !state.proyek || !(state.items||[]).length) return null;
   var dv = {}; (state.divisi||[]).forEach(function(d){ dv[d.id] = d.nama; });
-  return { nama:state.proyek.nama, items:state.items.map(function(i){ return { id:i.id, divisi:dv[i.divisiId]||'-', nama:i.nama, sat:i.sat, vol:i.vol||0, harga:i.harga||0 }; }), termin:(state.termin||[]).map(function(t){ return t.pct; }).filter(function(x){ return x>0; }) };
+  return { nama:state.proyek.nama, items:state.items.map(function(i){ return { id:i.id, divisi:dv[i.divisiId]||'-', nama:String(i.nama||''), sat:String(i.sat||''), vol:pahNum(i.vol,0), harga:pahNum(i.harga,0) }; }), termin:(state.termin||[]).map(function(t){ return t.pct; }).filter(function(x){ return x>0; }) };
 }
 function pahItemProposal(p){
   if(!p || !(p.items||[]).length) return null;
   var dv = {}; (p.divisi||[]).forEach(function(d){ dv[d.id] = d.nama; });
-  return { nama:'Proposal — '+(p.namaProspek||'tanpa nama'), items:p.items.map(function(i){ return { id:i.id, divisi:dv[i.divisiId]||'-', nama:i.nama, sat:i.sat, vol:i.vol||0, harga:i.harga||0 }; }), termin:(p.skemaPembayaran||[]).map(function(t){ return t.persen; }).filter(function(x){ return x>0; }) };
+  return { nama:'Proposal — '+(p.namaProspek||'tanpa nama'), items:p.items.map(function(i){ return { id:i.id, divisi:dv[i.divisiId]||'-', nama:String(i.nama||''), sat:String(i.sat||''), vol:pahNum(i.vol,0), harga:pahNum(i.harga,0) }; }), termin:(p.skemaPembayaran||[]).map(function(t){ return t.persen; }).filter(function(x){ return x>0; }) };
 }
 function pahItemDok(){
   if(!PAH.dok || !PAH.dok.items.length) return null;
-  return { nama:'Dokumen — '+PAH.dok.nama, items:PAH.dok.items.map(function(i,k){ return { id:'dok'+k, divisi:i.divisi||'-', nama:i.nama, sat:i.sat, vol:i.vol||0, harga:i.harga||0 }; }), termin:[] };
+  return { nama:'Dokumen — '+PAH.dok.nama, items:PAH.dok.items.map(function(i,k){ return { id:'dok'+k, divisi:i.divisi||'-', nama:String(i.nama||''), sat:String(i.sat||''), vol:pahNum(i.vol,0), harga:pahNum(i.harga,0) }; }), termin:[] };
 }
 function pahAmbilRab(){
   if(PAH.sumber==='proposal'){
@@ -15221,10 +15221,11 @@ function pahEnsurePage(){
   main.appendChild(d);
 }
 function pahBuka(sumber){
-  if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ notif('Analisa Harga hanya untuk Direktur','var(--red)'); return; }
+  if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ notif('Analisa Harga hanya untuk Direktur (peran akun ini: '+((window.PBC_AUTH&&PBC_AUTH.profil&&PBC_AUTH.profil.role)||'?')+', tampilan: '+(typeof currentRole!=='undefined'?currentRole:'?')+')','var(--red)'); return; }
   pahEnsurePage(); pahMuat(); if(sumber) PAH.sumber = sumber;
   if(sumber==='proposal' && typeof proposalState!=='undefined' && proposalState){ PAH.propId = proposalState.id; }
   switchToPage('page-analisaharga', null, function(){ pahGambar(); });
+  try{ window.scrollTo(0,0); var mn = document.querySelector('.main'); if(mn) mn.scrollTop = 0; }catch(e){}
   if(!PAH.propList.length) pahMuatProposal();
 }
 async function pahMuatProposal(){
@@ -15269,6 +15270,10 @@ function pahChipSumber(kode){
   return '<a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--gold)" title="'+pbcEsc(s.t+' · '+s.c)+'">'+kode+'</a><span style="color:'+(lama?'var(--red)':'var(--muted2)')+';font-size:9px"> '+s.tgl+(lama?' (lama)':'')+'</span>';
 }
 function pahGambar(){
+  try{ pahGambarIsi(); }
+  catch(e){ console.error('[PAH]', e); var el = document.getElementById('pahIsi'); if(el) el.innerHTML = '<div class="panel" style="color:#B3261E"><b>Analisa Harga gagal ditampilkan.</b><br>'+pbcEsc(e&&e.message?e.message:String(e))+'<br><span style="font-size:10px;color:var(--muted2)">Kirim tulisan ini ke Claude.</span></div>'; }
+}
+function pahGambarIsi(){
   var el = document.getElementById('pahIsi'); if(!el) return;
   var rab = pahAmbilRab(), H = null;
   var modeBtn = function(k, l){ return '<button class="btn btn-sm '+(PAH.mode===k?'btn-blue':'btn-gold')+'" onclick="pahSet(\'mode\',\''+k+'\')">'+l+'</button>'; };
