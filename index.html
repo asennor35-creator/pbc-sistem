@@ -1698,6 +1698,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     <button class="btn btn-gold btn-sm" onclick="newProjectFlow()">+ Proyek Baru</button>
     <button class="btn btn-gold btn-sm" onclick="openCrmPage()">🎯 CRM</button>
     <button class="btn btn-gold btn-sm" onclick="openProposalList()">📝 Proposal</button>
+    <button class="btn btn-gold btn-sm" onclick="pahBuka()">💲 Analisa Harga</button>
     <div class="more-wrap" id="moreWrap">
       <button class="btn btn-gold btn-sm" onclick="toggleMoreMenu(event)" title="Menu lainnya">⋯</button>
       <div class="more-menu" id="moreMenu">
@@ -1705,6 +1706,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
         <button class="mob" onclick="newProjectFlow()">+ Proyek Baru</button>
         <button class="mob" onclick="openCrmPage()">🎯 CRM</button>
         <button class="mob" onclick="openProposalList()">📝 Proposal</button>
+        <button class="mob" onclick="pahBuka()">💲 Analisa Harga</button>
         <button onclick="exportBackupJSON()">💾 Backup data proyek (.json)</button>
         <button onclick="document.getElementById('importBackupInput').click()">📂 Restore dari backup</button>
       </div>
@@ -1877,6 +1879,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     <button class="btn btn-gold" onclick="showModal('modalItem')">+ Tambah Item</button>
     <button class="btn btn-blue" onclick="openAiBoqModal()">🤖 AI Estimator (Auto BOQ)</button>
     <button class="btn btn-blue" onclick="openImportBoqModal()">📄 Import RAB/BOQ dari Dokumen</button>
+    <button class="btn btn-gold" onclick="pahBuka('boq')">💲 Analisa Harga BOQ</button>
     <button class="btn btn-gold" onclick="bukaDurasiModal()">⏱ Atur Durasi Proyek</button>
     <button class="btn btn-green" onclick="recalcAll()">⚡ Hitung Ulang Bobot</button>
     <button class="btn btn-green" onclick="recalcAllDurasi()">🤖 Hitung Ulang Durasi Otomatis</button>
@@ -10565,6 +10568,7 @@ function restoreMissingPages(){
     + '</select></div>'
     + '<div class="toolbar">'
     + '<button class="btn btn-gold" onclick="exportProposalPdf()">📄 Export PDF</button>'
+    + '<button class="btn btn-gold" onclick="pahBuka(\'proposal\')">💲 Analisa Harga</button>'
     + '<button class="btn btn-red" onclick="hapusProposalAktif()">🗑 Hapus Proposal</button>'
     + '</div></div>'
     + '<div class="panel" id="panelKontrak" style="margin-bottom:16px;display:none"><div class="panel-title">📜 Kontrak</div>'
@@ -14884,6 +14888,529 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', pasang); else pasang();
 })();
+</script>
+<script id="pahModule">
+/* ===========================================================================
+   ANALISA HARGA — dari RAB ke harga penawaran (T23)
+   Membaca RAB dari: BOQ proyek aktif, Proposal, atau dokumen (PDF/Excel/CSV/teks) — lalu:
+   cocokkan tiap item dengan analisa pekerjaan -> kebutuhan material x harga referensi bersumber
+   + upah (tukang/kenek) -> HPP -> batas harga penawaran (impas/minimum/target/maksimum),
+   perbandingan swakelola vs subkontraktor, dan arus kas.
+   ATURAN: harga yang tidak punya sumber TIDAK dikarang — ditandai "belum ada referensi".
+   Berdiri sendiri: tidak mengubah BOQ, Proposal, Kurva S maupun data proyek apa pun.
+   =========================================================================== */
+var PAH_SUMBER = {
+  A:{t:'Sobatbangun — Harga bahan Mei 2026',u:'https://sobatbangun.com/artikel/harga-bahan-bangunan-terbaru-mei-2026/',tgl:'2026-05',c:'Nasional'},
+  B:{t:'Builder ID — Harga material 2026',u:'https://www.builder.id/harga-material-bangunan-terbaru/',tgl:'2026-05',c:'Nasional (selisih lokasi 5–15%)'},
+  C:{t:'Harga bata ringan Denpasar',u:'https://jualbataringanmurah.com/harga-bata-ringan-denpasar/',tgl:'2026-01',c:'Denpasar (belum ongkir; tanggal halaman tidak pasti)'},
+  D:{t:'Detik — Harga gypsum per lembar',u:'https://www.detik.com/properti/berita/d-7939984/kisaran-harga-gypsum-per-lembar-terbaru-2025-sesuai-ketebalan/amp',tgl:'2025-05',c:'Nasional'},
+  E:{t:'Detik — Harga pipa air PVC',u:'https://www.detik.com/properti/berita/d-7955707/kisaran-harga-pipa-air-pvc-terbaru-2025-sesuai-jenis-jenisnya',tgl:'2025-06',c:'Nasional'},
+  F:{t:'Detik — Harga kayu triplek',u:'https://www.detik.com/properti/berita/d-7971716/kisaran-harga-kayu-triplek-terbaru-2025-sesuai-ukurannnya',tgl:'2025-06',c:'Nasional'},
+  G:{t:'Liputan6 — Daftar harga baja ringan',u:'https://www.liputan6.com/hot/read/6009665/daftar-harga-baja-ringan-terbaru-april-2025-kenali-apa-saja-jenisnya',tgl:'2025-04',c:'Nasional'},
+  H:{t:'harga.web.id — Septic tank biofil',u:'https://harga.web.id/harga-septic-tank-biofil.info',tgl:'2025-06',c:'Nasional'},
+  I:{t:'Semen Merah Putih — Harga ready mix',u:'https://semenmerahputih.com/en/news/construction/price-of-one-truckload-ready-mix-concrete',tgl:'2024-11',c:'Nasional (estimasi, tanpa wilayah)'},
+  J:{t:'harga.web.id — Kabel NYM',u:'https://harga.web.id/harga-kabel-nym-meter-roll.info',tgl:'2025-06',c:'Nasional'},
+  K:{t:'harga.web.id — Closet duduk American Standard',u:'https://harga.web.id/harga-closet-duduk-american-standard.info',tgl:'2025-03',c:'Nasional (seri standar)'},
+  L:{t:'harga.web.id — Wastafel American Standard',u:'https://harga.web.id/harga-wastafel-american-standard.info',tgl:'2025-03',c:'Nasional'},
+  M:{t:'harga.web.id — AC split 1 PK',u:'https://harga.web.id/info-terbaru-harga-ac-air-conditioner-dengan-daya-1-pk.info',tgl:'2025-03',c:'Nasional'},
+  N:{t:'harga.web.id — Besi beton per kg',u:'https://harga.web.id/harga-besi-beton-per-kilogram.info',tgl:'2025-06',c:'Nasional'},
+  O:{t:'harga.web.id — Wiremesh dan bondek',u:'https://harga.web.id/harga-wiremesh-dan-bondek.info',tgl:'2025-03',c:'Nasional'},
+  P:{t:'harga.web.id — Perekat hebel',u:'https://www.harga.web.id/info-lengkap-harga-perekat-hebel-bata-ringan.info',tgl:'2025-03',c:'Nasional'},
+  Q:{t:'harga.web.id — Harga kaca',u:'https://harga.web.id/daftar-harga-kaca-per-lembar-dalam-berbagai-ukuran.info',tgl:'2025-06',c:'Nasional'},
+  R:{t:'harga.web.id — HPL Aica',u:'https://harga.web.id/harga-hpl-aica-lembar.info',tgl:'2025-07',c:'Nasional'},
+  S:{t:'harga.web.id — Lantai vinyl roll',u:'https://harga.web.id/harga-lantai-vinyl-roll-di-pasaran.info',tgl:'2025-03',c:'Nasional (rentang sangat lebar)'},
+  T:{t:'harga.web.id — Plamir tembok',u:'https://harga.web.id/harga-plamir-tembok-instan-di-pasaran-all-merk.info',tgl:'2025-03',c:'Nasional'},
+  U:{t:'harga.web.id — Mortar acian',u:'https://harga.web.id/harga-mortar-acian-putih-di-pasaran-all-merk.info',tgl:'2025-03',c:'Nasional'},
+  V:{t:'harga.web.id — Granit 60x60',u:'https://harga.web.id/harga-granit-merek-lokal-per-dus.info',tgl:'2025-03',c:'Nasional'},
+  W:{t:'harga.web.id — Exhaust fan',u:'https://harga.web.id/harga-eksos-fan-termurah-di-pasaran-all-merek.info',tgl:'2025-03',c:'Nasional'},
+  X:{t:'harga.web.id — Ongkos borongan tukang',u:'https://harga.web.id/ongkos-borongan-pekerjaan-bangunan-2014.info',tgl:'2025-03',c:'Nasional (satuan beberapa item tidak konsisten)'}
+};
+/* Harga per SATUAN PEMBELIAN katalog material: [terendah, tertinggi, kode sumber, catatan] */
+var PAH_REF = {
+  'Semen PCC 40kg':[52000,58000,'B','sak 40 kg; juga Sobatbangun Mei 2026 (Merah Putih 40 kg Rp54.000–58.000)'],
+  'Pasir Urug':[190000,290000,'B','per m³'], 'Pasir Beton':[200000,360000,'B','per m³; Sobatbangun menulis Rp330.000–360.000'],
+  'Pasir Pasang':[215000,310000,'B','per m³; Sobatbangun menulis Rp280.000–310.000'],
+  'Batu Split 1-2':[250000,350000,'B','sumber: split 2/3 cm'], 'Batu Split 2-3':[250000,350000,'B','split 2/3 cm'],
+  'Batu Kali':[260000,360000,'B','per m³'],
+  'Besi Beton D8':[44000,48000,'B','polos 8 mm, 12 m'], 'Besi Beton D10':[75000,88000,'B','ulir 10 mm, 12 m'],
+  'Besi Beton D12':[105000,118000,'B','ulir 12 mm, 12 m'], 'Besi Beton D13':[118750,118750,'N','dihitung dari Rp9.500/kg × 12,5 kg'],
+  'Besi Beton D16':[180000,205000,'B','ulir 16 mm, 12 m'], 'Besi Beton D19':[255000,290000,'B','ulir 19 mm, 12 m'],
+  'Besi Beton D22':[415280,415280,'N','dihitung dari Rp11.600/kg × 35,8 kg'],
+  'Wiremesh M6':[242000,390000,'O','non-SNI sampai SNI, per lembar'], 'Wiremesh M8':[451000,933300,'O','non-SNI sampai SNI, per lembar'],
+  'Bondek':[150000,158000,'O','harga per meter (lebar 1 m ≈ per m²)'],
+  'Multiplek Bekisting 12mm':[127000,127000,'F','triplek 12 mm 122×244 (satu harga)'], 'Plywood 12mm':[127000,127000,'F','triplek 12 mm (satu harga)'],
+  'Triplek 9mm':[68500,68500,'F','satu harga'],
+  'Beton Ready Mix K-225':[870000,1295000,'I','truk standar sampai mini'], 'Beton Ready Mix K-300':[935000,1415000,'I','truk standar sampai mini'],
+  'Beton Ready Mix K-350':[970000,1465000,'I','truk standar sampai mini'],
+  'Bata Ringan (Hebel)':[7740,9180,'C','dihitung dari Rp645.000–765.000/m³ ÷ 83,3 biji (tebal 10 cm), belum ongkir'],
+  'Bata Ringan (Hebel) 10cm':[7740,9180,'C','dihitung dari Rp645.000–765.000/m³ ÷ 83,3 biji, belum ongkir'],
+  'Bata Ringan (Hebel) 7.5cm':[5810,6890,'C','dihitung dari Rp645.000–765.000/m³ ÷ 111 biji, belum ongkir'],
+  'Mortar Perekat Hebel':[56450,108400,'P','sak 40 kg, tergantung merek'], 'Mortar Acian':[62250,150000,'U','kemasan 40 kg, tergantung merek'],
+  'Keramik Lantai 40x40':[47900,67700,'B','dihitung dari Rp46.000–65.000/dus ÷ 0,96 m²'],
+  'Keramik Lantai 60x60':[63900,100700,'B','dihitung dari Rp92.000–145.000/dus ÷ 1,44 m² (lokal)'],
+  'Granit Tile 60x60':[122200,269400,'V','dihitung dari Rp176.000–388.000/dus ÷ 1,44 m²'],
+  'Vinyl Plank/Roll':[20000,270000,'S','rentang sangat lebar (roll murah sampai merek impor)'],
+  'Soundshield Gypsum 12mm':[154000,154000,'D','Jayaboard Sound Stop 12 mm (satu harga)'],
+  'Gypsum Board 9mm':[45000,69000,'D','lembar 120×240'], 'Gypsum Board 12mm':[62000,97000,'D','lembar 120×240, non-anti air'],
+  'Genteng Beton':[5000,7800,'B','per buah'], 'Genteng Keramik':[12500,15000,'B','per buah'], 'Genteng Metal':[45000,65000,'B','per lembar'],
+  'Baja Ringan C75':[82000,130000,'G','C75.75, 6 m (merek umum sampai BlueScope)'], 'Baja Ringan C75.75':[87000,130000,'G','6 m'],
+  'Reng Baja Ringan':[33000,57500,'G','6 m'],
+  'Cat Tembok Interior':[34000,46000,'B','dihitung dari pail 25 kg Rp850.000–1.150.000'],
+  'Cat Tembok Eksterior':[64000,80000,'B','dihitung dari pail 25 kg Rp1,6–2,0 juta'],
+  'Plamir Tembok':[10360,23500,'T','per kg, dari kemasan 4–25 kg'],
+  'Cat Kayu / Besi':[38000,60000,'B','per kg (cat besi)'],
+  'Pipa PVC 1/2 inch':[22000,30000,'E','AW, ±4 m'], 'Pipa PVC 3/4 inch':[30500,42000,'E','AW, ±4 m'],
+  'Pipa PVC 3 inch':[95000,112000,'E','tipe D (pembuangan), ±4 m'], 'Pipa PVC 4 inch':[145500,175000,'E','tipe D (pembuangan), ±4 m'],
+  'Kloset Duduk':[1395000,3474575,'K','seri standar (Winston, Luxia, Newton); seri premium jauh lebih mahal'],
+  'Wastafel':[990900,2490000,'L','tidak termasuk vanitori batu/premium'],
+  'Septictank Biofil':[2400000,5640000,'H','tergantung kapasitas (BSR 800 sampai BF 04)'],
+  'Kabel NYM 3x2.5':[756250,881500,'J','roll 50 m'], 'Kabel NYM 2x1.5':[269000,455500,'J','roll 50 m'],
+  'AC Split 1PK':[3050000,5750000,'M','merek umum; belum termasuk pasang/pipa'],
+  'Exhaust Fan':[131500,464000,'W','per unit'],
+  'Kaca Tempered 8mm':[540000,540000,'Q','per m² (satu harga)'], 'Kaca Tempered 12mm':[805000,805000,'Q','per m² (satu harga)'],
+  'HPL (High Pressure Laminate)':[310000,600000,'R','Aica per lembar']
+};
+/* Ongkos borongan tukang (referensi), per satuan pekerjaan — hanya untuk membandingkan dengan upah hasil analisa */
+var PAH_BORONGAN = {
+  'Pasangan Bata Ringan Hebel 10cm':[32000,'m2'], 'Pasangan Bata Ringan Hebel 7.5cm':[30000,'m2'], 'Pasangan Bata Merah':[91000,'m2'],
+  'Pasang Keramik Lantai 60x60':[55000,'m2'], 'Pasang Keramik Lantai 40x40':[50000,'m2'], 'Pasang Plafon Gypsum 9mm':[34000,'m2'], 'Pasang Plafon Gypsum 12mm':[34000,'m2'],
+  'Pekerjaan Atap Spandek':[132000,'m2'], 'Pasang Atap Genteng Beton':[132000,'m2'], 'Cat Tembok Interior':[25000,'m2'],
+  'Pasang Kloset Duduk':[348000,'unit'], 'Pasang Wastafel':[236230,'unit'], 'Pasang Floor Drain':[38000,'buah']
+};
+/* Analisa tambahan (nama bahan = nama di katalog material). Koefisien = angka umum yang mengacu pola analisa
+   SNI/AHSP, BUKAN data PBC — ubah di Analisa Pekerjaan (MRP) bila PBC punya angka sendiri.
+   Format: [nama, satuan, ukuran, kataKunci, [[bahan, koef], ...], OH tukang, OH kenek] */
+var PAH_TAMBAHAN = [
+  ['Galian Tanah Pondasi','m3','','galian tanah|galian pondasi|galian',[],0,0.75],
+  ['Urugan Pasir Bawah Lantai','m3','','urugan pasir|urug pasir|pasir urug',[['Pasir Urug',1.2]],0,0.3],
+  ['Lantai Kerja Beton','m2','','lantai kerja|rabat beton|rabat',[['Semen PCC 40kg',0.31],['Pasir Beton',0.027],['Batu Split 1-2',0.04]],0.02,0.1],
+  ['Bekisting (Begesting)','m2','','bekisting|begesting|cetakan beton',[['Multiplek Bekisting 12mm',0.12],['Kayu Kaso 5/7',0.25],['Paku Biasa',0.05],['Minyak Bekisting',0.1]],0.3,0.3],
+  ['Beton Bertulang (Sloof/Kolom/Balok) per m3','m3','','sloof|kolom|ring balok|balok|plat lantai|beton bertulang',
+    [['Semen PCC 40kg',9.28],['Pasir Beton',0.48],['Batu Split 1-2',0.78],['Besi Beton D13',160],['Kawat Bendrat',2.4],['Multiplek Bekisting 12mm',1.6]],2.2,4.0],
+  ['Pasang Keramik Lantai 40x40','m2','40x40','keramik|granit',[['Keramik Lantai 40x40',1.05],['Lem Keramik (Tile Adhesive)',0.12],['Nat Keramik',0.3]],0.1,0.2],
+  ['Cat Tembok Eksterior','m2','','cat tembok eksterior|cat dinding eksterior|cat luar|cat eksterior',[['Cat Tembok Eksterior',0.26],['Plamir Tembok',0.1],['Cat Dasar / Primer Tembok',0.1]],0.025,0.012],
+  ['Cat Plafon','m2','','cat plafon|cat plafond',[['Cat Tembok Interior',0.2],['Plamir Tembok',0.15]],0.02,0.01],
+  ['Cat Kayu / Besi','m2','','cat kayu|cat besi|cat pintu|cat kusen|politur|melamin',[['Cat Kayu / Besi',0.15],['Thinner',0.05],['Amplas',0.1]],0.06,0.02],
+  ['Waterproofing Coating','m2','','waterproofing|lapis kedap air|anti bocor',[['Waterproofing Coating',0.5]],0.05,0.05],
+  ['Pasang Atap Genteng Beton','m2','','atap genteng|pasang genteng|genteng beton|genteng',[['Genteng Beton',11],['Nok Genteng',0.1],['Baja Ringan C75',0.4],['Reng Baja Ringan',0.8]],0.1,0.15],
+  ['Pasang Pintu Panel Kayu','unit','','pintu panel|pintu kamar|pintu kayu panel',[['Pintu Panel Kayu',1],['Engsel Pintu',1],['Handle Pintu',1]],0.5,0.25],
+  ['Pasang Lantai Vinyl','m2','','vinyl|lantai vinyl',[['Vinyl Plank/Roll',1.05],['Lem Vinyl/Karet',0.3]],0.05,0.05],
+  ['Pasang Lantai Epoxy','m2','','epoxy',[['Epoxy Lantai',1.2],['Primer Epoxy',0.2]],0.08,0.08],
+  ['Pasang Rubber Mat','m2','','rubber mat|lantai karet',[['Rubber Mat',1.05],['Lem Vinyl/Karet',0.4]],0.05,0.05],
+  ['Pasang OSB Board 12mm','m2','12mm','osb',[['OSB 12mm',0.36],['Kayu Kaso 5/7',0.8],['Paku Biasa',0.05]],0.15,0.1],
+  ['Pasang Plafon Soundshield 12mm','m2','','soundshield|sound shield|plafon peredam',[['Soundshield Gypsum 12mm',0.36],['Rangka Hollow 4x4',0.5],['Compound Gypsum',0.15]],0.12,0.12],
+  ['Kitchen Set','m\'','','kitchen set',[['Kitchen Set',1]],0.5,0.2],
+  ['Lemari Built-in','m2','','lemari|wardrobe|built-in|builtin',[['Lemari Built-in',1]],0.2,0.1],
+  ['Titik Lampu (Instalasi)','titik','','titik lampu|titik penerangan|instalasi titik lampu',[['Kabel NYM 2x1.5',0.24],['Pipa Conduit',2.5],['Saklar Tunggal',0.5]],0.4,0.2],
+  ['Titik Stop Kontak (Instalasi)','titik','','titik stop kontak|titik kontak|stop kontak',[['Kabel NYM 3x2.5',0.24],['Pipa Conduit',2.5],['Stop Kontak',1]],0.4,0.2],
+  ['Panel Listrik dan MCB','unit','','panel listrik|panel distribusi|box panel|mcb',[['Box Panel Listrik',1],['MCB 1 Phase',8]],2,1],
+  ['Pasang Lampu LED Downlight','buah','','lampu downlight|downlight|lampu led',[['Lampu LED Downlight',1]],0.1,0],
+  ['Titik Air Bersih (Instalasi)','titik','','titik air bersih|instalasi air bersih|pipa air bersih',[['Pipa PVC 1/2 inch',0.75],['Fitting PVC (Knee/Tee/Sock)',3],['Lem Pipa PVC',0.05]],0.5,0.3],
+  ['Titik Air Kotor (Instalasi)','titik','','titik air kotor|air buangan|pembuangan|saluran buang',[['Pipa PVC 3 inch',1],['Fitting PVC (Knee/Tee/Sock)',3],['Lem Pipa PVC',0.1]],0.5,0.3],
+  ['Pasang Kloset Duduk','unit','','kloset duduk|closet duduk|wc duduk',[['Kloset Duduk',1]],0.4,0.2],
+  ['Pasang Kloset Jongkok','unit','','kloset jongkok|closet jongkok|wc jongkok',[['Kloset Jongkok',1]],0.4,0.2],
+  ['Pasang Wastafel','unit','','wastafel',[['Wastafel',1],['Kran Air',1]],0.4,0.2],
+  ['Pasang Floor Drain','buah','','floor drain',[['Floor Drain',1]],0.1,0.05],
+  ['Septictank Biofil','unit','','septic|septik|septictank',[['Septictank Biofil',1]],1,2],
+  ['Pompa Air Jet Pump','unit','','pompa air|jet pump',[['Pompa Air (Jet Pump)',1]],0.5,0.25],
+  ['Tandon Air','unit','','tandon|toren|tangki air',[['Tandon Air',1]],0.5,0.5],
+  ['Pasang AC Split 1PK','unit','','ac split 1pk|ac 1pk|ac 1 pk|pasang ac',[['AC Split 1PK',1]],0.5,0.25],
+  ['Pasang Exhaust Fan','unit','','exhaust fan|exhaust|kipas angin dinding',[['Exhaust Fan',1]],0.25,0.1],
+  ['Pasang Water Heater','unit','','water heater|pemanas air',[['Water Heater',1]],0.4,0.2]
+];
+var PAH_DEF = { mode:'mid', tukang:170000, kenek:140000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25,
+  subUpah:20, subPaket:10, termin:'30,40,20,10', sumber:'boq', propId:'', rabDok:null, pilih:{} };
+var PAH = Object.assign({}, PAH_DEF, { hasil:null, chart:null, propList:[], dok:null });
+
+function pahRp(n){ return (typeof fmtRpPenuh==='function') ? fmtRpPenuh(n) : 'Rp '+Math.round(n||0).toLocaleString('id'); }
+function pahJt(n){ if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()) return 'Rp ••••'; n = n||0; var a = Math.abs(n); return (n<0?'-':'')+'Rp '+(a>=1e9?(a/1e9).toFixed(2).replace('.',',')+' M':a>=1e6?(a/1e6).toFixed(1).replace('.',',')+' jt':Math.round(a).toLocaleString('id')); }
+function pahNum(v, d){ v = parseFloat(v); return isFinite(v) ? v : d; }
+function pahSimpan(){ try{ var o = {}; ['mode','tukang','kenek','tim','hariMinggu','ops','kont','mMin','mTarget','mMax','subUpah','subPaket','termin','sumber','propId','pilih'].forEach(function(k){ o[k] = PAH[k]; }); localStorage.setItem('pbc_pah_set', JSON.stringify(o)); }catch(e){} }
+function pahMuat(){ try{ var o = JSON.parse(localStorage.getItem('pbc_pah_set')||'null'); if(o) Object.keys(o).forEach(function(k){ if(PAH_DEF.hasOwnProperty(k) && o[k]!==undefined && o[k]!==null) PAH[k] = o[k]; }); }catch(e){} }
+function pahUmurBulan(tgl){ var p = String(tgl).split('-'), n = new Date(); return (n.getFullYear()-parseInt(p[0]))*12 + (n.getMonth()+1-parseInt(p[1])); }
+function pahSat(s){ s = String(s||'').toLowerCase().replace(/[²]/g,'2').replace(/[³]/g,'3').replace(/[^a-z0-9']/g,''); if(s==="m'"||s==='mlari'||s==='mtr'||s==='meter'||s==='ml') return 'm'; if(s==='ls'||s==='lot'||s==='paket'||s==='lumpsum') return 'ls'; if(s==='buah'||s==='pcs'||s==='unit'||s==='bh'||s==='set') return 'unit'; return s; }
+function pahKatalogFaktor(nama){
+  try{ var m = (state.materials||[]).find(function(x){ return (x.nama||'').toLowerCase()===nama.toLowerCase(); }); if(m && m.faktorKonversi>0) return m.faktorKonversi; }catch(e){}
+  var f = PAH_FAKTOR[nama]; return f || 1;
+}
+var PAH_FAKTOR = { 'Besi Beton D8':4.74,'Besi Beton D10':7.4,'Besi Beton D12':10.66,'Besi Beton D13':12.5,'Besi Beton D16':18.9,'Besi Beton D19':26.7,'Besi Beton D22':35.8,'Kabel NYM 2x1.5':50,'Kabel NYM 3x2.5':50,'Kabel NYY':50 };
+var PAH_BULAT = { 'sak':1,'buah':1,'lembar':1,'batang':1,'unit':1,'set':1,'roll':1,'kaleng':1,'tube':1 };
+
+/* ---- daftar analisa gabungan: standar + tambahan + analisa proyek (yang diubah/dibuat Bapak menang) ---- */
+function pahDaftarAnalisa(){
+  var hasil = [], nama = {};
+  (typeof SEED_ANALISA_PEKERJAAN!=='undefined' ? SEED_ANALISA_PEKERJAAN : []).forEach(function(a){
+    hasil.push({ nama:a.namaPekerjaan, sat:a.satuanPekerjaan, ukuran:a.ukuran||'', kata:a.kataKunci, m:a.koefisien.map(function(r){ return [r[0], r[1]]; }), tk:a.koefisienTukang||0, kl:a.koefisienKuli||0, asal:'standar' });
+  });
+  PAH_TAMBAHAN.forEach(function(r){ hasil.push({ nama:r[0], sat:r[1], ukuran:r[2], kata:r[3], m:r[4], tk:r[5], kl:r[6], asal:'tambahan' }); });
+  try{
+    (state.analisaPekerjaan||[]).forEach(function(a){
+      var m = (a.koefisien||[]).map(function(k){ var mt = (state.materials||[]).find(function(x){ return x.id===k.materialId; }); return mt ? [mt.nama, k.koefisien] : null; }).filter(Boolean);
+      if(!m.length && !(a.koefisienTukang||a.koefisienKuli)) return;
+      var idx = hasil.findIndex(function(h){ return h.nama.toLowerCase()===(a.namaPekerjaan||'').toLowerCase(); });
+      var o = { nama:a.namaPekerjaan, sat:a.satuanPekerjaan, ukuran:a.ukuran||'', kata:a.kataKunci||'', m:m, tk:a.koefisienTukang||0, kl:a.koefisienKuli||0, asal:'proyek' };
+      if(idx>-1) hasil[idx] = o; else hasil.push(o);
+    });
+  }catch(e){}
+  return hasil;
+}
+/* pencocokan nama item -> analisa (kata kunci + ukuran). Tidak menebak bila ada beberapa ukuran yang bersaing. */
+function pahCocok(namaItem, daftar){
+  var nm = (namaItem||'').toLowerCase(), spekItem = ekstrakSpekDariNama(namaItem), kand = [];
+  daftar.forEach(function(a){
+    var best = 0;
+    (a.kata||'').split('|').map(function(p){ return p.trim().toLowerCase(); }).filter(Boolean).forEach(function(p){ if(nm.indexOf(p)>-1 && p.length>best) best = p.length; });
+    if(best<=0) return;
+    var sa = ekstrakSpekDariNama(a.ukuran), punya = sa.length>0;
+    var cocok = punya && spekItem.length>0 && sa.some(function(x){ return spekItem.indexOf(x)>-1; });
+    var konflik = punya && spekItem.length>0 && !cocok;
+    kand.push({ a:a, len:best, punya:punya, cocok:cocok, konflik:konflik });
+  });
+  if(!kand.length) return { a:null, ambigu:false, spek:false };
+  var pool = kand.filter(function(k){ return !k.konflik; }); if(!pool.length) pool = kand;
+  var sm = pool.filter(function(k){ return k.cocok; }); if(sm.length) pool = sm;
+  pool.sort(function(x,y){ return y.len-x.len; });
+  var top = pool.filter(function(k){ return k.len===pool[0].len; });
+  if(top.length>1){
+    var gen = top.filter(function(t){ return !t.punya; });
+    if(gen.length && spekItem.length===0) return { a:gen[0].a, ambigu:false, spek:true };
+    var uk = top.map(function(t){ return t.a.ukuran||''; }).filter(function(v,i,r){ return r.indexOf(v)===i; });
+    if(uk.length<=1) return { a:top[0].a, ambigu:false, spek:false };
+    return { a:null, ambigu:true, spek:false, kandidat:top.map(function(t){ return t.a; }) };
+  }
+  var varian = kand.some(function(k){ return k.punya && k.a.nama!==top[0].a.nama; });
+  return { a:top[0].a, ambigu:false, spek:(!top[0].punya && varian && spekItem.length===0) };
+}
+/* harga satu bahan: harga supplier PBC (katalog material proyek) > referensi bersumber > kosong */
+function pahHargaBahan(nama){
+  var mode = PAH.mode;
+  try{
+    var m = (state.materials||[]).find(function(x){ return (x.nama||'').toLowerCase()===nama.toLowerCase() && x.harga>0; });
+    if(m) return { h:m.harga, asal:'PBC', sumber:null, lo:m.harga, hi:m.harga };
+  }catch(e){}
+  var r = PAH_REF[nama]; if(!r) return null;
+  var h = mode==='lo' ? r[0] : mode==='hi' ? r[1] : (r[0]+r[1])/2;
+  return { h:h, asal:'ref', sumber:r[2], lo:r[0], hi:r[1], cat:r[3] };
+}
+
+/* ---- sumber RAB -> daftar item seragam ---- */
+function pahItemBoq(){
+  if(!state || !state.proyek || !(state.items||[]).length) return null;
+  var dv = {}; (state.divisi||[]).forEach(function(d){ dv[d.id] = d.nama; });
+  return { nama:state.proyek.nama, items:state.items.map(function(i){ return { id:i.id, divisi:dv[i.divisiId]||'-', nama:i.nama, sat:i.sat, vol:i.vol||0, harga:i.harga||0 }; }), termin:(state.termin||[]).map(function(t){ return t.pct; }).filter(function(x){ return x>0; }) };
+}
+function pahItemProposal(p){
+  if(!p || !(p.items||[]).length) return null;
+  var dv = {}; (p.divisi||[]).forEach(function(d){ dv[d.id] = d.nama; });
+  return { nama:'Proposal — '+(p.namaProspek||'tanpa nama'), items:p.items.map(function(i){ return { id:i.id, divisi:dv[i.divisiId]||'-', nama:i.nama, sat:i.sat, vol:i.vol||0, harga:i.harga||0 }; }), termin:(p.skemaPembayaran||[]).map(function(t){ return t.persen; }).filter(function(x){ return x>0; }) };
+}
+function pahItemDok(){
+  if(!PAH.dok || !PAH.dok.items.length) return null;
+  return { nama:'Dokumen — '+PAH.dok.nama, items:PAH.dok.items.map(function(i,k){ return { id:'dok'+k, divisi:i.divisi||'-', nama:i.nama, sat:i.sat, vol:i.vol||0, harga:i.harga||0 }; }), termin:[] };
+}
+function pahAmbilRab(){
+  if(PAH.sumber==='proposal'){
+    if(PAH.propId && PAH.propCache && PAH.propCache[PAH.propId]) return pahItemProposal(PAH.propCache[PAH.propId]);
+    if(typeof proposalState!=='undefined' && proposalState && (!PAH.propId || PAH.propId===proposalState.id)) return pahItemProposal(proposalState);
+    return null;
+  }
+  if(PAH.sumber==='dok') return pahItemDok();
+  return pahItemBoq();
+}
+
+/* ---- mesin hitung ---- */
+function pahHitung(rab){
+  var S = { tukang:pahNum(PAH.tukang,170000), kenek:pahNum(PAH.kenek,140000), tim:Math.max(1,pahNum(PAH.tim,8)), hm:Math.max(1,pahNum(PAH.hariMinggu,6)),
+    ops:pahNum(PAH.ops,0), kont:pahNum(PAH.kont,0)/100 };
+  var daftar = pahDaftarAnalisa(), items = [], bahan = {}, nilaiRab = 0, nilaiTerhitung = 0, ohT = 0, ohK = 0, mat = 0, upah = 0, tanpaHarga = {};
+  rab.items.forEach(function(it){
+    var nilai = (it.vol||0)*(it.harga||0); nilaiRab += nilai;
+    var pil = PAH.pilih[it.id], ana = null, st = 'ok', cat = '';
+    if(pil){ ana = daftar.find(function(a){ return a.nama===pil; }) || null; }
+    if(!ana){
+      var c = pahCocok(it.nama, daftar);
+      if(c.ambigu){ st = 'ambigu'; cat = 'Beberapa analisa cocok (ukuran berbeda). Pilih manual.'; }
+      else if(!c.a){ st = 'tanpa'; cat = 'Belum ada analisa yang cocok. Pilih manual atau tambahkan di Analisa Pekerjaan.'; }
+      else { ana = c.a; if(c.spek) cat = 'Nama item tidak menyebut ukuran; dipakai analisa umum. Periksa.'; }
+    }
+    var r = { it:it, nilai:nilai, ana:ana, st:st, cat:cat, mat:0, upah:0, ohT:0, ohK:0, baris:[], kurang:0 };
+    if(ana){
+      if(pahSat(ana.sat)!==pahSat(it.sat)){ r.st = 'satuan'; r.cat = 'Satuan item ('+it.sat+') berbeda dengan analisa ('+ana.sat+'). Tidak dihitung; pilih analisa lain atau samakan satuan.'; r.ana = ana; }
+      else {
+        r.ohT = it.vol*ana.tk; r.ohK = it.vol*ana.kl; r.upah = r.ohT*S.tukang + r.ohK*S.kenek;
+        ana.m.forEach(function(row){
+          var nm = row[0], q = it.vol*row[1], hb = pahHargaBahan(nm), f = pahKatalogFaktor(nm);
+          var b = bahan[nm] || (bahan[nm] = { nama:nm, q:0, f:f, hb:hb, kategori:'' }); b.q += q; b.hb = hb;
+          var biaya = hb ? (q/f)*hb.h : 0;
+          if(!hb){ r.kurang++; tanpaHarga[nm] = true; }
+          r.baris.push({ nama:nm, q:q, koef:row[1], hb:hb, f:f, biaya:biaya });
+          r.mat += biaya;
+        });
+      }
+    }
+    if(r.st==='ok' && ana){ nilaiTerhitung += nilai; ohT += r.ohT; ohK += r.ohK; upah += r.upah; mat += r.mat; }
+    items.push(r);
+  });
+  /* rekap bahan dengan pembulatan beli (sak/buah/lembar/batang/unit dibulatkan ke atas) */
+  var rekap = Object.keys(bahan).map(function(k){
+    var b = bahan[k], qb = b.q/b.f, satBeli = pahSatBeli(k), bulat = PAH_BULAT[satBeli] ? Math.ceil(qb-1e-9) : qb;
+    return { nama:k, qAnalisa:b.q, qBeli:qb, qBulat:bulat, satBeli:satBeli, hb:b.hb, total:b.hb ? bulat*b.hb.h : 0 };
+  }).sort(function(a,b){ return b.total-a.total; });
+  var matBulat = rekap.reduce(function(s,x){ return s+x.total; }, 0);
+  var cov = nilaiRab>0 ? nilaiTerhitung/nilaiRab : 0;
+  var oh = ohT+ohK, minggu = oh>0 ? Math.max(1, Math.ceil(oh/(S.tim*S.hm))) : 0;
+  var scale = cov>0 ? 1/cov : 0;               /* proyeksi ke seluruh RAB bila sebagian item belum punya analisa */
+  var matP = matBulat*scale, upahP = upah*scale, ohP = oh*scale, mingguP = ohP>0 ? Math.max(1,Math.ceil(ohP/(S.tim*S.hm))) : 0;
+  var opsP = S.ops*(mingguP/4.345), kontP = (matP+upahP)*S.kont, hpp = matP+upahP+opsP+kontP;
+  return { S:S, items:items, rekap:rekap, nilaiRab:nilaiRab, nilaiTerhitung:nilaiTerhitung, cov:cov, mat:matBulat, matItem:mat, upah:upah, oh:oh, ohT:ohT, ohK:ohK,
+    matP:matP, upahP:upahP, ohP:ohP, mingguP:mingguP, opsP:opsP, kontP:kontP, hpp:hpp, tanpaHarga:Object.keys(tanpaHarga),
+    nOk:items.filter(function(x){ return x.st==='ok'&&x.ana; }).length, nTanpa:items.filter(function(x){ return x.st!=='ok'||!x.ana; }).length };
+}
+function pahSatBeli(nama){
+  try{ var row = (typeof MATERIAL_KATALOG!=='undefined' ? MATERIAL_KATALOG : []).find(function(r){ return r[2].replace(/\\'/g,"'")===nama; }); if(row) return row[3]; }catch(e){}
+  return '';
+}
+function pahBand(h){
+  var m = [0, pahNum(PAH.mMin,8), pahNum(PAH.mTarget,15), pahNum(PAH.mMax,25)];
+  var nama = ['Titik impas (laba 0%)','Minimum','Target','Maksimum'];
+  return m.map(function(x,i){ var harga = h.hpp/(1-x/100); return { nama:nama[i], m:x, harga:harga, laba:harga-h.hpp }; });
+}
+function pahSubkon(h){
+  var u = pahNum(PAH.subUpah,20)/100, p = pahNum(PAH.subPaket,10)/100;
+  var A = h.hpp;
+  var B = h.matP + h.upahP*(1+u) + h.opsP + (h.matP+h.upahP*(1+u))*pahNum(PAH.kont,5)/100;
+  var C = (h.matP+h.upahP)*(1+p) + h.opsP + (h.matP+h.upahP)*(1+p)*pahNum(PAH.kont,5)/100;
+  return [{ nama:'Swakelola (tukang PBC)', biaya:A, ket:'Material + upah tukang/kenek PBC' },
+          { nama:'Subkon upah (bahan dari PBC)', biaya:B, ket:'Upah ditambah '+(u*100)+'% untuk laba subkon' },
+          { nama:'Subkon paket (bahan + upah)', biaya:C, ket:'Material + upah ditambah '+(p*100)+'%' }];
+}
+/* ---- arus kas mingguan ---- */
+function pahArusKas(h, hargaJual){
+  var N = Math.max(2, h.mingguP||2), kel = new Array(N+1).fill(0), masuk = new Array(N+1).fill(0);
+  var ohTot = h.ohP>0 ? h.ohP : 1;
+  var urut = {}; h.items.forEach(function(r){ if(!(r.st==='ok'&&r.ana)) return; var k = (typeof fasaInfo==='function' ? fasaInfo(r.it.divisi).rank : 2); (urut[k] = urut[k]||[]).push(r); });
+  var ranks = Object.keys(urut).map(Number).sort(function(a,b){ return a-b; }), cur = 0, scale = h.cov>0 ? 1/h.cov : 1, hariTot = N*7;
+  ranks.forEach(function(k){
+    urut[k].forEach(function(r){
+      var oh = r.ohT+r.ohK, dur = Math.max(0.5, (oh*scale/ohTot)*hariTot), a = cur/7, z = Math.min(N, (cur+dur)/7);
+      var lamaMinggu = Math.max(1, Math.ceil(z)-Math.floor(a)), uang = (r.mat+r.upah)*scale;
+      for(var w = Math.floor(a); w < Math.floor(a)+lamaMinggu && w<=N-1; w++) kel[w+1] += uang/lamaMinggu;
+      cur += dur;
+    });
+  });
+  var tot = kel.reduce(function(s,x){ return s+x; },0), tar = h.matP+h.upahP;
+  if(tot>0 && Math.abs(tot-tar)>1){ var k = tar/tot; kel = kel.map(function(x){ return x*k; }); }
+  for(var w=1; w<=N; w++) kel[w] += h.opsP/N + h.kontP/N;
+  var pc = String(PAH.termin||'30,40,20,10').split(',').map(function(x){ return parseFloat(x); }).filter(function(x){ return x>0; });
+  if(!pc.length) pc = [30,40,20,10];
+  var jml = pc.reduce(function(s,x){ return s+x; },0);
+  pc.forEach(function(p,i){ var w = pc.length===1 ? 0 : Math.round(i*(N)/(pc.length-1)); masuk[Math.min(N,w)] += hargaJual*p/jml; });
+  var ck = 0, cm = 0, labels = [], K = [], M = [], Sd = [], low = 0, lowW = 0;
+  for(var i=0;i<=N;i++){ ck += kel[i]; cm += masuk[i]; labels.push(i); K.push(ck); M.push(cm); Sd.push(cm-ck); if(cm-ck<low){ low = cm-ck; lowW = i; } }
+  return { N:N, labels:labels, keluar:K, masuk:M, saldo:Sd, low:low, lowW:lowW, pc:pc };
+}
+
+/* ===================== TAMPILAN ===================== */
+function pahEnsurePage(){
+  if(document.getElementById('page-analisaharga')) return;
+  var main = document.querySelector('.main'); if(!main) return;
+  var d = document.createElement('div'); d.className = 'page'; d.id = 'page-analisaharga';
+  d.innerHTML = '<div class="sec-head"><div class="sec-title">Analisa Harga <span>— dari RAB ke harga penawaran</span></div>'
+    + '<div class="sec-sub">Baca RAB (BOQ, Proposal, atau dokumen), hitung kebutuhan material dan upah, lalu lihat batas harga penawaran, perbandingan subkon, dan arus kas. Harga yang tidak punya sumber tidak dikarang.</div></div>'
+    + '<div id="pahIsi"></div>';
+  main.appendChild(d);
+}
+function pahBuka(sumber){
+  if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ notif('Analisa Harga hanya untuk Direktur','var(--red)'); return; }
+  pahEnsurePage(); pahMuat(); if(sumber) PAH.sumber = sumber;
+  if(sumber==='proposal' && typeof proposalState!=='undefined' && proposalState){ PAH.propId = proposalState.id; }
+  switchToPage('page-analisaharga', null, function(){ pahGambar(); });
+  if(!PAH.propList.length) pahMuatProposal();
+}
+async function pahMuatProposal(){
+  try{
+    var idx = await getProposalIndex(); PAH.propList = idx||[]; PAH.propCache = PAH.propCache||{};
+    if(typeof proposalState!=='undefined' && proposalState){ PAH.propCache[proposalState.id] = proposalState; if(!PAH.propList.some(function(p){ return p.id===proposalState.id; })) PAH.propList.unshift({ id:proposalState.id, nama:proposalState.namaProspek||'(proposal terbuka)' }); }
+    if(document.getElementById('page-analisaharga') && document.getElementById('page-analisaharga').classList.contains('active')) pahGambar();
+  }catch(e){}
+}
+async function pahPilihProposal(id){
+  PAH.propId = id; PAH.propCache = PAH.propCache||{};
+  if(!PAH.propCache[id]){
+    try{ var r = await window.storage.get('pbc_proposal:'+id, false); if(r && r.value){ var p = JSON.parse(r.value); p.divisi = p.divisi||[]; p.items = p.items||[]; p.skemaPembayaran = p.skemaPembayaran||[]; PAH.propCache[id] = p; } }catch(e){}
+  }
+  pahSimpan(); pahGambar();
+}
+function pahSet(k, v){ PAH[k] = v; pahSimpan(); pahGambar(); }
+function pahSetSumber(s){ PAH.sumber = s; pahSimpan(); if(s==='proposal') pahMuatProposal(); pahGambar(); }
+function pahPilihAnalisa(itemId, nama){ if(nama) PAH.pilih[itemId] = nama; else delete PAH.pilih[itemId]; pahSimpan(); pahGambar(); }
+async function pahBacaDokumen(input){
+  var files = Array.prototype.slice.call(input.files||[]); if(!files.length) return;
+  var st = document.getElementById('pahDokStatus'); if(st) st.textContent = 'Membaca '+files.length+' file di perangkat ini...';
+  try{
+    var gab = { items:[], totalDok:null }, nama = [];
+    for(var i=0;i<files.length;i++){ var h = await pbcBacaRabFile(files[i]); h.items.forEach(function(x){ gab.items.push(x); }); nama.push(files[i].name); }
+    if(!gab.items.length) throw new Error('Tidak ada baris pekerjaan yang terbaca. Pastikan dokumen berisi teks (bukan foto/scan).');
+    PAH.dok = { nama:nama.join(', '), items:gab.items, totalDok:gab.totalDok }; PAH.sumber = 'dok'; PAH.pilih = {}; pahSimpan(); pahGambar();
+    notif('Dokumen terbaca: '+gab.items.length+' baris pekerjaan');
+  }catch(e){ if(st) st.textContent = '❌ '+(e&&e.message?e.message:e); }
+}
+function pahTempel(){
+  var t = (document.getElementById('pahTempelTxt')||{}).value||''; if(!t.trim()){ notif('Tempel daftar pekerjaan dulu','var(--red)'); return; }
+  try{ var h = pbcRabDariTeks(t); if(!h.items.length) throw new Error('Tidak ada baris pekerjaan yang terbaca'); PAH.dok = { nama:'teks yang ditempel', items:h.items, totalDok:h.totalDok }; PAH.sumber = 'dok'; PAH.pilih = {}; pahSimpan(); pahGambar(); notif('Teks terbaca: '+h.items.length+' baris'); }
+  catch(e){ notif(e.message,'var(--red)'); }
+}
+function pahInp(label, key, step, w){
+  return '<label style="display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted2);min-width:'+(w||120)+'px;flex:1"><span>'+label+'</span><input class="form-input" type="number" step="'+(step||1)+'" value="'+(PAH[key]!==undefined?PAH[key]:'')+'" onchange="pahSet(\''+key+'\',this.value)"></label>';
+}
+function pahChipSumber(kode){
+  var s = PAH_SUMBER[kode]; if(!s) return '';
+  var um = pahUmurBulan(s.tgl), lama = um>12;
+  return '<a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--gold)" title="'+pbcEsc(s.t+' · '+s.c)+'">'+kode+'</a><span style="color:'+(lama?'var(--red)':'var(--muted2)')+';font-size:9px"> '+s.tgl+(lama?' (lama)':'')+'</span>';
+}
+function pahGambar(){
+  var el = document.getElementById('pahIsi'); if(!el) return;
+  var rab = pahAmbilRab(), H = null;
+  var modeBtn = function(k, l){ return '<button class="btn btn-sm '+(PAH.mode===k?'btn-blue':'btn-gold')+'" onclick="pahSet(\'mode\',\''+k+'\')">'+l+'</button>'; };
+  var srcBtn = function(k, l){ return '<button class="btn btn-sm '+(PAH.sumber===k?'btn-blue':'btn-gold')+'" onclick="pahSetSumber(\''+k+'\')">'+l+'</button>'; };
+  var propOpt = (PAH.propList||[]).map(function(p){ return '<option value="'+p.id+'"'+(p.id===PAH.propId?' selected':'')+'>'+pbcEsc(p.nama||'(tanpa nama)')+'</option>'; }).join('');
+  var h = '<div class="panel" style="margin-bottom:14px"><div class="panel-title">1. Sumber RAB</div>'
+    + '<div class="toolbar" style="flex-wrap:wrap;gap:6px">'+srcBtn('boq','📋 BOQ proyek aktif')+srcBtn('proposal','📝 Proposal')+srcBtn('dok','📄 Dokumen RAB')+'</div>';
+  if(PAH.sumber==='proposal'){ h += '<div style="margin-top:8px"><select class="form-select" onchange="pahPilihProposal(this.value)"><option value="">— pilih proposal —</option>'+propOpt+'</select></div>'; }
+  if(PAH.sumber==='dok'){
+    h += '<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px"><input type="file" accept=".pdf,.xlsx,.xls,.csv" multiple onchange="pahBacaDokumen(this)" class="form-input">'
+      + '<textarea id="pahTempelTxt" class="form-input" rows="3" placeholder="atau tempel daftar pekerjaan di sini (nama, satuan, volume, harga)"></textarea>'
+      + '<div><button class="btn btn-gold btn-sm" onclick="pahTempel()">Baca teks tempelan</button> <button class="btn btn-gold btn-sm" onclick="openImportBoqModal()" title="Memasukkan RAB ke BOQ proyek aktif">Masukkan ke BOQ…</button></div>'
+      + '<div id="pahDokStatus" style="font-size:10px;color:var(--muted2)">Dibaca di perangkat ini; isi dokumen tidak keluar dari HP. Foto/scan belum bisa dibaca.</div></div>';
+  }
+  h += '<div style="font-size:10px;color:var(--muted2);margin-top:6px">'+(rab ? ('Terbaca: <b>'+pbcEsc(rab.nama)+'</b> · '+rab.items.length+' item') : 'Belum ada RAB pada sumber ini. '+(PAH.sumber==='boq'?'Buka proyek yang punya item BOQ.':PAH.sumber==='proposal'?'Pilih atau buka proposal yang sudah berisi RAB.':'Unggah atau tempel dokumen RAB.'))+'</div></div>';
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">2. Pengaturan</div>'
+    + '<div class="toolbar" style="flex-wrap:wrap;gap:6px;margin-bottom:8px"><span style="font-size:10px;color:var(--muted2);align-self:center">Harga referensi:</span>'+modeBtn('lo','Terendah')+modeBtn('mid','Tengah')+modeBtn('hi','Tertinggi')+'</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px">'+pahInp('Upah tukang / hari (Rp)','tukang',5000)+pahInp('Upah kenek / hari (Rp)','kenek',5000)+pahInp('Jumlah pekerja (orang)','tim',1,110)+pahInp('Hari kerja / minggu','hariMinggu',1,110)+'</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Operasional / bulan (Rp)','ops',500000)+pahInp('Cadangan tak terduga (%)','kont',1,110)+pahInp('Margin minimum (%)','mMin',1,110)+pahInp('Margin target (%)','mTarget',1,110)+pahInp('Margin maksimum (%)','mMax',1,110)+'</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Laba subkon atas upah (%)','subUpah',1,130)+pahInp('Laba subkon atas paket (%)','subPaket',1,130)
+    + '<label style="display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted2);min-width:180px;flex:2"><span>Skema termin (% dipisah koma)</span><input class="form-input" value="'+pbcEsc(PAH.termin)+'" onchange="pahSet(\'termin\',this.value)"></label></div>'
+    + '<div style="font-size:9px;color:var(--muted2);margin-top:6px">Upah tukang Rp170.000 dan kenek Rp140.000 dari Bapak. Operasional Rp10.000.000/bulan dari Bapak. Margin, cadangan, dan laba subkon adalah asumsi awal.</div></div>';
+  if(!rab){ el.innerHTML = h; return; }
+  H = pahHitung(rab); PAH.hasil = H;
+  var band = pahBand(H), sub = pahSubkon(H);
+  var jual = H.nilaiRab>0 ? H.nilaiRab : band[2].harga;
+  var kas = pahArusKas(H, jual);
+  var banner = [];
+  if(H.cov<1) banner.push('<b>'+H.nTanpa+' dari '+rab.items.length+' item</b> belum terhitung (tanpa analisa, satuan berbeda, atau ambigu), setara '+Math.round((1-H.cov)*100)+'% nilai RAB. Angka di bawah diproyeksikan ke seluruh RAB dengan rasio yang sama, jadi hanya perkiraan. Selesaikan item bertanda merah di tabel rincian.');
+  if(H.tanpaHarga.length) banner.push('<b>'+H.tanpaHarga.length+' bahan belum punya harga referensi</b> ('+H.tanpaHarga.slice(0,8).map(pbcEsc).join(', ')+(H.tanpaHarga.length>8?', …':'')+'). Biayanya belum masuk; isi harga di Material (harga supplier PBC otomatis dipakai).');
+  if(H.nilaiRab<=0) banner.push('RAB belum punya harga satuan, jadi posisi harga penawaran dibandingkan dengan margin target.');
+  h += (banner.length ? '<div style="background:#FBE9D4;color:#A5520F;border-radius:6px;padding:10px 12px;font-size:11px;margin-bottom:14px">'+banner.join('<br>')+'</div>' : '<div style="background:#E2F2E9;color:#1D7A4F;border-radius:6px;padding:10px 12px;font-size:11px;margin-bottom:14px">✓ Semua item punya analisa dan semua bahan punya harga.</div>');
+  var tile = function(l, v, n){ return '<div class="panel" style="padding:10px 12px;margin:0;min-width:140px;flex:1"><div style="font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em">'+l+'</div><div style="font-size:15px;font-weight:700;color:var(--white);margin-top:3px;overflow-wrap:anywhere">'+v+'</div><div style="font-size:9px;color:var(--muted2);margin-top:2px">'+n+'</div></div>'; };
+  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    + tile('Material', pahRp(H.matP), 'dibulatkan ke satuan beli')
+    + tile('Upah', pahRp(H.upahP), Math.round(H.ohP)+' OH · tukang '+pahRp(H.S.tukang)+', kenek '+pahRp(H.S.kenek))
+    + tile('Operasional', pahRp(H.opsP), H.mingguP+' minggu dengan '+H.S.tim+' orang')
+    + tile('Cadangan', pahRp(H.kontP), PAH.kont+'% dari material + upah')
+    + tile('Total biaya (HPP)', pahRp(H.hpp), (H.nilaiRab>0 ? (H.hpp/H.nilaiRab*100).toFixed(1)+'% dari nilai RAB' : 'RAB belum berharga'))
+    + '</div>';
+  /* batas harga + posisi harga pengajuan */
+  var mAktual = H.nilaiRab>0 ? (H.nilaiRab-H.hpp)/H.nilaiRab*100 : null, vonis = '', warna = '#1D7A4F';
+  if(mAktual!==null){
+    if(H.nilaiRab < H.hpp){ vonis = 'DI BAWAH HPP — rugi '+pahRp(H.hpp-H.nilaiRab); warna = '#B3261E'; }
+    else if(H.nilaiRab < band[1].harga){ vonis = 'Di bawah harga minimum — laba terlalu tipis'; warna = '#A5520F'; }
+    else if(H.nilaiRab <= band[3].harga){ vonis = H.nilaiRab>=band[2].harga ? 'Di atas target, masih dalam batas wajar' : 'Dalam rentang minimum sampai target'; }
+    else { vonis = 'Di atas harga maksimum — risiko ditolak owner'; warna = '#A5520F'; }
+  }
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">3. Harga penawaran ke owner</div><div class="tbl-wrap"><table><thead><tr><th>Batas</th><th style="text-align:right">Laba</th><th style="text-align:right">Harga penawaran</th><th style="text-align:right">Selisih vs HPP</th></tr></thead><tbody>'
+    + band.map(function(b){ return '<tr><td>'+b.nama+'</td><td style="text-align:right">'+b.m+'%</td><td style="text-align:right"><b>'+pahRp(b.harga)+'</b></td><td style="text-align:right">'+pahRp(b.laba)+'</td></tr>'; }).join('')
+    + '</tbody></table></div>'
+    + (mAktual!==null ? '<div style="margin-top:10px;padding:10px 12px;border-radius:6px;border:1px solid '+warna+';color:'+warna+';font-size:12px"><b>Harga pengajuan di RAB: '+pahRp(H.nilaiRab)+'</b> · laba kotor '+mAktual.toFixed(1)+'% ('+pahRp(H.nilaiRab-H.hpp)+')<br>'+vonis+'</div>' : '')
+    + '<div style="font-size:9px;color:var(--muted2);margin-top:6px">Belum termasuk PPN. Harga = HPP ÷ (1 − laba). HPP = material + upah + operasional + cadangan.</div></div>';
+  /* subkon */
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">4. Swakelola atau subkon</div><div class="tbl-wrap"><table><thead><tr><th>Cara kerja</th><th style="text-align:right">Biaya PBC</th><th style="text-align:right">Laba di harga pengajuan</th><th style="text-align:right">Laba di harga target</th></tr></thead><tbody>'
+    + sub.map(function(s){ var l1 = H.nilaiRab>0 ? H.nilaiRab-s.biaya : null, l2 = band[2].harga-s.biaya; return '<tr><td>'+s.nama+'<div style="font-size:9px;color:var(--muted2)">'+s.ket+'</div></td><td style="text-align:right">'+pahRp(s.biaya)+'</td><td style="text-align:right">'+(l1===null?'—':pahRp(l1)+' ('+(H.nilaiRab? (l1/H.nilaiRab*100).toFixed(1):0)+'%)')+'</td><td style="text-align:right">'+pahRp(l2)+' ('+(l2/band[2].harga*100).toFixed(1)+'%)</td></tr>'; }).join('')
+    + '</tbody></table></div><div style="font-size:9px;color:var(--muted2);margin-top:6px">Operasional dan cadangan dianggap sama di semua cara. Persentase laba subkon adalah asumsi; ganti sesuai penawaran subkon yang masuk.</div></div>';
+  /* skenario tim */
+  var tim = [6,8,10,12].map(function(n){ var o = PAH.tim; PAH.tim = n; var hh = pahHitung(rab); PAH.tim = o; return { n:n, minggu:hh.mingguP, ops:hh.opsP, hpp:hh.hpp }; });
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">5. Berapa pekerja?</div><div class="tbl-wrap"><table><thead><tr><th>Pekerja</th><th style="text-align:right">Durasi</th><th style="text-align:right">Operasional</th><th style="text-align:right">HPP</th></tr></thead><tbody>'
+    + tim.map(function(t){ return '<tr'+(t.n===H.S.tim?' style="background:rgba(212,168,50,0.12)"':'')+'><td>'+t.n+' orang</td><td style="text-align:right">'+t.minggu+' minggu</td><td style="text-align:right">'+pahRp(t.ops)+'</td><td style="text-align:right">'+pahRp(t.hpp)+'</td></tr>'; }).join('')
+    + '</tbody></table></div><div style="font-size:9px;color:var(--muted2);margin-top:6px">Upah tetap (dihitung dari hari-orang pekerjaan). Pekerja lebih banyak memperpendek durasi, jadi operasional bulanan lebih kecil.</div></div>';
+  /* arus kas */
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">6. Arus kas</div><div style="position:relative;height:280px"><canvas id="pahChart"></canvas></div>'
+    + '<div style="font-size:11px;margin-top:8px">'+(kas.low<0 ? 'Saldo kas terendah <b style="color:#B3261E">'+pahRp(kas.low)+'</b> di minggu '+kas.lowW+'. Itu modal kerja yang harus tersedia sebelum termin berikutnya cair.' : 'Kas tidak pernah negatif dengan skema termin ini.')+'</div>'
+    + '<div style="font-size:9px;color:var(--muted2);margin-top:4px">Termin '+kas.pc.join('/')+'% dari harga '+(H.nilaiRab>0?'pengajuan di RAB':'target')+', DP minggu 0, pelunasan akhir proyek. Jadwal pemakaian material mengikuti urutan fase pekerjaan.</div></div>';
+  /* rekap material */
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">7. Kebutuhan material</div><div class="tbl-wrap"><table><thead><tr><th>Material</th><th style="text-align:right">Kebutuhan</th><th style="text-align:right">Beli</th><th>Harga satuan</th><th style="text-align:right">Total</th><th>Sumber</th></tr></thead><tbody>'
+    + H.rekap.map(function(x){ var hb = x.hb, sat = x.satBeli||''; return '<tr'+(hb?'':' style="background:rgba(192,57,43,0.08)"')+'><td>'+pbcEsc(x.nama)+'</td><td style="text-align:right">'+x.qAnalisa.toLocaleString('id',{maximumFractionDigits:2})+'</td><td style="text-align:right">'+(PAH_BULAT[sat]?x.qBulat:x.qBulat.toLocaleString('id',{maximumFractionDigits:2}))+' '+sat+'</td>'
+      +'<td>'+(hb ? pahRp(hb.h)+(hb.lo!==hb.hi?'<div style="font-size:9px;color:var(--muted2)">'+pahRp(hb.lo)+' – '+pahRp(hb.hi)+'</div>':'') : '<span style="color:#B3261E;font-size:10px">belum ada referensi</span>')+'</td><td style="text-align:right">'+(hb?pahRp(x.total):'—')+'</td><td>'+(hb ? (hb.asal==='PBC'?'<span style="color:#1D7A4F;font-size:10px">harga PBC</span>':pahChipSumber(hb.sumber)) : '')+'</td></tr>'; }).join('')
+    + '<tr><td colspan="4" style="text-align:right"><b>Total material terhitung</b></td><td style="text-align:right"><b>'+pahRp(H.mat)+'</b></td><td></td></tr></tbody></table></div>'
+    + '<div style="font-size:9px;color:var(--muted2);margin-top:6px">Selisih pembulatan dibanding jumlah per item: '+pahRp(H.mat-H.matItem)+' (per item belum dibulatkan; total memakai pembulatan satuan beli).</div></div>';
+  /* rincian item */
+  var daftar = pahDaftarAnalisa();
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">8. Rincian per item</div><div class="tbl-wrap"><table><thead><tr><th>Pekerjaan</th><th style="text-align:right">Vol</th><th>Analisa</th><th style="text-align:right">Material</th><th style="text-align:right">Upah</th><th style="text-align:right">HPP</th><th style="text-align:right">Harga RAB</th></tr></thead><tbody>'
+    + H.items.map(function(r){
+      var ok = r.st==='ok' && r.ana, hpp = r.mat+r.upah, jl = r.nilai;
+      var sel = '<select class="form-select" style="font-size:10px;max-width:180px" onchange="pahPilihAnalisa(\''+r.it.id+'\',this.value)"><option value="">'+(ok?pbcEsc(r.ana.nama):'— pilih analisa —')+'</option>'+daftar.filter(function(a){ return !ok || a.nama!==r.ana.nama; }).map(function(a){ return '<option value="'+pbcEsc(a.nama)+'">'+pbcEsc(a.nama)+' ('+a.sat+')</option>'; }).join('')+'</select>';
+      var bor = ''; if(ok && PAH_BORONGAN[r.ana.nama]){ var per = r.it.vol>0 ? r.upah/r.it.vol : 0, ref = PAH_BORONGAN[r.ana.nama][0]; if(per<ref*0.6) bor = '<div style="font-size:9px;color:#A5520F">Upah analisa '+pahRp(per)+'/'+r.ana.sat+' jauh di bawah ongkos borongan referensi '+pahRp(ref)+' ('+pahChipSumber('X')+')</div>'; else bor = '<div style="font-size:9px;color:var(--muted2)">Upah '+pahRp(per)+'/'+r.ana.sat+' · borongan ref '+pahRp(ref)+'</div>'; }
+      var det = ok ? '<details><summary style="cursor:pointer;font-size:9px;color:var(--muted2)">bahan ('+r.baris.length+')</summary>'+r.baris.map(function(b){ return '<div style="font-size:9px;color:var(--muted2)">'+pbcEsc(b.nama)+': '+b.q.toLocaleString('id',{maximumFractionDigits:2})+(b.hb?' × '+pahRp(b.hb.h/b.f):' <span style="color:#B3261E">tanpa harga</span>')+'</div>'; }).join('')+'</details>' : '';
+      return '<tr'+(ok?'':' style="background:rgba(192,57,43,0.08)"')+'><td>'+pbcEsc(r.it.nama)+'<div style="font-size:9px;color:var(--muted2)">'+pbcEsc(r.it.divisi)+'</div>'+(r.cat?'<div style="font-size:9px;color:#A5520F">'+pbcEsc(r.cat)+'</div>':'')+'</td><td style="text-align:right;white-space:nowrap">'+(+r.it.vol.toFixed(2))+' '+pbcEsc(r.it.sat)+'</td><td>'+sel+bor+det+'</td>'
+        +'<td style="text-align:right">'+(ok?pahRp(r.mat):'—')+'</td><td style="text-align:right">'+(ok?pahRp(r.upah):'—')+'</td><td style="text-align:right"><b>'+(ok?pahRp(hpp):'—')+'</b></td><td style="text-align:right">'+(jl?pahRp(jl):'—')+(ok&&jl?'<div style="font-size:9px;color:'+(jl<hpp?'#B3261E':'var(--muted2)')+'">'+((jl-hpp)/jl*100).toFixed(0)+'%</div>':'')+'</td></tr>'; }).join('')
+    + '</tbody></table></div><div style="font-size:9px;color:var(--muted2);margin-top:6px">Koefisien analisa adalah angka umum (pola SNI/AHSP), bukan data PBC. Ubah di menu MRP → Analisa Pekerjaan bila PBC punya angka sendiri; perubahan itu otomatis dipakai di sini.</div></div>';
+  /* sumber */
+  var dipakai = {}; H.rekap.forEach(function(x){ if(x.hb && x.hb.sumber) dipakai[x.hb.sumber] = 1; }); dipakai.X = 1;
+  h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">9. Sumber dan mutu data</div><ul style="margin:0;padding-left:18px;font-size:10px;line-height:1.7">'
+    + Object.keys(dipakai).sort().map(function(k){ var s = PAH_SUMBER[k], um = pahUmurBulan(s.tgl); return '<li><a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--gold)">'+pbcEsc(s.t)+'</a> · '+s.tgl+(um>12?' <b style="color:#B3261E">(lebih dari setahun, cek ulang)</b>':'')+' · '+pbcEsc(s.c)+'</li>'; }).join('')
+    + '</ul><div style="font-size:10px;color:var(--muted2);margin-top:6px">Hampir semua harga adalah rata-rata nasional, bukan khusus Bali (satu-satunya data Denpasar: bata ringan). Harga supplier PBC yang diisi di katalog Material otomatis menggantikan referensi. Upah dan operasional dari Bapak.</div></div>';
+  h += '<div class="toolbar"><button class="btn btn-gold" onclick="pahExportPdf()">📄 Export PDF Analisa Harga</button></div>';
+  el.innerHTML = h;
+  pahGambarChart(kas);
+}
+function pahGambarChart(kas){
+  var cv = document.getElementById('pahChart'); if(!cv || typeof Chart==='undefined') return;
+  if(PAH.chart){ try{ PAH.chart.destroy(); }catch(e){} }
+  var jt = function(v){ return (v/1e6).toLocaleString('id',{maximumFractionDigits:0})+' jt'; };
+  PAH.chart = new Chart(cv, { type:'line', data:{ labels:kas.labels, datasets:[
+    { label:'Kas masuk (termin)', data:kas.masuk, borderColor:'#1D7A4F', backgroundColor:'#1D7A4F', stepped:true, pointRadius:0, borderWidth:2 },
+    { label:'Kas keluar', data:kas.keluar, borderColor:'#B3261E', backgroundColor:'#B3261E', pointRadius:0, borderWidth:2 },
+    { label:'Saldo kas', data:kas.saldo, borderColor:'#16213A', backgroundColor:'#16213A', borderDash:[5,4], pointRadius:0, borderWidth:2 } ] },
+    options:{ responsive:true, maintainAspectRatio:false, animation:false, interaction:{ mode:'index', intersect:false },
+      plugins:{ tooltip:{ callbacks:{ label:function(c){ return c.dataset.label+': '+jt(c.parsed.y); } } } },
+      scales:{ x:{ title:{ display:true, text:'Minggu ke-' } }, y:{ ticks:{ callback:function(v){ return jt(v); } } } } } });
+}
+/* ---- PDF ---- */
+function pahExportPdf(){
+  var H = PAH.hasil, rab = pahAmbilRab(); if(!H || !rab){ notif('Belum ada hasil analisa','var(--red)'); return; }
+  if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi sebentar','var(--red)'); return; }
+  try{
+    var doc = new window.jspdf.jsPDF('p','mm','a4'), y = 32, judul = 'Analisa Harga';
+    var np = function(d){ pdfHeader(d, judul); pdfFooter(d); };
+    np(doc);
+    y = pdfSectionTitle(doc, y, 'ANALISA HARGA — '+rab.nama);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, PDF.dark);
+    var band = pahBand(H), sub = pahSubkon(H), jual = H.nilaiRab>0 ? H.nilaiRab : band[2].harga, kas = pahArusKas(H, jual);
+    [['Tanggal', today()], ['Harga referensi', {lo:'Terendah',mid:'Tengah',hi:'Tertinggi'}[PAH.mode]], ['Upah tukang / kenek', pahRp(H.S.tukang)+' / '+pahRp(H.S.kenek)], ['Pekerja / durasi', H.S.tim+' orang / '+H.mingguP+' minggu'],
+      ['Operasional / bulan', pahRp(H.S.ops)], ['Cakupan analisa', Math.round(H.cov*100)+'% nilai RAB ('+H.nOk+' dari '+rab.items.length+' item)']].forEach(function(r){ doc.text(r[0]+':',12,y); doc.setFont('helvetica','bold'); doc.text(String(r[1]),60,y); doc.setFont('helvetica','normal'); y += 6; });
+    y += 4; y = pdfSectionTitle(doc, y, 'Ringkasan biaya');
+    y = pdfTable(doc, y, [{label:'Komponen',w:3},{label:'Nilai',w:2}], [['Material (dibulatkan satuan beli)',pahRp(H.matP)],['Upah tukang dan kenek',pahRp(H.upahP)],['Operasional '+H.mingguP+' minggu',pahRp(H.opsP)],['Cadangan '+PAH.kont+'%',pahRp(H.kontP)],['TOTAL BIAYA (HPP)',pahRp(H.hpp)]], { onNewPage:np });
+    y += 6; y = pdfSectionTitle(doc, y, 'Batas harga penawaran');
+    y = pdfTable(doc, y, [{label:'Batas',w:2.4},{label:'Laba',w:0.8},{label:'Harga penawaran',w:2}], band.map(function(b){ return [b.nama, b.m+'%', pahRp(b.harga)]; }), { onNewPage:np });
+    if(H.nilaiRab>0){ y += 4; doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('Harga pengajuan di RAB: '+pahRp(H.nilaiRab)+' (laba kotor '+((H.nilaiRab-H.hpp)/H.nilaiRab*100).toFixed(1)+'%)', 12, y); y += 8; }
+    if(y>235){ doc.addPage(); np(doc); y = 32; }
+    y = pdfSectionTitle(doc, y, 'Swakelola atau subkon');
+    y = pdfTable(doc, y, [{label:'Cara kerja',w:2.6},{label:'Biaya PBC',w:2},{label:'Laba di harga target',w:2}], sub.map(function(s){ var l = band[2].harga-s.biaya; return [s.nama, pahRp(s.biaya), pahRp(l)+' ('+(l/band[2].harga*100).toFixed(1)+'%)']; }), { onNewPage:np });
+    y += 6; doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.text(kas.low<0 ? 'Saldo kas terendah '+pahRp(kas.low)+' di minggu '+kas.lowW+' (modal kerja yang dibutuhkan).' : 'Kas tidak pernah negatif dengan skema termin ini.', 12, y); y += 8;
+    doc.addPage(); np(doc); y = 32;
+    y = pdfSectionTitle(doc, y, 'Kebutuhan material');
+    y = pdfTable(doc, y, [{label:'Material',w:3},{label:'Beli',w:1.4},{label:'Harga satuan',w:1.5},{label:'Total',w:1.6}], H.rekap.map(function(x){ return [x.nama, (PAH_BULAT[x.satBeli]?x.qBulat:x.qBulat.toFixed(2))+' '+x.satBeli, x.hb?pahRp(x.hb.h):'belum ada referensi', x.hb?pahRp(x.total):'-']; }), { onNewPage:np });
+    y += 6; if(y>240){ doc.addPage(); np(doc); y = 32; }
+    y = pdfSectionTitle(doc, y, 'Sumber data');
+    var dipakai = {}; H.rekap.forEach(function(x){ if(x.hb && x.hb.sumber) dipakai[x.hb.sumber] = 1; });
+    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    Object.keys(dipakai).sort().forEach(function(k){ var s = PAH_SUMBER[k]; if(y>280){ doc.addPage(); np(doc); y = 32; } doc.text(k+'. '+s.t+' ('+s.tgl+', '+s.c+')', 12, y); y += 4.5; });
+    y += 3; doc.text('Harga adalah referensi pasar, bukan penawaran. Belum termasuk PPN. Koefisien analisa adalah angka umum.', 12, y);
+    if(typeof window.__PBC_TEST_PDF==='function'){ window.__PBC_TEST_PDF(doc); return; }
+    doc.save(fileNameFor('Analisa_Harga'));
+    notif('PDF Analisa Harga berhasil dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+
 </script>
 </body>
 </html>
