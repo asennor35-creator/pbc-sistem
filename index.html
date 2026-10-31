@@ -1729,7 +1729,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
       </div>
       <div class="role-panel" id="rolePanel" onclick="event.stopPropagation()"></div>
     </div>
-    <input type="file" id="importBackupInput" accept=".json" style="display:none" onchange="importBackupJSON(this.files[0])">
+    <input type="file" id="importBackupInput" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="importBackupJSON(this.files[0])">
   </div>
 </div>
 
@@ -5980,6 +5980,65 @@ async function convertProposalToProject(){
    proyek+proposal sekaligus, supaya ukuran file tetap wajar dan jelas cakupannya) ke
    satu file .json, termasuk isi dokumen (foto/file) yang ter-upload — bukan cuma metadata.
    =========================================================================== */
+/* ===== PENGINGAT BACKUP BULANAN + KIRIM KE GOOGLE DRIVE =====
+   Tanggal backup terakhir dicatat per proyek di perangkat ini (localStorage). Pengingat muncul bila >= 30 hari sejak backup
+   terakhir (atau sejak proyek pertama kali dibuka di perangkat ini bila belum pernah backup). "Nanti" menunda 1 hari. */
+const PBC_BK_HARI = 30;
+function pbcBkKey(k){ return 'pbc_bk_'+k+':'+(state.proyek && state.proyek.id || ''); }
+function pbcBkBaca(k){ try{ return localStorage.getItem(pbcBkKey(k)); }catch(e){ return null; } }
+function pbcBkTulis(k, v){ try{ localStorage.setItem(pbcBkKey(k), v); }catch(e){} }
+function pbcBkTutup(){ const el = document.getElementById('pbcBackupBar'); if(el) el.remove(); }
+function pbcBkBar(html){
+  pbcBkTutup();
+  const el = document.createElement('div'); el.id = 'pbcBackupBar';
+  el.style.cssText = 'position:fixed;left:10px;right:10px;bottom:14px;z-index:99999;background:#0E2A5A;color:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.45);font:13px/1.4 Arial,sans-serif;max-width:560px;margin:0 auto';
+  el.innerHTML = html; document.body.appendChild(el); return el;
+}
+function pbcBkTombol(label, fn, utama){
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+  b.style.cssText = 'margin:8px 8px 0 0;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.4);font:600 12px Arial;cursor:pointer;'+(utama?'background:#D4A832;color:#1a1a2e;border-color:#D4A832':'background:transparent;color:#fff');
+  b.addEventListener('click', fn); return b;
+}
+function pbcBackupSelesai(blob, nama, lengkap, nDok){
+  if(lengkap){ pbcBkTulis('last', new Date().toISOString()); pbcBkTulis('tunda', ''); }
+  const el = pbcBkBar('<div style="font-weight:700">'+(lengkap?'✅ Backup sudah jadi':'⚠ Backup belum lengkap')+'</div><div style="opacity:.85;margin-top:2px">'+(lengkap?('Tersimpan di folder Download ('+nDok+' dokumen/foto ikut). Simpan juga ke Google Drive supaya aman kalau HP hilang.'):'Sebagian foto belum di server. Sambungkan internet, tunggu foto terkirim, lalu backup ulang.')+'</div>');
+  const file = new File([blob], nama, { type:'application/json' });
+  let bisa = false, fileKirim = file;
+  try{
+    if(navigator.share && navigator.canShare){
+      if(navigator.canShare({files:[file]})) bisa = true;
+      else { const f2 = new File([blob], nama+'.txt', { type:'text/plain' }); if(navigator.canShare({files:[f2]})){ fileKirim = f2; bisa = true; } }
+    }
+  }catch(e){ bisa = false; }
+  if(bisa) el.appendChild(pbcBkTombol('☁ Kirim ke Google Drive', function(){
+    navigator.share({ files:[fileKirim], title:'Backup PBC' }).then(function(){ pbcBkTutup(); notif('Pilih Google Drive pada daftar yang muncul untuk menyimpan salinan'); }).catch(function(e){ if(e && e.name!=='AbortError') notif('Tidak bisa membuka menu bagikan. Buka aplikasi Files, lalu kirim file backup ke Drive.','var(--orange)'); });
+  }, true));
+  else { const t = document.createElement('div'); t.style.cssText = 'margin-top:6px;opacity:.85;font-size:12px'; t.textContent = 'Buka aplikasi Files → Download → tekan file backup → Bagikan → Google Drive.'; el.appendChild(t); }
+  el.appendChild(pbcBkTombol('Tutup', pbcBkTutup, false));
+}
+function pbcCekPengingatBackup(){
+  try{
+    if(!state.proyek || !state.proyek.id || !PBC_UANG_TERBUKA()) return;
+    if(document.getElementById('pbcBackupBar')) return;
+    const kini = Date.now(), tunda = Date.parse(pbcBkBaca('tunda')||'');
+    if(isFinite(tunda) && kini < tunda) return;
+    let acuan = Date.parse(pbcBkBaca('last')||'');
+    if(!isFinite(acuan)){
+      acuan = Date.parse(pbcBkBaca('ref')||'');
+      if(!isFinite(acuan)){ pbcBkTulis('ref', new Date(kini).toISOString()); return; }
+    }
+    const hari = Math.floor((kini-acuan)/86400000);
+    if(hari < PBC_BK_HARI) return;
+    const ada = !!pbcBkBaca('last');
+    const el = pbcBkBar('<div style="font-weight:700">💾 Waktunya backup proyek</div><div style="opacity:.85;margin-top:2px">'+(ada?('Backup terakhir '+hari+' hari lalu.'):'Proyek ini belum pernah dibackup.')+' Sebaiknya backup tiap bulan.</div>');
+    el.appendChild(pbcBkTombol('Backup sekarang', function(){ pbcBkTutup(); exportBackupJSON(); }, true));
+    el.appendChild(pbcBkTombol('Nanti (besok)', function(){ pbcBkTulis('tunda', new Date(Date.now()+86400000).toISOString()); pbcBkTutup(); }, false));
+  }catch(e){ console.warn('[PBC] pengingat backup', e); }
+}
+(function(){
+  var t = null, el = document.getElementById('topProject'); if(!el || !window.MutationObserver) return;
+  new MutationObserver(function(){ clearTimeout(t); t = setTimeout(pbcCekPengingatBackup, 2500); }).observe(el, {childList:true, characterData:true, subtree:true});
+})();
 async function exportBackupJSON(){
   if(!PBC_UANG_TERBUKA()){ notif('Backup data memuat harga — hanya untuk Direktur','var(--red)'); return; }
   if(!state.proyek){ notif('Buat/pilih proyek terlebih dahulu sebelum backup','var(--red)'); return; }
@@ -6022,6 +6081,7 @@ async function exportBackupJSON(){
     a.href = url; a.download = 'PBC_Backup_'+safeName+'_'+today()+'.json';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    try{ pbcBackupSelesai(blob, 'PBC_Backup_'+safeName+'_'+today()+'.json', tidakTerekspor.length===0, dokumenBlobs.length); }catch(e){ console.warn('[PBC] panel backup', e); }
     if(tidakTerekspor.length) notif('Backup TIDAK lengkap: '+tidakTerekspor.length+' foto/dokumen tidak bisa diambil isinya (daftarnya ada di dalam file backup). '+dokumenBlobs.length+' lainnya tersimpan.','var(--red)');
     else if(hanyaDiPerangkat.length) notif('Backup berhasil — '+dokumenBlobs.length+' dokumen ikut tersimpan. '+hanyaDiPerangkat.length+' foto baru ada di perangkat ini (belum di server) dan ikut tersimpan di backup.','var(--orange)');
     else notif('Backup berhasil diunduh — '+dokumenBlobs.length+' dokumen ikut tersimpan di dalamnya');
