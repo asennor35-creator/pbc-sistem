@@ -4464,10 +4464,54 @@ const PBC_DOK_DEFAULT = { alamat:'Jl. Penarukan No.7, Kab. Tabanan', email:'prat
   ttdNama:'Norasen', ttdJabatan:'Managing Director' };
 function pbcDokPref(){ try{ return JSON.parse(localStorage.getItem('pbc_dok_pref')||'{}')||{}; }catch(e){ return {}; } }
 function pbcDokSimpanPref(o){ try{ localStorage.setItem('pbc_dok_pref', JSON.stringify(Object.assign(pbcDokPref(), o))); }catch(e){} }
+function pbcDokUraiBank(t){   /* "NAMA BANK - nomor a/n Nama" -> {bank,no,an} (null bila tidak terbaca) */
+  const m = String(t||'').match(/^\s*(.*?)\s*[-–:]\s*([\d][\d\s.]{4,})\s*(?:a\/n|a\.n\.?|an\.?|atas nama)?\s*(.*)$/i);
+  return m ? { bank:m[1].trim(), no:m[2].replace(/\s+/g,'').trim(), an:m[3].trim() } : null;
+}
+function pbcDokBarisBank(bank, bhs){ return bhs==='en' ? 'Bank Transfer Account: '+bank+'.' : 'Rekening Transfer: '+bank+'.'; }
+function pbcDokBankLengkap(){   /* bank + nomor + atas nama semuanya terisi? */
+  const g = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  return !!(g('dokBankNama') && g('dokBankNo') && g('dokBankAn'));
+}
+function pbcDokBankGabung(){   /* tiga kolom -> satu teks "BANK - nomor a/n nama" (disimpan di isian tersembunyi) + perbarui catatan */
+  const g = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  const b = g('dokBankNama'), n = g('dokBankNo'), a = g('dokBankAn'), h = document.getElementById('dokBank'); if(!h) return;
+  h.value = (b && n) ? (b+' - '+n+(a?' a/n '+a:'')) : '';
+  const i = document.getElementById('dokBankInfo'); if(i){ const kurang = [!b?'nama bank':'', !n?'nomor rekening':'', !a?'atas nama':''].filter(Boolean);
+    i.textContent = kurang.length ? ('Belum diisi: '+kurang.join(', ')+'.') : 'Lengkap — tersimpan sekali, dipakai di semua penawaran.'; i.style.color = kurang.length ? 'var(--red)' : 'var(--muted2)'; }
+  pbcDokSinkronBank();
+}
+function pbcDokIsiBank(){   /* isi tiga kolom dari rekening tersimpan / isian lama */
+  const r = pbcRekening(), u = pbcDokUraiBank(pbcDokProfil().bank) || {};
+  const set = function(id, v){ const e = document.getElementById(id); if(e && !e.value.trim() && v) e.value = v; };
+  set('dokBankNama', r.bank || u.bank); set('dokBankNo', r.no || u.no); set('dokBankAn', r.an || u.an);
+  pbcDokBankGabung();
+}
+function pbcDokSinkronBank(){   /* isi rekening berubah -> baris "Rekening Transfer" di catatan ikut berubah */
+  const ta = document.getElementById('dokCatatan'), bk = document.getElementById('dokBank'), sel = document.getElementById('dokBhs'); if(!ta || !bk) return;
+  const bhs = sel ? sel.value : 'en', val = bk.value.trim(); if(!val) return;
+  const baris = ta.value.split('\n'); let ada = false;
+  for(let i=0;i<baris.length;i++){ if(/^\s*(\d+[.)]\s*)?(Rekening Transfer|Bank Transfer Account)\s*:/i.test(baris[i])){ baris[i] = pbcDokBarisBank(val, bhs); ada = true; } }
+  if(!ada) baris.push(pbcDokBarisBank(val, bhs));
+  ta.value = baris.filter(function(x,i){ return x.trim() || i < baris.length-1; }).join('\n');
+}
+function pbcDokRefOtomatis(kind, tglStr){   /* contoh: PBC/QUO/20261031-01 (nomor urut per hari; naik setelah PDF benar-benar dibuat) */
+  const tgl = String(tglStr||today()).replace(/\D/g,'').slice(0,8) || String(today()).replace(/\D/g,'');
+  let seq = {}; try{ seq = JSON.parse(localStorage.getItem('pbc_dok_seq')||'{}')||{}; }catch(e){}
+  const n = (seq.tgl===tgl ? (seq.n||0) : 0) + 1;
+  return 'PBC/'+(kind==='proposal'?'PRO':'QUO')+'/'+tgl+'-'+String(n).padStart(2,'0');
+}
+function pbcDokRefCatat(ref){   /* panggil setelah PDF dibuat: simpan nomor urut terakhir hari itu */
+  const m = String(ref||'').match(/^PBC\/(?:QUO|PRO)\/(\d{8})-(\d+)$/); if(!m) return;
+  let seq = {}; try{ seq = JSON.parse(localStorage.getItem('pbc_dok_seq')||'{}')||{}; }catch(e){}
+  const n = parseInt(m[2],10); if(seq.tgl===m[1] && (seq.n||0) >= n) return;
+  try{ localStorage.setItem('pbc_dok_seq', JSON.stringify({ tgl:m[1], n:n })); }catch(e){}
+}
 function pbcDokProfil(){
   const p = Object.assign({}, PBC_DOK_DEFAULT, pbcDokPref().profil||{});
   if(window.PBC_DEMO){ const r = pbcRekBawaan(); p.bank = r.bank+' - '+r.no+' '+r.an; return p; } /* Mode Demo: tidak pernah memakai rekening asli */
-  if(!p.bank){ const r = pbcRekening(); if(r.bank && r.no) p.bank = r.bank+' - '+r.no+(r.an?' a/n '+r.an:''); }
+  const r = pbcRekening(); const dariRek = (r.bank && r.no) ? (r.bank+' - '+r.no+(r.an?' a/n '+r.an:'')) : '';
+  if(dariRek && (!p.bank || !/a\/n|a\.n|atas nama/i.test(p.bank))) p.bank = dariRek;   /* rekening lengkap (bank, nomor, atas nama) dari pengaturan menang atas isian lama yang tidak lengkap */
   return p;
 }
 function pbcRp(n){ return (n<0?'-':'')+'Rp'+String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
@@ -4795,21 +4839,28 @@ function pbcDokBukaForm(kind){
     + '<div class="modal-title">📑 Dokumen Resmi PBC — '+(kind==='vo'?'Addendum':'Penawaran / RAB')+'</div>'
     + '<div style="font-size:10px;color:var(--muted2);margin-bottom:10px">Tampilan dokumen sudah dikunci (format paten PBC). Di sini hanya isi nomor, tujuan, dan catatan.</div>'
     + '<div class="form-group"><label class="form-label">Bahasa dokumen</label><select class="form-select" id="dokBhs" onchange="pbcDokGantiBahasa()"><option value="en"'+(d.bhs==='en'?' selected':'')+'>English (seperti contoh Addendum)</option><option value="id"'+(d.bhs==='id'?' selected':'')+'>Bahasa Indonesia</option></select></div>'
-    + '<div class="form-row">'+f('dokRef','Nomor Referensi',d.ref)+f('dokTgl','Tanggal',d.tgl,'date')+'</div>'
+    + '<div class="form-row">'+f('dokRef','Nomor Referensi (otomatis, boleh diubah)',(d.kind==='vo'||d.ref)?d.ref:pbcDokRefOtomatis(d.kind,d.tgl))+f('dokTgl','Tanggal',d.tgl,'date')+'</div>'
     + f('dokKepada','Kepada (nama klien / perusahaan)',d.kepada)
     + f('dokPerihal','Perihal / Subject',t.perihal)
     + f('dokLampiran','Lampiran / Attachment (boleh kosong)','')
     + f('dokSub','Sub-judul di kanan atas',t.sub)
     + (kind==='vo' ? f('dokJudulTabel','Judul tabel',t.judulTabel) : '')
     + ta('dokIntro','Kalimat pembuka',t.intro,3)
+    + '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 10px 2px;margin-bottom:10px;background:rgba(255,255,255,.35)"><div style="font-size:11px;color:var(--gold);font-weight:700;margin-bottom:6px">🏦 Rekening pembayaran <span style="font-weight:400;color:var(--muted2)">(ikut tercetak di Catatan &amp; Ketentuan)</span></div>'
+    + '<div class="form-row">'+'<div class="form-group"><label class="form-label">Nama bank</label><input class="form-input" id="dokBankNama" type="text" placeholder="nama bank" oninput="pbcDokBankGabung()"></div>'
+    + '<div class="form-group"><label class="form-label">Nomor rekening</label><input class="form-input" id="dokBankNo" type="text" inputmode="numeric" placeholder="nomor rekening" oninput="pbcDokBankGabung()"></div></div>'
+    + '<div class="form-group"><label class="form-label">Atas nama</label><input class="form-input" id="dokBankAn" type="text" placeholder="nama pemilik rekening" oninput="pbcDokBankGabung()"></div>'
+    + '<input type="hidden" id="dokBank" value="'+pbcDokEsc(pr.bank)+'"><div id="dokBankInfo" style="font-size:9px;margin:-4px 0 8px"></div></div>'
     + ta('dokCatatan','Catatan &amp; Ketentuan (satu baris = satu poin, nomor otomatis)',t.notes.join('\n'),5)
     + '<div id="dokEnBox"></div>'
     + '<details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:11px;color:var(--gold)">Data perusahaan &amp; penandatangan</summary>'
-    + f('dokAlamat','Alamat',pr.alamat)+f('dokEmail','Email',pr.email)+f('dokTelp','Telepon',pr.telp)+f('dokBank','Rekening bank',pr.bank)
+    + f('dokAlamat','Alamat',pr.alamat)+f('dokEmail','Email',pr.email)+f('dokTelp','Telepon',pr.telp)
     + '<div class="form-row">'+f('dokTtdNama','Nama penandatangan',pr.ttdNama)+f('dokTtdJab','Jabatan',pr.ttdJabatan)+'</div></details>'
     + '<div class="modal-footer"><button class="btn btn-gold" onclick="hideModal(\'modalDokPbc\')">Batal</button><button class="btn btn-blue" onclick="pbcDokCetak()">📄 Buat PDF</button></div></div>';
   showModal('modalDokPbc');
   pbcDokIsiEn();
+  pbcDokIsiBank();
+  try{ pbcMuatRekening().then(function(){ pbcDokIsiBank(); }); }catch(x){}
 }
 function pbcDokIsiEn(){
   const box = document.getElementById('dokEnBox'), d = _pbcDokD; if(!box || !d) return;
@@ -4841,6 +4892,13 @@ function pbcDokCetak(){
   const bhs = v('dokBhs') || 'en', L = PBC_DOK_L[bhs];
   const prof = { nama:'PRATAMA BUILD & CONSTRUCTION', alamat:v('dokAlamat')||PBC_DOK_DEFAULT.alamat, email:v('dokEmail')||PBC_DOK_DEFAULT.email, telp:v('dokTelp')||PBC_DOK_DEFAULT.telp,
                  bank:v('dokBank')||pbcDokProfil().bank, ttdNama:v('dokTtdNama')||PBC_DOK_DEFAULT.ttdNama, ttdJabatan:v('dokTtdJab')||PBC_DOK_DEFAULT.ttdJabatan };
+  if(!prof.bank || !pbcDokBankLengkap()){
+    const kosong = ['dokBankNama','dokBankNo','dokBankAn'].filter(function(id){ const e = document.getElementById(id); return e && !e.value.trim(); })[0];
+    const bk = document.getElementById(kosong || 'dokBankNama'); if(bk){ try{ bk.focus(); bk.scrollIntoView({block:'center'}); }catch(x){} }
+    notif('Lengkapi rekening: nama bank, nomor rekening, dan atas nama. PDF belum dibuat agar tidak ada yang kosong.','var(--red)'); return;
+  }
+  pbcDokSinkronBank();   /* pastikan baris rekening di catatan memakai isian terbaru */
+  try{ const u = pbcDokUraiBank(prof.bank); if(u && u.bank && u.no){ pbcSimpanRek('bank', u.bank); pbcSimpanRek('no', u.no); if(u.an) pbcSimpanRek('an', u.an); } }catch(x){}   /* simpan sekali -> berlaku di semua perangkat & semua proyek */
   pbcDokSimpanPref({ bahasa:bhs, profil:{ alamat:prof.alamat, email:prof.email, telp:prof.telp, bank:prof.bank, ttdNama:prof.ttdNama, ttdJabatan:prof.ttdJabatan } });
   try{
     const t = pbcDokTeks(Object.assign({}, d, {prof:prof}), bhs);
@@ -4862,6 +4920,7 @@ function pbcDokCetak(){
     const nm = d.kind==='vo' ? 'Addendum_'+d.ref : (d.kind==='proposal' ? 'Penawaran_'+(proposalState.namaProspek||'Tanpa_Nama') : 'Penawaran_'+(state.proyek?state.proyek.nama:'Proyek'));
     doc.save(fileNameFor(nm.replace(/[^A-Za-z0-9_-]+/g,'_')));
     hideModal('modalDokPbc');
+    pbcDokRefCatat(v('dokRef'));
     if(d.kind==='vo'){ catatDokumenPdfLog('Variation Order', d.ref+' (format PBC)'); }
     else if(d.kind==='proposal'){ try{ catatProposalPdfLog('Proposal','Penawaran format PBC — '+(proposalState.namaProspek||'Tanpa Nama')); }catch(e){} }
     else { try{ catatDokumenPdfLog('Penawaran', 'Penawaran/RAB format PBC — '+today()); }catch(e){} }
@@ -7447,7 +7506,7 @@ function pbcAngka(t){ const k = pbcAngkaKandidat(t); return k.length ? k[0] : nu
 function pbcPeranKolom(teks){
   const t = String(teks).toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[.:*]/g, ' ').replace(/\s+/g, ' ').trim();
   if(!t) return null;
-  if(/^(no|nomor|item no|no urut|#)$/.test(t)) return 'no';
+  if(/^(no|nomor|item no|item|no urut|#)$/.test(t)) return 'no';
   if(/(unit rate|harga satuan|harga sat|price|rate|unit price|h\s?s)$/.test(t) || /^harga$/.test(t)) return 'rate';
   if(/(amount|jumlah harga|jumlah biaya|total harga|sub total|subtotal|total)$/.test(t) || /^jumlah$/.test(t)) return 'amount';
   if(/(qty|quantity|volume|vol|kuantitas|kuantiti)$/.test(t)) return 'qty';
@@ -7461,7 +7520,10 @@ function pbcPeranKolom(teks){
 function pbcBangunRab(baris, judul){
   const hasil = { items: [], totalDok: null, peringatan: [] };
   let div = (judul && judul.trim()) || 'Item Diimpor', terakhir = null, setelahBaris = false, pra = '';
-  const ADALAH_TOTAL = /grand\s*total|total\s+(addendum|rab|biaya|nilai|keseluruhan|pekerjaan|penawaran|akhir)|^total\b/i;
+  const ADALAH_TOTAL = /grand\s*total|total\s+(addendum|rab|biaya|nilai|keseluruhan|pekerjaan|penawaran|akhir)|jumlah\s+total|^total\b/i;
+  const ADALAH_TOTAL_AKHIR = /grand\s*total|total\s+(addendum|rab|keseluruhan|penawaran|akhir)|jumlah\s+total|total\s+harga\s+penawaran/i;  /* hanya ini yang menutup pembacaan; "Total Divisi/Lantai" hanya subtotal */
+  const ADALAH_JUDUL_KOLOM = /^(no|nomor|item|uraian|description|pekerjaan|volume|vol|qty|sat|satuan|unit|harga|jumlah|amount|total|rate|price)\b/i;
+  const totalSub = []; let totalAkhir = null, hitungSub = 0;
   const ADALAH_SUB = /sub\s*-?\s*total|subtotal|sub\s*jumlah|jumlah\s*(bagian|divisi)/i;
   const ADALAH_JUDUL = /^(([IVXLC]+|[A-Z])[\.\)]\s+\S|[A-Z0-9][A-Z0-9 &\/\-\.,()+']{3,}$)/;
   for(let i = 0; i < baris.length; i++){
@@ -7470,12 +7532,18 @@ function pbcBangunRab(baris, judul){
     const adaAngka = (qtyK.length ? 1 : 0) + (rateK.length ? 1 : 0) + (amtK.length ? 1 : 0);
     const teksBaris = (desc + ' ' + (f.no || '')).trim();
     if(ADALAH_SUB.test(teksBaris) && !qtyK.length){ terakhir = null; setelahBaris = false; continue; }
+    /* baris judul kolom yang diulang di halaman berikutnya / tabel kedua: lewati, jangan dianggap total */
+    if(!qtyK.length && !rateK.length && hasil.items.length && [f.no, f.desc, f.qty, f.unit, f.rate, f.amount].filter(function(x){ return x && ADALAH_JUDUL_KOLOM.test(String(x).trim()) && !pbcAngkaKandidat(x).length; }).length >= 2){ terakhir = null; setelahBaris = false; continue; }
     if(ADALAH_TOTAL.test(teksBaris) && !qtyK.length){
-      if(amtK.length) hasil.totalDok = amtK[0];
-      else { const sisa = baris.slice(i + 1, i + 3).map(function(b){ return pbcAngka(b.f.amount || b.f.rate || b.f.desc || ''); }).filter(function(x){ return x != null; }); if(sisa.length) hasil.totalDok = sisa[0]; }
-      if(hasil.items.length) break; else continue;
+      let nilai = null;
+      if(amtK.length) nilai = amtK[0];
+      else { const sisa = baris.slice(i + 1, i + 3).map(function(b){ return pbcAngka(b.f.amount || b.f.rate || b.f.desc || ''); }).filter(function(x){ return x != null; }); if(sisa.length) nilai = sisa[0]; }
+      if(ADALAH_TOTAL_AKHIR.test(teksBaris)){ if(nilai != null) totalAkhir = nilai; if(hasil.items.length) break; else continue; }
+      if(nilai != null && hasil.items.length) totalSub.push({ n: nilai, j: hasil.items.length });   /* total per divisi/lantai: tidak menghentikan pembacaan */
+      terakhir = null; setelahBaris = false; continue;
     }
-    const barisData = (qtyK.length && (rateK.length || amtK.length)) || (adaAngka >= 2 && desc);
+    const hanyaJumlah = !!(desc && amtK.length === 1 && !qtyK.length && !rateK.length && (f.amount || '').trim() && amtK[0] >= 1000 && !ADALAH_SUB.test(teksBaris) && !ADALAH_TOTAL.test(teksBaris));  /* lumpsum: hanya ada jumlah */
+    const barisData = (qtyK.length && (rateK.length || amtK.length)) || (adaAngka >= 2 && desc) || hanyaJumlah;
     if(barisData){
       /* pilih tafsiran qty/rate yang cocok dengan jumlah */
       let qty = qtyK.length ? qtyK[0] : 0, rate = rateK.length ? rateK[0] : null, amt = amtK.length ? amtK[0] : null, catatan = [];
@@ -7489,6 +7557,7 @@ function pbcBangunRab(baris, judul){
         else if(qtyK.length && rate == null && qty){ rate = amt / qty; catatan.push('harga satuan dihitung dari jumlah ÷ volume'); }
         else if(qtyK.length && rate != null) catatan.push('volume × harga satuan ≠ jumlah di dokumen — periksa');
       } else if(rate != null && qty) { amt = qty * rate; }
+      if(hanyaJumlah){ qty = 1; rate = amtK[0]; amt = amtK[0]; if(!(f.unit || '').trim()) catatan.push('hanya ada jumlah — dibaca sebagai 1 ls'); }
       if(rate == null) { rate = 0; catatan.push('harga satuan tidak terbaca'); }
       hasil.items.push({ divisi: div, nama: (pra ? pra + ' ' : '') + desc, sat: (f.unit || '').trim() || '-', vol: qty || 0, harga: rate || 0, jumlahDok: amt, catatan: catatan });
       pra = ''; terakhir = hasil.items[hasil.items.length - 1]; setelahBaris = true;
@@ -7503,6 +7572,13 @@ function pbcBangunRab(baris, judul){
     }
   }
   hasil.items.forEach(function(it){ it.nama = it.nama.replace(/\s+/g, ' ').trim(); });
+  /* total dokumen: yang berlabel "Grand Total/Keseluruhan" dulu; kalau hanya ada "Total" biasa: yang terakhir bila sama dengan jumlah total sebelumnya, atau jumlah semua total per divisi */
+  if(totalAkhir != null) hasil.totalDok = totalAkhir;
+  else if(totalSub.length){
+    const t = totalSub.map(function(x){ return x.n; }), akhir = t[t.length - 1], sebelum = t.slice(0, -1).reduce(function(a, b){ return a + b; }, 0);
+    if(t.length > 1 && Math.abs(akhir - sebelum) <= Math.max(1, akhir * 0.001)) hasil.totalDok = akhir;
+    else hasil.totalDok = t.reduce(function(a, b){ return a + b; }, 0);
+  }
   if(!hasil.items.length) hasil.peringatan.push('Tidak ada baris pekerjaan yang terbaca.');
   return hasil;
 }
@@ -7543,7 +7619,7 @@ async function pbcBacaPdfRab(file){
   let kolom = null, idxJudul = -1;
   for(let i = 0; i < semuaBaris.length && !kolom; i++){
     const kandidat = [semuaBaris[i].sel];
-    if(semuaBaris[i + 1] && semuaBaris[i].y - semuaBaris[i + 1].y < semuaBaris[i].h * 2.6 && !semuaBaris[i + 1].sel.some(function(c){ return /\d/.test(c.t); })
+    if(semuaBaris[i + 1] && semuaBaris[i].sel.some(function(c){ return pbcPeranKolom(c.t); }) && semuaBaris[i].y - semuaBaris[i + 1].y < semuaBaris[i].h * 2.6 && !semuaBaris[i + 1].sel.some(function(c){ return /\d/.test(c.t); })
        && semuaBaris[i + 1].sel.every(function(c){ return c.t.length <= 16 || pbcPeranKolom(c.t); })){
       const gabung = semuaBaris[i].sel.map(function(c){ return { t: c.t, x0: c.x0, x1: c.x1 }; });
       semuaBaris[i + 1].sel.forEach(function(c){
@@ -7559,6 +7635,12 @@ async function pbcBacaPdfRab(file){
     }
   }
   if(!kolom) throw new Error('Tabel rincian pekerjaan tidak ditemukan di PDF ini (judul kolom seperti No / Uraian / Volume / Satuan / Harga Satuan / Jumlah tidak terbaca). Coba file Excel/CSV, atau tambah item lewat "Tambah Item Massal".');
+  /* judul "No Uraian Pekerjaan" yang menempel jadi satu sel -> pisahkan: kolom No dan kolom Uraian (letaknya diperkirakan dari panjang teks) */
+  if(kolom.desc && !kolom.no){
+    const mm = String(kolom.desc.t).match(/^(no\.?|nomor|item)\s+(\S.*)$/i);
+    if(mm){ const lebar = kolom.desc.x1 - kolom.desc.x0, tepi = kolom.desc.x0 + lebar * (mm[1].length + 0.5) / (kolom.desc.t.length);
+      kolom.no = { t: mm[1], x0: kolom.desc.x0, x1: tepi - 1 }; kolom.desc = { t: mm[2], x0: tepi, x1: kolom.desc.x1 }; }
+  }
   /* judul bagian di atas tabel = divisi bawaan */
   let judul = '';
   for(let i = idxJudul - 1; i >= 0; i--){ const t = semuaBaris[i].sel.map(function(c){ return c.t; }).join(' ').trim(); if(t && t === t.toUpperCase() && /[A-Z]{4}/.test(t) && !/@|\||www\./i.test(t)){ judul = t; break; } }
@@ -7570,7 +7652,7 @@ async function pbcBacaPdfRab(file){
     semuaBaris[i].sel.forEach(function(c){
       let role;
       if(pbcEsNumerik(c.t) && numerik.length){
-        if(kolom.no && !/rp/i.test(c.t) && /^\d{1,3}$/.test(c.t) && ctr(c) < (kolom.desc ? kolom.desc.x0 : batasDesc) ) role = 'no';
+        if(!/rp/i.test(c.t) && /^\d{1,3}(\.\d{1,3}){0,3}$/.test(c.t) && ctr(c) < (kolom.desc ? kolom.desc.x0 : batasDesc) && (kolom.no || /^\d{1,3}$/.test(c.t) || /\./.test(c.t)) ) role = 'no';
         else { role = numerik.slice().sort(function(a, b){ return Math.abs(ctr(kolom[a]) - ctr(c)) - Math.abs(ctr(kolom[b]) - ctr(c)); })[0]; }
       } else if(kolom.unit && c.x0 >= kolom.unit.x0 - 14 && c.x0 < kolom.unit.x1 + 30 && c.x0 > batasDesc - 20) role = 'unit';
       else if(kolom.no && c.x1 < (kolom.desc ? kolom.desc.x0 : batasDesc) - 2 && /^[\dIVXLCivxlcA-Za-z]{1,4}[\.\)]?$/.test(c.t)) role = 'no';
