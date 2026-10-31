@@ -1614,6 +1614,15 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
   .tbl-wrap table{min-width:100%}
   .tbl-wrap th,.tbl-wrap td{padding:8px 6px!important;font-size:10px!important;letter-spacing:.03em!important}
 }
+
+.pbc-dd{position:relative;display:inline-block}
+.pbc-dd-p{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:60;min-width:260px;max-width:86vw;background:var(--bg2,#16213e);border:1px solid var(--border,#2a3a5e);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.45);padding:6px 0}
+.pbc-dd.open>.pbc-dd-p{display:block}
+.pbc-dd-p.pbc-dd-r{left:auto;right:0}
+@media(max-width:600px){.pbc-dd-p.pbc-dd-r{position:fixed;left:12px;right:12px;top:auto;max-width:none;max-height:70vh;overflow:auto}}
+.pbc-dd-p button{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;font-size:12px;padding:9px 14px;cursor:pointer}
+.pbc-dd-p button:hover{background:rgba(255,255,255,.07)}
+.pbc-dd-h{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:8px 14px 3px}
 </style>
 </head>
 <body>
@@ -1874,24 +1883,36 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
   </div>
   <div id="boqKpi"></div>
 
-  <div class="toolbar">
-    <button class="btn btn-blue" onclick="showModal('modalDivisi')">+ Tambah Divisi</button>
-    <button class="btn btn-gold" onclick="showModal('modalItem')">+ Tambah Item</button>
-    <button class="btn btn-blue" onclick="openAiBoqModal()">🤖 AI Estimator (Auto BOQ)</button>
-    <button class="btn btn-blue" onclick="openImportBoqModal()">📄 Import RAB/BOQ dari Dokumen</button>
-    <button class="btn btn-gold" onclick="pahBuka('boq')">💲 Analisa Harga BOQ</button>
-    <button class="btn btn-gold" onclick="bukaDurasiModal()">⏱ Atur Durasi Proyek</button>
-    <button class="btn btn-green" onclick="recalcAll()">⚡ Hitung Ulang Bobot</button>
-    <button class="btn btn-green" onclick="recalcAllDurasi()">🤖 Hitung Ulang Durasi Otomatis</button>
-    <button class="btn btn-gold" onclick="saranRelasiParalel()">💡 Saran Relasi Paralel</button>
-    <button class="btn btn-gold btn-sm" onclick="openFaktorModal()">⚙ Faktor Lapangan</button>
-    <button class="btn btn-blue" onclick="cetakPenawaranBoq()">📑 PDF Penawaran (Format PBC)</button>
-    <span style="margin-left:10px;font-size:9px;color:var(--muted2);align-self:center">Bahasa BOQ:</span>
-    <button class="btn btn-sm" id="btnBhsId" onclick="pbcSetBoqBhs('id')">🇮🇩 Indonesia</button>
-    <button class="btn btn-sm" id="btnBhsEn" onclick="pbcSetBoqBhs('en')">🇬🇧 English</button>
-    <button class="btn btn-green btn-sm" onclick="pbcTerjemahSemuaBoq()">🌐 Terjemahkan Otomatis ke English</button>
-    <span id="boqEnCount" style="font-size:9px;color:var(--muted2);align-self:center"></span>
-    <button class="btn btn-gold" onclick="exportBoqCsv()">⬇ Export CSV</button>
+  <div class="toolbar pbc-tb">
+    <div class="pbc-dd">
+      <button class="btn btn-gold" onclick="pbcDd(event,this)">＋ Tambah ▾</button>
+      <div class="pbc-dd-p" onclick="pbcDdTutup()">
+        <button onclick="showModal('modalItem')">+ Item pekerjaan</button>
+        <button onclick="showModal('modalDivisi')">+ Divisi</button>
+        <button onclick="openImportBoqModal()">📄 Import RAB/BOQ dari dokumen (PDF/Excel)</button>
+        <button onclick="openAiBoqModal()">🤖 AI Estimator (Auto BOQ)</button>
+      </div>
+    </div>
+    <button class="btn btn-blue" onclick="cetakPenawaranBoq()">📑 PDF Penawaran</button>
+    <div class="pbc-dd">
+      <button class="btn" onclick="pbcDd(event,this)">⋯ Menu ▾</button>
+      <div class="pbc-dd-p pbc-dd-r" onclick="pbcDdTutup()">
+        <div class="pbc-dd-h">Hitung &amp; Jadwal</div>
+        <button onclick="recalcAll()">⚡ Hitung ulang bobot</button>
+        <button onclick="recalcAllDurasi()">🤖 Hitung ulang durasi otomatis</button>
+        <button onclick="bukaDurasiModal()">⏱ Atur durasi proyek</button>
+        <button onclick="saranRelasiParalel()">💡 Saran relasi paralel</button>
+        <button onclick="openFaktorModal()">⚙ Faktor lapangan</button>
+        <div class="pbc-dd-h">Analisa &amp; Ekspor</div>
+        <button onclick="pahBuka('boq')">💲 Analisa harga BOQ</button>
+        <button onclick="exportBoqCsv()">⬇ Export CSV</button>
+        <div class="pbc-dd-h">Bahasa BOQ</div>
+        <button id="btnBhsId" onclick="pbcSetBoqBhs('id')">🇮🇩 Indonesia</button>
+        <button id="btnBhsEn" onclick="pbcSetBoqBhs('en')">🇬🇧 English</button>
+        <button onclick="pbcTerjemahSemuaBoq()">🌐 Terjemahkan otomatis ke English</button>
+        <div id="boqEnCount" style="font-size:9px;color:var(--muted2);padding:2px 12px 6px"></div>
+      </div>
+    </div>
     <div style="margin-left:auto;font-size:10px;color:var(--muted)">Total BOQ: <strong style="color:var(--gold)" id="boqTotalDisplay">Rp 0</strong></div>
   </div>
 
@@ -5019,6 +5040,9 @@ function pbcInputEn(id, isDiv){
 function pbcNamaEnMap(){ if(!state.namaEn) state.namaEn = {}; return state.namaEn; }
 function pbcBoqBhs(){ try{ return localStorage.getItem('pbc_boq_bhs')==='en' ? 'en' : 'id'; }catch(e){ return 'id'; } }
 function pbcNamaTampil(id, namaId){ if(pbcBoqBhs()==='en'){ const e = pbcNamaEnMap()[id]; if(e) return e; } return namaId; }
+function pbcDd(ev,btn){ ev.stopPropagation(); var w=btn.parentNode, was=w.classList.contains('open'); pbcDdTutup(); if(!was) w.classList.add('open'); }
+function pbcDdTutup(){ document.querySelectorAll('.pbc-dd.open').forEach(function(x){ x.classList.remove('open'); }); }
+document.addEventListener('click', function(e){ if(!e.target.closest || !e.target.closest('.pbc-dd')) pbcDdTutup(); });
 function pbcSetBoqBhs(b){ try{ localStorage.setItem('pbc_boq_bhs', b); }catch(e){} pbcDokSimpanPref({bahasa:b}); renderBoq(); }
 function pbcBoqBhsUi(){
   const b = pbcBoqBhs(), m = pbcNamaEnMap();
