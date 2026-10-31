@@ -1479,7 +1479,8 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
 .foto-slot .foto-slot-label{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);color:#fff;font-size:8px;padding:2px 4px;text-align:center;line-height:1.3}
 .foto-slot .foto-slot-remove{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;z-index:2}
 .foto-slot .foto-slot-remove:hover{background:var(--red)}
-@media(max-width:640px){ .foto-grid{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:640px){ .foto-grid{grid-template-columns:repeat(2,1fr)} #fotoMaterialGrid{grid-template-columns:repeat(2,1fr)!important} }
+#fotoMaterialGrid textarea{width:100%;box-sizing:border-box;margin-top:4px;padding:5px 7px;font:11px/1.3 inherit;border:1px solid rgba(30,80,180,0.25);border-radius:6px;resize:vertical;background:transparent;color:inherit}
 
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:none;align-items:center;justify-content:center}
 .modal-overlay.show{display:flex}
@@ -2050,6 +2051,20 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     </div>
   </div>
 
+  <div class="panel" id="panelMaterialDatang" style="margin-bottom:16px">
+    <div class="panel-title">📦 Material Datang (10 Foto + Catatan)</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <span style="font-size:10px;color:var(--muted2)">Tanggal:</span>
+      <input type="date" id="matTgl" class="form-input" style="width:auto;padding:5px 8px;font-size:12px" onchange="renderMaterialDatang(true)">
+      <button class="btn btn-sm" onclick="matKeHariIni()">Hari ini</button>
+      <span id="matInfo" style="font-size:10px;color:var(--muted2)"></span>
+    </div>
+    <input type="file" id="fotoMaterialInput" accept="image/*" style="display:none" onchange="handleFotoMaterialSelected(this)">
+    <div id="fotoMaterialGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px"></div>
+    <div style="margin-top:10px;font-size:10px;color:var(--muted2)">* Tap kotak untuk foto material yang datang. Tulis catatan di bawah foto (contoh: "Pasir 3 truk", "Semen 40 sak"). Tersimpan per tanggal sampai proyek selesai dan ikut backup.</div>
+    <details style="margin-top:12px"><summary style="cursor:pointer;font-size:11px;color:var(--gold)">Riwayat Material Datang (semua tanggal)</summary><div id="matRiwayat" style="margin-top:8px"></div></details>
+  </div>
+
   <div class="panel">
     <div class="panel-title">Riwayat Laporan Harian</div>
     <div id="laporanList"><div class="empty"><div class="empty-icon">📸</div>Belum ada laporan. Mulai input laporan hari ini.</div></div>
@@ -2339,7 +2354,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
       <option value="gambar_kerja">Gambar Kerja</option>
       <option value="shop_drawing">Shop Drawing</option>
       <option value="revisi_gambar">Revisi Gambar</option>
-      <option value="foto_progress">Foto Progress</option><option value="foto_owner">Foto Laporan Owner</option>
+      <option value="foto_progress">Foto Progress</option><option value="foto_material">Foto Material Datang</option><option value="foto_owner">Foto Laporan Owner</option>
       <option value="invoice">Invoice</option>
       <option value="bast">BAST</option>
       <option value="dokumen_owner">Dokumen Owner</option>
@@ -3329,7 +3344,7 @@ async function saveProjectNowInti() {
     namaEn: state.namaEn||{}, variationOrders: state.variationOrders, catatanOwner: state.catatanOwner||{}, dokumenPdfLog: state.dokumenPdfLog,
     masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan,
     inspections: state.inspections, punchList: state.punchList,
-    fotoHarian: fotoHarianRingkas() /* hanya referensi {docId,uploadedAt,label}; gambar tetap di pbc_doc:ID */
+    fotoMaterial: materialRingkas(), fotoHarian: fotoHarianRingkas() /* hanya referensi {docId,uploadedAt,label}; gambar tetap di pbc_doc:ID */
   });
   /* Data utama proyek — paling kritis. Dicoba 2x (dengan jeda sebentar) sebelum benar-benar
      mengalah & memberi tahu user, supaya kegagalan sesaat/transient tidak langsung jadi alarm. */
@@ -3492,7 +3507,7 @@ async function loadProjectById(id) {
     state.termin = data.termin||[]; state.kurva = data.kurva||{mulai:null,durasi:24,weeks:[]};
     state.estimasiFaktor = data.estimasiFaktor || {cuaca:1.15, material:1.10, tenagaKerja:1.0};
     state.dokumen = data.dokumen || [];
-    state.fotoHarian = pulihkanFotoHarian(data.fotoHarian, state.dokumen); /* T5: foto harian kembali per tanggal; foto lama dipetakan dari state.dokumen */
+    state.fotoMaterial = bersihkanMaterial(data.fotoMaterial); state.fotoHarian = pulihkanFotoHarian(data.fotoHarian, state.dokumen); /* T5: foto harian kembali per tanggal; foto lama dipetakan dari state.dokumen */
     state.suppliers = data.suppliers || [];
     state.materials = data.materials || [];
     state.materialKategori = data.materialKategori || [];
@@ -3665,7 +3680,7 @@ async function deleteProject(id) {
     if(state.proyek && state.proyek.id===id) {
       state.proyek=null; state.divisi=[]; state.items=[]; state.laporan=[]; state.termin=[];
       state.kurva={mulai:null,durasi:24,weeks:[]};
-      state.dokumen=[]; state.fotoHarian={}; state.suppliers=[]; state.materials=[]; state.materialKategori=[]; state.materialSubkategori=[]; state.analisaPekerjaan=[]; state.mrpDraft=[]; state.materialRequests=[]; state.approvalLog=[]; state.materialReceiving=[]; state.materialUsageLog=[]; state.progressLog=[]; state.opnameList=[]; state.purchaseOrders=[]; state.pekerja=[]; state.absensi=[]; state.payrollLog=[]; state.payrollSettings={siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders=[]; state.catatanOwner={}; state.dokumenPdfLog=[]; state.masaGaransi=null; state.retensiPencairan=[]; state.inspections=[]; state.punchList=[];
+      state.dokumen=[]; state.fotoHarian={}; state.fotoMaterial={}; state.suppliers=[]; state.materials=[]; state.materialKategori=[]; state.materialSubkategori=[]; state.analisaPekerjaan=[]; state.mrpDraft=[]; state.materialRequests=[]; state.approvalLog=[]; state.materialReceiving=[]; state.materialUsageLog=[]; state.progressLog=[]; state.opnameList=[]; state.purchaseOrders=[]; state.pekerja=[]; state.absensi=[]; state.payrollLog=[]; state.payrollSettings={siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders=[]; state.catatanOwner={}; state.dokumenPdfLog=[]; state.masaGaransi=null; state.retensiPencairan=[]; state.inspections=[]; state.punchList=[];
       document.getElementById('topProject').textContent='— Pilih Proyek —';
       renderBoq(); renderKurva(); renderProgress(); renderTermin(); refreshDashboard();
     }
@@ -5363,7 +5378,7 @@ function pbcCetakTermin(){
 }
 
 /* ===== 4. LAPORAN HARIAN ===== */
-function pbcCetakLaporanHarian(){
+async function pbcCetakLaporanHarian(){
   if(!pbcLapSiap()) return;
   try{
     const bhs = pbcLapBhs(), R = PBC_R[bhs];
@@ -5374,6 +5389,7 @@ function pbcCetakLaporanHarian(){
     c.tabel([{l:R.no,w:0.4,a:'c'},{l:R.tgl,w:1.1,a:'c'},{l:R.cuaca,w:1.1,a:'c'},{l:R.tk,w:1,a:'c'},{l:R.divisi,w:1.8,wrap:true},{l:R.pekerjaan,w:5,wrap:true},{l:R.kendala,w:2.6,wrap:true}], rows, {title:R.lapJudul});
     const lg = (state.progressLog||[]).slice().sort(function(a,b){ return String(a.tanggal).localeCompare(String(b.tanggal)); });
     if(lg.length){ c.tabel([{l:R.no,w:0.5,a:'c'},{l:R.tgl,w:2,a:'c'},{l:R.akKum,w:2,a:'r'},{l:R.prog,w:6}], lg.map(function(g,i){ return [String(i+1), g.tanggal, Number(g.kumulatifPct).toFixed(1)+'%', {pct:Number(g.kumulatifPct), warna:C.teal}]; }), {title:R.riwayat}); }
+    await pbcLapMaterial(c, bhs);
     c.selesai('LaporanHarian');
     notif(bhs==='en'?'Daily report PDF created':'PDF Laporan Harian berhasil dibuat');
   }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
@@ -5946,7 +5962,7 @@ async function convertProposalToProject(){
   state.divisi = newDivisi;
   state.items = newItems;
   state.laporan = []; state.termin = []; state.kurva = { mulai:null, durasi:24, weeks:[] }; state.estimasiFaktor = 1;
-  state.dokumen = []; state.fotoHarian = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = [];
+  state.dokumen = []; state.fotoHarian = {}; state.fotoMaterial = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = [];
   state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = [];
   state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.catatanOwner = {}; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
 
@@ -5986,7 +6002,7 @@ async function exportBackupJSON(){
       _backupVersion: 1, _appName: 'PBC Sistem Terpadu', _exportedAt: new Date().toISOString(), _proyekNama: state.proyek.nama,
       proyek: state.proyek, divisi: state.divisi, items: state.items,
       laporan: state.laporan, termin: state.termin, kurva: state.kurva, estimasiFaktor: state.estimasiFaktor,
-      dokumen: state.dokumen, dokumenBlobs: dokumenBlobs, fotoHarian: fotoHarianRingkas(),
+      dokumen: state.dokumen, dokumenBlobs: dokumenBlobs, fotoHarian: fotoHarianRingkas(), fotoMaterial: materialRingkas(),
       _lengkap: tidakTerekspor.length===0, _dokumenTidakTerekspor: tidakTerekspor, _fotoBelumDiServer: hanyaDiPerangkat,
       suppliers: state.suppliers, materials: state.materials, materialKategori: state.materialKategori, materialSubkategori: state.materialSubkategori,
       analisaPekerjaan: state.analisaPekerjaan, materialRequests: state.materialRequests, approvalLog: state.approvalLog,
@@ -6055,7 +6071,7 @@ async function importBackupJSON(file){
     state.kurva = data.kurva || { mulai:null, durasi:24, weeks:[] };
     state.estimasiFaktor = data.estimasiFaktor || 1;
     state.dokumen = data.dokumen || [];
-    state.fotoHarian = pulihkanFotoHarian(data.fotoHarian, state.dokumen);
+    state.fotoHarian = pulihkanFotoHarian(data.fotoHarian, state.dokumen); state.fotoMaterial = bersihkanMaterial(data.fotoMaterial);
     state.suppliers = data.suppliers || [];
     state.materials = data.materials || [];
     state.materialKategori = data.materialKategori || [];
@@ -6978,7 +6994,7 @@ async function simpanProyek() {
     state.proyek = null;
     state.divisi = []; state.items = []; state.laporan = []; state.termin = [];
     state.kurva = { mulai:null, durasi:24, weeks:[] };
-    state.dokumen = []; state.fotoHarian = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.catatanOwner = {}; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
+    state.dokumen = []; state.fotoHarian = {}; state.fotoMaterial = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.catatanOwner = {}; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
   }
   state.proyek = {
     id: state.proyek && state.proyek.id ? state.proyek.id : uid(),
@@ -9030,6 +9046,8 @@ function kumpulkanIdFotoDokumen(){
   (state.dokumen||[]).forEach(function(d){ if(d && d.id!=null && !peta.has(d.id)) peta.set(d.id, {id:d.id, namaFile:d.namaFile, sumber:'dokumen'}); });
   const fh = state.fotoHarian || {};
   Object.keys(fh).forEach(function(t){ Object.keys(fh[t]||{}).forEach(function(i){ const e = fh[t][i]; if(e && e.docId && !peta.has(e.docId)) peta.set(e.docId, {id:e.docId, namaFile:(e.label||'')+' — '+t, sumber:'fotoHarian'}); }); });
+  const fmm = state.fotoMaterial || {};
+  Object.keys(fmm).forEach(function(t){ Object.keys(fmm[t]||{}).forEach(function(i){ const e = fmm[t][i]; if(e && e.docId && !peta.has(e.docId)) peta.set(e.docId, {id:e.docId, namaFile:'Material Datang — '+t, sumber:'fotoMaterial'}); }); });
   (state.punchList||[]).forEach(function(p){ ((p&&p.fotoDokIds)||[]).forEach(function(id){ if(!peta.has(id)) peta.set(id, {id:id, namaFile:null, sumber:'punchList'}); }); });
   (state.materialReceiving||[]).forEach(function(r){ ((r&&r.fotoDokIds)||[]).forEach(function(id){ if(!peta.has(id)) peta.set(id, {id:id, namaFile:null, sumber:'penerimaanMaterial'}); }); });
   return Array.from(peta.values());
@@ -9255,8 +9273,206 @@ async function hapusFotoSlot(idx, event){
   notif('Foto dihapus, silakan ambil ulang','var(--orange)');
 }
 
+/* ===== MATERIAL DATANG — 10 foto + catatan per tanggal =====
+   fotoMaterial[tanggal][0..9] = {docId, uploadedAt, catatan[, belumUpload]}. Gambar disimpan sama seperti foto harian
+   (pbc_doc:ID + tercatat di state.dokumen kategori foto_material, jadi ikut backup/restore). Tanggal memakai jam setempat. */
+const FOTO_MATERIAL_MAKS = 10;
+function tglLokal(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function matTgl(){ const el = document.getElementById('matTgl'); const v = el && el.value; return /^\d{4}-\d{2}-\d{2}$/.test(v||'') ? v : tglLokal(); }
+function bersihkanMaterial(src){
+  const out = {};
+  if(!src || typeof src!=='object' || Array.isArray(src)) return out;
+  Object.keys(src).forEach(function(tgl){
+    const h = src[tgl]; if(!/^\d{4}-\d{2}-\d{2}$/.test(tgl) || !h || typeof h!=='object') return;
+    Object.keys(h).forEach(function(k){
+      const idx = Number(k), e = h[k];
+      if(!Number.isInteger(idx) || idx<0 || idx>=FOTO_MATERIAL_MAKS || !e || typeof e!=='object') return;
+      const foto = idDokAman(e.docId), cat = typeof e.catatan==='string' ? e.catatan.slice(0,600) : '';
+      if(!foto && !cat) return;
+      out[tgl] = out[tgl] || {};
+      const r = { uploadedAt: Number.isFinite(e.uploadedAt) ? e.uploadedAt : 0, catatan: cat };
+      if(foto){ r.docId = e.docId; if(e.belumUpload===true) r.belumUpload = true; }
+      out[tgl][idx] = r;
+    });
+  });
+  return out;
+}
+function materialRingkas(){ return bersihkanMaterial(state.fotoMaterial); }
+function matKeHariIni(){ const el = document.getElementById('matTgl'); if(el) el.value = tglLokal(); renderMaterialDatang(true); }
+function muatThumbMaterial(docId){
+  if(fotoHarianMemuat[docId] || docId in fotoHarianCache) return;
+  if(fotoHarianGagal[docId] && Date.now()-fotoHarianGagal[docId] < 30000) return;
+  fotoHarianMemuat[docId] = true;
+  Promise.resolve().then(function(){ return window.storage.get('pbc_doc:'+docId, false); })
+    .then(function(r){
+      const aman = (r && r.value) ? sanitasiFoto(r.value) : null;
+      if(aman){ fotoHarianCache[docId] = aman; delete fotoHarianGagal[docId]; sinkronBenderaFoto(docId, !!r.hanyaLokal); }
+      else fotoHarianGagal[docId] = Date.now();
+    })
+    .catch(function(){ fotoHarianGagal[docId] = Date.now(); })
+    .then(function(){
+      delete fotoHarianMemuat[docId];
+      document.querySelectorAll('#fotoMaterialGrid [data-doc]').forEach(function(ph){
+        if(ph.getAttribute('data-doc')!==docId) return;
+        const src = fotoHarianCache[docId];
+        ph.textContent = '';
+        if(src){ const im = document.createElement('img'); im.alt = 'Material'; im.src = src; ph.appendChild(im); }
+        else ph.textContent = 'foto belum bisa dimuat';
+      });
+    });
+}
+function renderMaterialDatang(paksa){
+  const grid = document.getElementById('fotoMaterialGrid'); if(!grid) return;
+  const el = document.getElementById('matTgl');
+  if(el){ if(!el.value) el.value = tglLokal(); el.max = tglLokal(); }
+  if(!paksa && grid.contains(document.activeElement) && document.activeElement.tagName==='TEXTAREA') return; /* jangan ganggu yang sedang mengetik */
+  state.fotoMaterial = state.fotoMaterial || {};
+  const tgl = matTgl(), hari = state.fotoMaterial[tgl] || {};
+  grid.textContent = '';
+  for(let idx=0; idx<FOTO_MATERIAL_MAKS; idx++){
+    const e = hari[idx], kotak = document.createElement('div');
+    const slot = document.createElement('div');
+    slot.className = 'foto-slot' + (e && e.docId ? ' filled' : '');
+    slot.title = 'Material Datang '+(idx+1);
+    if(e && e.docId){
+      slot.style.position = 'relative';
+      slot.addEventListener('click', function(){ if(typeof previewDokumen==='function') previewDokumen(e.docId); });
+      const ph = document.createElement('div'); ph.setAttribute('data-doc', e.docId); ph.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;opacity:.8';
+      const src = fotoHarianCache[e.docId];
+      if(src){ const im = document.createElement('img'); im.alt = 'Material'; im.src = src; ph.appendChild(im); } else { ph.textContent = '⏳'; muatThumbMaterial(e.docId); }
+      slot.appendChild(ph);
+      if(e.belumUpload){ const w = document.createElement('div'); w.style.cssText = 'position:absolute;left:2px;bottom:2px;background:rgba(230,126,34,.95);color:#fff;font-size:10px;border-radius:4px;padding:1px 4px'; w.textContent = '⚠ belum di server'; slot.appendChild(w); }
+      const x = document.createElement('div'); x.className = 'foto-slot-remove'; x.textContent = '✕';
+      x.addEventListener('click', function(ev){ hapusFotoMaterial(idx, ev); }); slot.appendChild(x);
+    } else {
+      slot.textContent = '📷'; slot.addEventListener('click', function(){ klikFotoMaterial(idx); });
+    }
+    const ta = document.createElement('textarea'); ta.rows = 2; ta.maxLength = 600; ta.placeholder = 'Catatan: mis. Pasir 3 truk'; ta.value = (e && e.catatan) || '';
+    ta.addEventListener('input', function(){ simpanCatatanMaterial(idx, ta.value, tgl); });
+    kotak.appendChild(slot); kotak.appendChild(ta); grid.appendChild(kotak);
+  }
+  const jumlahHari = Object.keys(state.fotoMaterial).length, nf = Object.keys(hari).filter(function(k){ return hari[k] && hari[k].docId; }).length;
+  const info = document.getElementById('matInfo'); if(info) info.textContent = nf+'/'+FOTO_MATERIAL_MAKS+' foto hari ini · '+jumlahHari+' hari tercatat';
+  renderRiwayatMaterial();
+}
+function renderRiwayatMaterial(){
+  const box = document.getElementById('matRiwayat'); if(!box) return;
+  const fm = state.fotoMaterial || {}, tg = Object.keys(fm).sort().reverse();
+  box.textContent = '';
+  if(!tg.length){ box.textContent = 'Belum ada catatan material.'; box.style.cssText = 'font-size:11px;color:var(--muted2)'; return; }
+  tg.forEach(function(t){
+    const h = fm[t], ks = Object.keys(h).map(Number).sort(function(a,b){ return a-b; });
+    const nf = ks.filter(function(i){ return h[i].docId; }).length;
+    const cat = ks.filter(function(i){ return h[i].catatan; }).map(function(i){ return h[i].catatan; }).join('; ');
+    const r = document.createElement('div'); r.style.cssText = 'padding:7px 0;border-bottom:1px solid rgba(30,80,180,0.1);font-size:11px;cursor:pointer';
+    const a = document.createElement('strong'); a.textContent = t; const b = document.createElement('span'); b.style.color = 'var(--muted2)'; b.textContent = '  ·  '+nf+' foto';
+    const c = document.createElement('div'); c.style.cssText = 'color:var(--muted);margin-top:2px'; c.textContent = cat || '(tanpa catatan)';
+    r.appendChild(a); r.appendChild(b); r.appendChild(c);
+    r.addEventListener('click', function(){ const el = document.getElementById('matTgl'); if(el){ el.value = t; renderMaterialDatang(true); window.scrollTo({top:document.getElementById('panelMaterialDatang').offsetTop-60,behavior:'smooth'}); } });
+    box.appendChild(r);
+  });
+}
+function simpanCatatanMaterial(idx, teks, tgl){
+  if(!state.proyek) return;
+  state.fotoMaterial = state.fotoMaterial || {};
+  const h = state.fotoMaterial[tgl] = state.fotoMaterial[tgl] || {};
+  teks = String(teks||'').slice(0,600);
+  if(h[idx]) h[idx].catatan = teks; else if(teks.trim()) h[idx] = { uploadedAt: Date.now(), catatan: teks };
+  if(h[idx] && !h[idx].docId && !h[idx].catatan.trim()) delete h[idx];
+  if(!Object.keys(h).length) delete state.fotoMaterial[tgl];
+  debounceSave();
+}
+function klikFotoMaterial(idx){
+  if(!state.proyek){ notif('Buat / pilih proyek terlebih dahulu!','var(--red)'); return; }
+  fotoMaterialSlotAktif = { idx: idx, tgl: matTgl() };
+  const input = document.getElementById('fotoMaterialInput'); input.value = ''; input.click();
+}
+let fotoMaterialSlotAktif = null;
+async function handleFotoMaterialSelected(input){
+  const f = input.files && input.files[0];
+  if(!f || !fotoMaterialSlotAktif) return;
+  const idx = fotoMaterialSlotAktif.idx, tgl = fotoMaterialSlotAktif.tgl;
+  const reader = new FileReader();
+  reader.onload = function(){
+    const img = new Image();
+    img.onload = async function(){
+      let w = img.width, h = img.height; const maxW = 1100;
+      if(w>maxW){ h = h*(maxW/w); w = maxW; }
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const url = canvas.toDataURL('image/jpeg',0.72), id = uid();
+      let hs;
+      try { hs = await window.storage.set('pbc_doc:'+id, url, false); }
+      catch(e){ console.error('Gagal simpan foto material', e); notif('Gagal menyimpan foto — coba lagi dengan foto yang lebih kecil','var(--red)'); return; }
+      const belumUpload = !!(hs && hs.tersimpanServer===false);
+      state.dokumen = state.dokumen || [];
+      state.dokumen.push({ id:id, kategori:'foto_material', namaFile:'Material Datang '+(idx+1)+' — '+tgl+'.jpg', fileType:'image/jpeg', ukuran:url.length*0.75, uploadedAt:Date.now() });
+      state.fotoMaterial = state.fotoMaterial || {};
+      const hari = state.fotoMaterial[tgl] = state.fotoMaterial[tgl] || {};
+      const lama = hari[idx];
+      const e = { docId:id, uploadedAt:Date.now(), catatan:(lama && lama.catatan) || '' };
+      if(belumUpload) e.belumUpload = true;
+      hari[idx] = e;
+      fotoHarianCache[id] = url;
+      renderMaterialDatang(true); debounceSave();
+      if(belumUpload){ notif('Foto material baru tersimpan di HP ini, BELUM terunggah ke server. Akan dikirim otomatis saat tersambung internet; jangan hapus data aplikasi dulu.','var(--orange)'); jadwalkanKirimUlangFoto(); }
+      else notif('Foto material tersimpan!');
+    };
+    img.onerror = function(){ notif('File yang dipilih bukan gambar yang valid','var(--red)'); };
+    img.src = reader.result;
+  };
+  reader.onerror = function(){ notif('Gagal membaca file','var(--red)'); };
+  reader.readAsDataURL(f);
+}
+async function hapusFotoMaterial(idx, event){
+  if(event) event.stopPropagation();
+  const tgl = matTgl(), hari = state.fotoMaterial && state.fotoMaterial[tgl], e = hari && hari[idx];
+  if(!e || !e.docId) return;
+  if(!confirm('Hapus foto material ini? Catatannya tetap disimpan.')) return;
+  state.dokumen = (state.dokumen||[]).filter(function(d){ return d.id!==e.docId; });
+  try { await window.storage.delete('pbc_doc:'+e.docId, false); } catch(x){}
+  delete e.docId; delete e.belumUpload;
+  if(!(e.catatan||'').trim()) delete hari[idx];
+  if(!Object.keys(hari).length) delete state.fotoMaterial[tgl];
+  renderMaterialDatang(true); debounceSave();
+  notif('Foto dihapus, silakan ambil ulang','var(--orange)');
+}
+/* PDF Laporan Harian: rekap catatan semua tanggal + foto 7 hari terakhir yang punya foto material */
+async function pbcLapMaterial(c, bhs){
+  const en = bhs==='en', fm = state.fotoMaterial || {}, tg = Object.keys(fm).sort();
+  if(!tg.length) return;
+  const rows = tg.map(function(t, i){
+    const h = fm[t], ks = Object.keys(h).map(Number).sort(function(a,b){ return a-b; });
+    return [String(i+1), t, String(ks.filter(function(k){ return h[k].docId; }).length), ks.filter(function(k){ return h[k].catatan; }).map(function(k){ return h[k].catatan; }).join('; ') || '-'];
+  });
+  c.tabel([{l:(en?'No':'No'),w:0.5,a:'c'},{l:(en?'Date':'Tanggal'),w:1.5,a:'c'},{l:(en?'Photos':'Jumlah Foto'),w:1.2,a:'c'},{l:(en?'Material delivery notes':'Catatan Material Datang'),w:9,wrap:true}], rows, {title:(en?'Material Deliveries — Notes':'Material Datang — Rekap Catatan')});
+  const doc = c.doc, tFoto = tg.filter(function(t){ return Object.keys(fm[t]).some(function(k){ return fm[t][k].docId; }); }).slice(-7);
+  if(!tFoto.length) return;
+  const kol = 5, gap = 8, cw = (c.TW-(kol-1)*gap)/kol, ch = cw*0.75, rh = ch+34;
+  for(const t of tFoto){
+    const h = fm[t], ks = Object.keys(h).map(Number).sort(function(a,b){ return a-b; }).filter(function(k){ return h[k].docId; });
+    c.pastikan(20+rh+6); c.bar((en?'Material delivered — ':'Material Datang — ')+t, true); c.y += 8;
+    for(let i=0; i<ks.length; i++){
+      const col = i%kol; if(col===0 && i>0){ c.y += rh; }
+      c.pastikan(rh);
+      const x = c.FX+col*(cw+gap), y = c.y, e = h[ks[i]];
+      let dataUrl = null;
+      try {
+        const r = await window.storage.get('pbc_doc:'+e.docId, false), aman = (r && r.value) ? sanitasiFoto(r.value) : null;
+        if(aman){ dataUrl = await new Promise(function(ok){ const im = new Image(); im.onload = function(){ const mw = 480, sc = Math.min(1, mw/im.width), cv = document.createElement('canvas'); cv.width = Math.round(im.width*sc); cv.height = Math.round(im.height*sc); cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height); ok(cv.toDataURL('image/jpeg',0.7)); }; im.onerror = function(){ ok(null); }; im.src = aman; }); }
+      } catch(x){}
+      if(dataUrl){ try { doc.addImage(dataUrl,'JPEG',x,y,cw,ch); } catch(x){ dataUrl = null; } }
+      if(!dataUrl){ doc.setFillColor(238,238,238); doc.rect(x,y,cw,ch,'F'); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(120,120,120); doc.text(en?'photo unavailable':'foto tidak tersedia', x+cw/2, y+ch/2, {align:'center'}); }
+      doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(34,34,34);
+      doc.splitTextToSize(e.catatan || '-', cw).slice(0,3).forEach(function(l, j){ doc.text(l, x, y+ch+9+j*8.5); });
+    }
+    c.y += rh+6;
+  }
+}
+
 function renderProgress() {
   renderFotoHarian();
+  renderMaterialDatang();
   const listEl = document.getElementById('progresItemList');
   if(!state.items.length){ listEl.innerHTML='<div class="empty">Tambah item BOQ terlebih dahulu</div>'; }
   else {
@@ -10855,7 +11071,7 @@ function openKeuanganPage(e){ switchToPage('page-keuangan', e, renderKeuangan); 
 const DOK_KATEGORI = [
   {key:'kontrak', label:'Kontrak'}, {key:'addendum', label:'Addendum'}, {key:'gambar_kerja', label:'Gambar Kerja'},
   {key:'shop_drawing', label:'Shop Drawing'}, {key:'revisi_gambar', label:'Revisi Gambar'},
-  {key:'foto_progress', label:'Foto Progress'}, {key:'foto_owner', label:'Foto Laporan Owner'}, {key:'foto_qc', label:'Foto QC Material'}, {key:'invoice', label:'Invoice'},
+  {key:'foto_progress', label:'Foto Progress'}, {key:'foto_material', label:'Foto Material Datang'}, {key:'foto_owner', label:'Foto Laporan Owner'}, {key:'foto_qc', label:'Foto QC Material'}, {key:'invoice', label:'Invoice'},
   {key:'bast', label:'BAST'}, {key:'dokumen_owner', label:'Dokumen Owner'}, {key:'dokumen_lainnya', label:'Dokumen Lainnya'}
 ];
 let dokFilterAktif = 'semua';
