@@ -101,7 +101,7 @@ const MAT={
 const GLASS=[.35,.25,.18,.12,.07,.04],DOOR=[.14,.10,.06,.08,.10,.10];
 const USE={
  kamar:{id:'Kamar tidur',en:'Bedroom',k:'room',T:[.5,.4,.6]},
- podcast:{id:'Podcast / rekam vokal',en:'Podcast / vocal recording',k:'talk',T:[.25,.2,.3]},
+ podcast:{id:'Podcast / rekam vokal',en:'Podcast / vocal recording',k:'talk',T:null,Tf:[.2,.35]},
  konten:{id:'Ruang konten / streaming',en:'Content / streaming room',k:'cam',T:[.3,.25,.4]},
  mixing:{id:'Studio mixing / mastering',en:'Mixing / mastering room',k:'listen',T:null},
  rekaman:{id:'Studio rekaman (live room)',en:'Recording live room',k:'live',T:[.4,.3,.6]},
@@ -167,13 +167,27 @@ const N=(v,d=2)=>(+v).toLocaleString(lang==='id'?'id-ID':'en-GB',{minimumFractio
 const R=Math.round,cm=v=>R(v*100),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const def={name:'',D:5,W:4,H:3,use:'kamar',floor:'spc',wall:'tembok',ceil:'gypsum',
  ops:[{t:'win',wall:'L',pos:1.4,w:1.0,h:1.2,sill:.9},{t:'win',wall:'L',pos:3.4,w:1.0,h:1.2,sill:.9},{t:'door',wall:'F',pos:.75,w:.9,h:2.1,sill:0}],
- cx:{echo:true,bass:false,flutter:false},mT:'chunk',mP:'auto',mC:'cloud',pal:'pasir',pkg:'std'};
+ cx:{echo:true,bass:false,flutter:false},mT:'chunk',mP:'auto',mC:'cloud',pal:'pasir',pkg:'std',lay:'A'};
 let S=JSON.parse(JSON.stringify(def));try{const s=JSON.parse(localStorage.getItem('pbcak3')||'null');if(s)S={...S,...s}}catch(e){}
-if(!TM[S.mT])S.mT='chunk';if(S.mP!=='auto'&&!PM[S.mP])S.mP='auto';if(!PAL[S.pal])S.pal='pasir';if(!CM[S.mC])S.mC='cloud';
+if(!TM[S.mT])S.mT='chunk';if(!['A','B','C'].includes(S.lay))S.lay='A';if(S.mP!=='auto'&&!PM[S.mP])S.mP='auto';if(!PAL[S.pal])S.pal='pasir';if(!CM[S.mC])S.mC='cloud';
 let PR={};try{PR=JSON.parse(localStorage.getItem('pbcak_pr')||'{}')}catch(e){}
 let RES=null,ALL=null,tab='plan',showLbl=true;
 const pcol=()=>PAL[S.pal].c;
 const pmodel=()=>S.mP==='auto'?recList()[0]:S.mP;
+const LAYS={A:{id:'Berjajar rapi',en:'Neat row'},B:{id:'Kelompok / feature wall',en:'Feature cluster'},C:{id:'Dinamis zig-zag',en:'Dynamic zig-zag'}};
+const CLU=['hex','bulat','batu','tri'];
+function gp(m,lay,H){const M=PM[m],w=M.w,h=M.h==='full'?Math.min(2.4,H-.3):M.h,tall=M.h==='full'||h>=1.5;
+ if(m==='head'||m==='skyline')return [{dx:0,yo:0,w,h}];
+ if(m==='strips'||m==='lebar'){if(lay==='A')return [{dx:0,yo:0,w,h}];if(lay==='B')return [{dx:-(w/2+.04),yo:0,w,h},{dx:w/2+.04,yo:0,w,h}];return [{dx:-w*.3,yo:0,w,h},{dx:w*.3,yo:h+.12,w,h}]}
+ if(tall){if(lay==='A')return [{dx:0,yo:0,w,h}];if(lay==='B')return [-1,0,1].map(i=>({dx:i*(w+.02),yo:0,w,h}));const h2=Math.round(h*.72*100)/100;return [{dx:-(w/2+.08),yo:0,w,h},{dx:w/2+.08,yo:h-h2,w,h:h2}]}
+ if(CLU.includes(m)){if(lay==='A')return [{dx:0,yo:0,w,h}];if(lay==='B')return [{dx:-(w/2+.03),yo:0,w,h},{dx:w/2+.03,yo:Math.round(h*.45*100)/100,w,h}];return [{dx:-(w+.08),yo:0,w,h},{dx:0,yo:Math.round(h*.4*100)/100,w,h},{dx:w+.08,yo:0,w,h}]}
+ if(lay==='A'){const k=w>=1?1:2,g=.12;return [...Array(k)].map((_,i)=>({dx:(i-(k-1)/2)*(w+g),yo:0,w,h}))}
+ if(lay==='B'){const k=w>=1?2:(w>=.85?3:4),g=.03;return [...Array(k)].map((_,i)=>({dx:(i-(k-1)/2)*(w+g),yo:0,w,h}))}
+ return [0,1,2].map(i=>({dx:(i-1)*(w+.15),yo:i===1?.25:0,w,h}))}
+function layDesc(m,lay){const M=PM[m],tall=M.h==='full'||M.h>=1.5;
+ if(lay==='A')return tall?L('1 panel per titik, jarak antar titik longgar','one panel per spot, spaced'):L('Berderet sejajar setinggi telinga, celah 12 cm','in a level row at ear height, 12 cm gaps');
+ if(lay==='B')return tall?L('3 panel rapat jadi satu feature wall','3 panels tight as one feature wall'):CLU.includes(m)?L('2 kelompok bertingkat, menyambung','2 stepped clusters'):L('3–4 panel rapat (celah 3 cm) jadi satu blok','3–4 panels tight as one block');
+ return tall?L('tinggi–rendah berselang (100% & 72%)','alternating tall & short'):L('naik-turun zig-zag ±25 cm','zig-zag up/down ±25 cm')}
 function recList(){return Object.keys(PM).filter(k=>PM[k].rec.includes(S.use)&&!PM[k].diff)}
 
 // ================= 2D PAINTERS (shared: icons, elevations, details) =================
@@ -242,6 +256,8 @@ function opRow(o,i){const w=WALLS();return `<div class="oprow" data-i="${i}">
 function panelCards(){const rec=recList();const keys=Object.keys(PM).filter(k=>!PM[k].only||PM[k].only===S.use).sort((a,b)=>(rec.includes(b)?1:0)-(rec.includes(a)?1:0));
  return `<div class="models"><button class="model ${S.mP==='auto'?'on':''}" data-g="mP" data-m="auto"><svg viewBox="0 0 100 72"><text x="50" y="44" text-anchor="middle" font-size="26" font-weight="700" fill="#1f8a5b">AUTO</text></svg><b>${L('Rekomendasi otomatis','Auto recommendation')}</b><small>${L('Dipilihkan: ','Picks: ')}${PM[rec[0]][lang]}</small></button>`+
  keys.map(k=>`<button class="model ${S.mP===k?'on':''}" data-g="mP" data-m="${k}">${rec.includes(k)?`<span class="rec">${L('Rekomendasi','Recommended')}</span>`:''}${iconPanel(k)}<b>${PM[k][lang]}</b><small>${MDESC[k]()}</small></button>`).join('')+'</div>'}
+function layCards(){const m=pmodel(),c=pcol();return `<div class="models">${['A','B','C'].map(k=>{const P=gp(m,k,2.8),sc=100/3.2;const tot=Math.max(...P.map(p=>p.yo+p.h));const base=PM[m].h==='full'?.15:Math.max(.2,1.25-tot/2);
+ return `<button class="model ${S.lay===k?'on':''}" data-g="lay" data-m="${k}"><svg viewBox="0 0 100 72"><rect x="0" y="2" width="100" height="${2.8*sc}" fill="#f2f3f6" stroke="#c3c7d1"/>${P.map(p=>paint(m,50+(p.dx-p.w/2)*sc,2+(2.8-base-p.yo-p.h)*sc,p.w*sc,p.h*sc,c,.5)).join('')}</svg><b>${k} · ${LAYS[k][lang]}</b><small>${layDesc(m,k)}</small></button>`}).join('')}</div>`}
 function trapCards(){return `<div class="models">${Object.entries(TM).map(([k,v])=>`<button class="model ${S.mT===k?'on':''}" data-g="mT" data-m="${k}"><svg viewBox="0 0 100 72">${ITRAP[k](pcol())}</svg><b>${v[lang]}</b><small>${TDESC[k]()}</small></button>`).join('')}</div>`}
 function ceilCards(){return `<div class="models">${Object.entries(CM).map(([k,v])=>`<button class="model ${S.mC===k?'on':''}" data-g="mC" data-m="${k}"><svg viewBox="0 0 100 72">${ICEIL[k](pcol())}</svg><b>${v[lang]}</b><small>${MDESC[k]()}</small></button>`).join('')}</div>`}
 function palCards(){return `<div class="pals">${Object.entries(PAL).map(([k,v])=>`<button class="pal ${S.pal===k?'on':''}" data-p="${k}"><div>${v.c.map(c=>`<i style="background:${c}"></i>`).join('')}</div><b>${v[lang]}</b></button>`).join('')}</div>`}
@@ -270,6 +286,7 @@ function renderInput(){
   <label class="chip"><input type="checkbox" id="c_flutter" ${S.cx.flutter?'checked':''}>${L('Tepuk tangan berbunyi "dzing"','Hand clap rings ("zing")')}</label></div>
  <h3>${L('Palet warna','Colour palette')}</h3><div id="palBox">${palCards()}</div>
  <h3>${L('Model wall panel','Wall panel model')}</h3><div id="pBox">${panelCards()}</div>
+ <h3>${L('Versi penempatan panel','Panel arrangement')}</h3><div id="lBox">${layCards()}</div>
  <h3>${L('Model bass trap','Bass trap model')}</h3><div id="tBox">${trapCards()}</div>
  <h3>${L('Plafon','Ceiling')}</h3><div id="cBox">${ceilCards()}</div>
  <button class="btn" id="go" style="margin-top:14px">${L('Analisis ruang','Analyse room')}</button>`;
@@ -277,9 +294,9 @@ function renderInput(){
 }
 function bindInput(){
  const ic=document.getElementById('inputCard');
- ic.querySelectorAll('.model').forEach(b=>b.onclick=()=>{S[b.dataset.g]=b.dataset.m;ic.querySelectorAll(`.model[data-g="${b.dataset.g}"]`).forEach(x=>x.classList.toggle('on',x===b))});
- ic.querySelectorAll('.pal').forEach(b=>b.onclick=()=>{S.pal=b.dataset.p;document.getElementById('palBox').innerHTML=palCards();document.getElementById('pBox').innerHTML=panelCards();document.getElementById('tBox').innerHTML=trapCards();document.getElementById('cBox').innerHTML=ceilCards();bindInput()});
- document.getElementById('i_use').onchange=()=>{S.use=document.getElementById('i_use').value;if(PM[S.mP]&&PM[S.mP].only&&PM[S.mP].only!==S.use)S.mP='auto';document.getElementById('pBox').innerHTML=panelCards();bindInput()};
+ ic.querySelectorAll('.model').forEach(b=>b.onclick=()=>{S[b.dataset.g]=b.dataset.m;ic.querySelectorAll(`.model[data-g="${b.dataset.g}"]`).forEach(x=>x.classList.toggle('on',x===b));if(b.dataset.g==='mP'){document.getElementById('lBox').innerHTML=layCards();bindInput()}});
+ ic.querySelectorAll('.pal').forEach(b=>b.onclick=()=>{S.pal=b.dataset.p;document.getElementById('palBox').innerHTML=palCards();document.getElementById('lBox').innerHTML=layCards();document.getElementById('pBox').innerHTML=panelCards();document.getElementById('tBox').innerHTML=trapCards();document.getElementById('cBox').innerHTML=ceilCards();bindInput()});
+ document.getElementById('i_use').onchange=()=>{S.use=document.getElementById('i_use').value;if(PM[S.mP]&&PM[S.mP].only&&PM[S.mP].only!==S.use)S.mP='auto';document.getElementById('pBox').innerHTML=panelCards();document.getElementById('lBox').innerHTML=layCards();bindInput()};
  document.getElementById('addW').onclick=()=>{readInput();S.ops.push({t:'win',wall:'R',pos:1.5,w:1,h:1.2,sill:.9});renderInput()};
  document.getElementById('addD').onclick=()=>{readInput();S.ops.push({t:'door',wall:'B',pos:.8,w:.9,h:2.1,sill:0});renderInput()};
  ic.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{readInput();S.ops.splice(+b.dataset.del,1);renderInput()});
@@ -299,7 +316,7 @@ function readInput(){
 let SURF=1;
 const rtOf=(V,A)=>A.map(a=>{const al=Math.min(.95,Math.max(a,.01)/SURF);return 0.161*V/(-SURF*Math.log(1-al))});
 const mid=a=>(a[2]+a[3])/2;
-function target(V){const u=USE[S.use];if(u.T)return u.T;const tm=clamp(0.25*Math.cbrt(V/100),.2,.4);return [tm,Math.max(.2,tm-.05),Math.min(.4,tm+.05)]}
+function target(V){const u=USE[S.use];if(u.T)return u.T;const tm=clamp(0.25*Math.cbrt(V/100),.2,u.Tf?u.Tf[1]:.4);return [tm,Math.max(.2,tm-.05),Math.min(.4,tm+.05)]}
 function modes(dim,tag){const r=[];for(let n=1;n<30;n++){const f=n*343/(2*dim);if(f>300)break;r.push({f,dim:tag,n})}return r}
 function cornerName(c){return [L('depan-kiri','front-left'),L('depan-kanan','front-right'),L('belakang-kiri','rear-left'),L('belakang-kanan','rear-right')][c]}
 function wallName(w){return {L:L('Dinding kiri','Left wall'),R:L('Dinding kanan','Right wall'),F:L('Dinding depan','Front wall'),B:L('Dinding belakang','Rear wall'),C:L('Plafon','Ceiling')}[w]}
@@ -310,7 +327,9 @@ function analyse(pkg){
  const doorA=ops.filter(o=>o.t==='door').reduce((t,o)=>t+o.w*o.h,0),glass=ops.filter(o=>o.t==='win').reduce((t,o)=>t+o.w*o.h,0);
  const wallGross=2*(Wf+D)*H,wallNet=Math.max(0,wallGross-doorA-glass),Stot=2*Wf*D+wallGross;
  const fl=MAT.floor[S.floor].a,ce=MAT.ceil[S.ceil].a,wa=MAT.wall[S.wall].a;
- const A0=B.map((_,i)=>Wf*D*(fl[i]+ce[i])+wallNet*wa[i]+doorA*DOOR[i]+glass*GLASS[i]);
+ const nTab=Math.max(1,Math.floor((Wf-1.2)/1.8+1)*Math.floor((D-1.2)/1.8+1));
+ const FA={kamar:[.5,1,1.6,2,2.1,2.1],mixing:[.4,.6,.8,.9,.9,.9],theater:[.6,1.2,1.8,2.2,2.3,2.3],podcast:[.3,.5,.8,.9,.9,.9],konten:[.2,.35,.5,.55,.55,.55],rekaman:[.6,.8,1.2,1.4,1.4,1.4],band:[.6,.8,1.2,1.4,1.4,1.4],rapat:[.5,.8,1.5,2,2,2].map(v=>v*Math.max(.6,D/5)),kafe:[.15,.3,.6,.75,.8,.8].map(v=>v*nTab)}[S.use];
+ const A0=B.map((_,i)=>Wf*D*(fl[i]+ce[i])+wallNet*wa[i]+doorA*DOOR[i]+glass*GLASS[i]+FA[i]);
  SURF=Stot;const T0=rtOf(V,A0),TT=target(V),Tt=TT[0];
  const goal={hemat:TT[2]*1.6,std:TT[2]*.98,max:TT[0]}[pkg];
  const items=[],notes=[],blk=[],furn=[];let cnt={P:0,BT:0,C:0,D:0};
@@ -318,11 +337,20 @@ function analyse(pkg){
  const mk=pmodel(),pm=PM[mk];
  const ph=m=>PM[m].h==='full'?Math.min(2.4,H-.3):PM[m].h;
  const py=(m,cy)=>{const M=PM[m],h=ph(m);if(M.y==='full')return clamp((H-h)/2,.1,.3);if(M.y==='low')return clamp(.4,0,H-h-.1);return clamp(cy-h/2,.25,H-h-.1)};
+ const GP=gp(mk,S.lay,H),gw=Math.max(...GP.map(p=>p.dx+p.w/2))-Math.min(...GP.map(p=>p.dx-p.w/2));
  const tleg=S.mT==='tube'||S.mT==='gobo'||S.mT==='membran'?.55:TM[S.mT].leg;
  const hitOp=(wall,pos,w,y0,h)=>ops.concat(blk).some(o=>o.wall===wall&&Math.abs(o.pos-pos)<(o.w+w)/2+.05&&y0<o.sill+o.h+.03&&y0+h>o.sill-.03);
  const hitIt=(wall,pos,w,y0,h)=>items.some(it=>it.wall===wall&&it.t!=='trap'&&Math.abs(it.pos-pos)<(it.w+w)/2+.05&&y0<it.y0+it.h+.05&&y0+h>it.y0-.05);
  const edge=()=>items.some(i=>i.t==='trap')?tleg+.05:.1;
- function place(wall,pos,cy,role,m,y0o){m=m||mk;const M=PM[m],w=M.w,h=ph(m),y0=y0o!=null?y0o:py(m,cy);if(h>H-.15)return null;
+ let GID=0;
+ function placeGroup(wall,pos,cy,role,m){const M=PM[m];const all=gp(m,S.lay,H).slice().sort((a,b)=>Math.abs(a.dx)-Math.abs(b.dx)||a.yo-b.yo);
+  const tryP=P=>{const tot=Math.max(...P.map(p=>p.yo+p.h));if(tot>H-.15)return null;const y0b=M.h==='full'?py(m,cy):M.y==='low'?clamp(.4,0,H-tot-.1):clamp(cy-tot/2,.25,H-tot-.1);
+   const lo=Math.min(...P.map(p=>p.dx-p.w/2)),hi=Math.max(...P.map(p=>p.dx+p.w/2));
+   for(const dp of [0,.1,-.1,.2,-.2,.3,-.3,.4,-.4,.6,-.6,.8,-.8,1,-1,1.2,-1.2]){const c=pos+dp;if(c+lo<edge()||c+hi>len[wall]-edge())continue;if(role==='refl'&&!P.some(p=>Math.abs(c+p.dx-pos)<=p.w/2-.02))continue;
+    if(P.some(p=>hitOp(wall,c+p.dx,p.w,y0b+p.yo,p.h)||hitIt(wall,c+p.dx,p.w,y0b+p.yo,p.h)))continue;
+    const gid=++GID;return P.map(p=>add({t:M.diff?'diff':'panel',m,wall,pos:c+p.dx,w:p.w,h:p.h,y0:y0b+p.yo,d:M.d,role,gid}))}return null};
+  for(let n=all.length;n>=1;n--){const r=tryP(all.slice(0,n));if(r)return r}return null}
+ function place(wall,pos,cy,role,m,y0o){if((!m||m===mk)&&y0o==null&&mk!=='head')return placeGroup(wall,pos,cy,role,mk);m=m||mk;const M=PM[m],w=M.w,h=ph(m),y0=y0o!=null?y0o:py(m,cy);if(h>H-.15)return null;
   for(const dp of [0,.25,-.25,.5,-.5,.75,-.75,1,-1]){const p=pos+dp;if(p-w/2<edge()||p+w/2>len[wall]-edge())continue;if(hitOp(wall,p,w,y0,h)||hitIt(wall,p,w,y0,h))continue;
    return add({t:M.diff?'diff':'panel',m,wall,pos:p,w,h,y0,d:M.d,role})}return null}
  // ---- bass traps ----
@@ -336,7 +364,7 @@ function analyse(pkg){
  wantTraps.forEach(c=>{if(cornerBlocked(c)){notes.push(L(`Sudut ${cornerName(c)} terpakai pintu, jadi bass trap di sudut itu ditiadakan.`,`The ${cornerName(c)} corner is taken by a door, so no trap there.`));return}
   add({t:'trap',m:S.mT,corner:c,leg:tleg,h:S.mT==='tube'?Math.min(1.5,H-.3):S.mT==='gobo'?Math.min(1.8,H-.3):S.mT==='membran'?Math.min(1.2,H-.6):H,arm:S.mT==='tricorner'?armLen:0})});
  // ---- furniture & people ----
- let spk=[],lis=null,ppl=[];const earS=1.15,earT=1.2;
+ let spk=[],lis=null,ppl=[];const RP=[];const earS=1.15,earT=1.2;
  const freeSeg=(wall,w)=>{const ls=len[wall],m=edge()+.05;for(let p=ls/2;p>=w/2+m;p-=.1)for(const q of [p,ls-p]){if(q-w/2<m||q+w/2>ls-m)continue;if(!ops.some(o=>o.wall===wall&&Math.abs(o.pos-q)<(o.w+w)/2+.05))return q}return null};
  if(S.use==='kamar'){
   const bw=Math.min(1.8,Wf-1.4),bl=Math.min(2.05,D-1.4);furn.push({k:'bed',x:Wf/2,z:D-bl/2-.02,w:bw,l:bl});
@@ -352,17 +380,17 @@ function analyse(pkg){
  // ---- essential placements (reasoned) ----
  if(kind==='listen'){
   ['L','R'].forEach(w=>{const r=spk.map(s=>{const wx=w==='L'?0:Wf,dS=Math.abs(wx-s.x),dL=Math.abs(wx-lis.x);return s.z+(lis.z-s.z)*dS/(dS+dL)}).sort((a,b)=>a-b);
-   if(pm.w>=.85||r[1]-r[0]<pm.w*1.6){if(pm.w>=.85)place(w,(r[0]+r[1])/2,earT,'refl');else{const c=(r[0]+r[1])/2;place(w,c-pm.w/2-.01,earT,'refl');place(w,c+pm.w/2+.01,earT,'refl')}}else r.forEach(p=>place(w,p,earT,'refl'))});
+   RP.push(...r.map(z=>({wall:w,z})));const cov=z=>items.some(i=>i.t==='panel'&&i.wall===w&&Math.abs(i.pos-z)<=i.w/2+.02&&i.y0<=1.25&&i.y0+i.h>=1.15);if(r[1]-r[0]<gw*.75)place(w,(r[0]+r[1])/2,earT,'refl');r.forEach(p=>{if(!cov(p))place(w,p,earT,'refl')});r.forEach(p=>{if(!cov(p))place(w,p,earT,'refl','kotak')})});
   spk.forEach(s=>place('F',s.x,earT,'front','kotak'));
   if(D-lis.z>=2.4&&Wf>=2.4&&S.use!=='band'){[-.31,.31].forEach(o=>place('B',Wf/2+o,earT,'rear','skyline'))}
   if(pkg!=='hemat')[Wf/2-.95,Wf/2+.95,Wf/2].forEach(p=>place('B',p,earT,'rear','kotak'));
  }else if(kind==='talk'){const tz=D*.45;place('L',tz,earS,'refl');place('R',tz,earS,'refl');place('F',Wf/2,earS,'behind');place('B',Wf/2,earS,'behind')}
  else if(kind==='cam'){const pz=D*.62;place('B',Wf/2,earS,'bg');place('F',Wf/2,earS,'face');place('L',pz,earS,'refl');place('R',pz,earS,'refl')}
- else if(kind==='room'){if(mk==='head')place('B',Wf/2,1.1,'head','head',.5);else place('B',Wf/2,1.4,'head',mk,Math.max(.95,py(mk,1.45)));}
+ else if(kind==='room'){if(mk==='head')place('B',Wf/2,1.1,'head','head',.5);else if(PM[mk].h==='full'){const hh=Math.round((H-.15-.95)*100)/100,P=gp(mk,S.lay,H).map(p=>({...p,h:Math.min(p.h,hh),yo:0}));const gid=++GID;P.forEach(p=>{const x=Wf/2+p.dx;if(x-p.w/2>edge()&&x+p.w/2<Wf-edge()&&!hitOp('B',x,p.w,.95,p.h)&&!hitIt('B',x,p.w,.95,p.h))add({t:'panel',m:mk,wall:'B',pos:x,w:p.w,h:p.h,y0:.95,d:PM[mk].d,role:'head',gid})})}else place('B',Wf/2,1.6,'head')}
  // ---- ceiling ----
  const ceilOK=S.mC!=='none'&&H>=2.4;if(S.mC!=='none'&&H<2.4)notes.push(L('Plafon di bawah 2,4 m: item plafon tidak dipasang supaya tidak terbentur kepala.','Ceiling below 2.4 m: no hanging items.'));
  const addCeil=(x,z)=>{if(!ceilOK)return null;const cw=1.2,cd=S.mC==='cloud'?1.2:.05;if(x-cw/2<.3||x+cw/2>Wf-.3||z-.6<.3||z+.6>D-.3)return null;
-  if(items.some(i=>i.t==='ceil'&&Math.abs(i.x-x)<(S.mC==='cloud'?1.3:1.25)&&Math.abs(i.z-z)<(S.mC==='cloud'?1.3:.7)))return null;
+  if(items.some(i=>i.t==='ceil'&&Math.abs(i.x-x)<(S.mC==='cloud'?1.25:1.25)&&Math.abs(i.z-z)<(S.mC==='cloud'?1.25:.7)))return null;
   return add({t:'ceil',m:S.mC,x,z,w:cw,d:cd,h:S.mC==='cloud'?.1:.6,drop:S.mC==='cloud'?(H>=2.7?.2:.08):.15,wall:'C',role:'ceil'})};
  if(S.mC==='cloud'&&pkg!=='hemat'){if(kind==='listen')addCeil(lis.x,(spk[0].z+lis.z)/2);if(kind==='talk')addCeil(Wf/2,D*.45);if(kind==='cam')addCeil(Wf/2,D*.62-.4);if(kind==='live')addCeil(Wf/2,D*.62)}
  // ---- absorption ----
@@ -376,9 +404,9 @@ function analyse(pkg){
     else if(m==='tube'){face=Math.PI*.2*h*1.6;cov=0}else if(m==='gobo'){face=.6*h*1.6;cov=0}else{face=.5*h*2;cov=.5*h*2}}
    else{a=CM[it.m].a;face=it.m==='cloud'?it.w*it.d*1.15:2*it.w*it.h}
    it.face=face;cover+=cov;B.forEach((_,i)=>A[i]+=face*a[i])});
-  return B.map((_,i)=>A[i]+Wf*D*(fl[i]+ce[i])+Math.max(0,wallNet-cover)*wa[i]+doorA*DOOR[i]+glass*GLASS[i])}
+  return B.map((_,i)=>A[i]+Wf*D*(fl[i]+ce[i])+Math.max(0,wallNet-cover)*wa[i]+doorA*DOOR[i]+glass*GLASS[i]+FA[i])}
  // ---- fill candidates (staggered) ----
- const step=Math.max(pm.w+.35,.95);
+ const step=Math.max(gw+.4,.95);
  const row=(wall,start)=>{const r=[];for(let p=start;p<=len[wall]-.3;p+=step)r.push({wall,pos:p});return r};
  const ceilGrid=()=>{const r=[];if(!ceilOK)return r;const sx=S.mC==='cloud'?1.8:.9,sz=S.mC==='cloud'?1.8:.9;for(let z=.9;z<=D-.9;z+=sz)for(let x=.9;x<=Wf-.9+1e-6;x+=sx)r.push({ceil:1,x,z});return r};
  const inter=(...arrs)=>{const o=[];const m=Math.max(...arrs.map(a=>a.length));for(let i=0;i<m;i++)arrs.forEach(a=>{if(a[i])o.push(a[i])});return o};
@@ -392,15 +420,19 @@ function analyse(pkg){
  while(mid(T1)>goal&&ci<C.length){C[ci++].forEach(c=>{if(c.ceil)addCeil(c.x,c.z);else place(c.wall,c.pos,cy,'fill')});A1=after();T1=rtOf(V,A1)}
  if(mid(T1)>goal){const C2=[];['L','R','F','B'].forEach(w=>{for(let p=.45;p<=len[w]-.45;p+=pm.w+.1)C2.push({wall:w,pos:p})});C2.sort((a,b)=>Math.abs(a.pos-len[a.wall]/2)-Math.abs(b.pos-len[b.wall]/2));
   for(const c of C2){if(mid(T1)<=goal)break;if(place(c.wall,c.pos,cy,'fill')){A1=after();T1=rtOf(V,A1)}}}
- if(mid(T1)>goal&&mk!=='kotak'){let added=0;const C3=[];['L','R','F','B'].forEach(w=>{for(let p=.45;p<=len[w]-.45;p+=.7)C3.push({wall:w,pos:p})});C3.sort((a,b)=>Math.abs(a.pos-len[a.wall]/2)-Math.abs(b.pos-len[b.wall]/2));
+ if(mid(T1)>goal){let added=0;const C3=[];['L','R','F','B'].forEach(w=>{for(let p=.45;p<=len[w]-.45;p+=.7)C3.push({wall:w,pos:p})});C3.sort((a,b)=>Math.abs(a.pos-len[a.wall]/2)-Math.abs(b.pos-len[b.wall]/2));
   for(const c of C3){if(mid(T1)<=goal)break;if(place(c.wall,c.pos,cy,'fill','kotak')){added++;A1=after();T1=rtOf(V,A1)}}
+  if(mid(T1)>goal&&H>=2.7){for(const c of C3){if(mid(T1)<=goal)break;const y0u=Math.max(1.9,H-.75-.1);if(y0u+.6<=H-.1&&place(c.wall,c.pos,cy,'fill','lebar',y0u)){added++;A1=after();T1=rtOf(V,A1)}}}
+  if(mid(T1)>goal&&ceilOK&&S.mC==='cloud'){for(let z=.9;z<=D-.9;z+=1.35)for(let x=.9;x<=Wf-.9+1e-6;x+=1.35){if(mid(T1)<=goal)break;if(addCeil(x,z)){A1=after();T1=rtOf(V,A1)}}}
   if(added)notes.push(L(`Model ${PM[mk].id.toLowerCase()} saja belum cukup menyerap untuk ruang ini, jadi ditambah ${added} panel kain kotak 10 cm (warna sama) sebagai pendukung.`,`The chosen model alone is not enough here, so ${added} thick fabric panels were added in the same colours.`))}
+ const hard=MAT.wall[S.wall].a[3]<.12;const covW=w=>items.filter(i=>(i.t==='panel')&&i.wall===w&&i.y0<1.8&&i.y0+i.h>.9).reduce((t,i)=>t+i.w,0)/len[w];
+ const fth=pkg==='hemat'?.13:.26;if(hard)[['L','R'],['F','B']].forEach(([a,b])=>{let guard=0,dead={};while(covW(a)+covW(b)<fth&&guard++<14){const ws=[a,b].filter(w=>!dead[w]).sort((x,y)=>covW(x)-covW(y));if(!ws.length)break;const w=ws[0],o=w===a?b:a;const taken=items.filter(i=>i.wall===o||i.wall===w).map(i=>i.pos);const cand=[];for(let p=.5;p<=len[w]-.5;p+=.25)cand.push([p,taken.length?Math.min(...taken.map(t=>Math.abs(t-p))):9]);cand.sort((x,y)=>y[1]-x[1]);let okp=false;for(const [p] of cand){if(place(w,p,cy,'flutter')||place(w,p,cy,'flutter','kotak')){okp=true;break}}if(!okp)dead[w]=1}A1=after();T1=rtOf(V,A1)});
  if(pkg!=='hemat'&&mid(T1)>TT[2]*1.02)notes.push(L('Dinding yang tersedia tidak cukup untuk mencapai target dengan model ini. Pilih model yang lebih tebal (panel kain kotak 10 cm) atau tambah cloud plafon.','Not enough free wall to reach the target with this model. Use a thicker model or add ceiling clouds.'));
  if(mid(T1)<TT[1]*.85)notes.push(L('Ruang kecil ini sudah cukup "kering". Kalau terasa pengap, kurangi panel atau ganti sebagian dengan difuser.','This small room is already dry; if stuffy, remove a few panels or swap for diffusers.'));
  const md=[...modes(D,'P'),...modes(Wf,'L'),...modes(H,'T')].sort((a,b)=>a.f-b.f);
  const clusters=[];for(let i=1;i<md.length;i++){const a=md[i-1],b=md[i];if(b.f<200&&a.dim!==b.dim&&(b.f-a.f)/a.f<.04){const f=R((a.f+b.f)/2);if(!clusters.some(x=>Math.abs(x-f)<3))clusters.push(f)}}
  const dims=[H,Wf,D].sort((a,b)=>a-b),ratio=dims.map(v=>v/dims[0]);let propBad=false;for(let i=0;i<3;i++)for(let j=i+1;j<3;j++){const r=dims[j]/dims[i];if(Math.abs(r-R(r))<.06)propBad=true}
- return {pkg,Wf,D,H,V,Stot,A0,T0,TT,Tt,A1,T1,items,lis,spk,ppl,kind,md,clusters,ratio,propBad,glass,doorA,ops,notes,len,furn,blk,mk};
+ return {pkg,RP,Wf,D,H,V,Stot,A0,T0,TT,Tt,A1,T1,items,lis,spk,ppl,kind,md,clusters,ratio,propBad,glass,doorA,ops,notes,len,furn,blk,mk};
 }
 
 // ================= 2D DRAWINGS =================
@@ -451,7 +483,7 @@ function planSVG(mode){
 }
 function elevSVG(wall){
  const {H,items,ops,len,blk}=RES;const ln=len[wall],s=100,P=Math.max(ln,H)*10+30,W=ln*s,Hh=H*s,fs=Math.max(ln,H)*4.3,th=Math.max(ln,H)*2.6,c=pcol();
- let g=`<svg viewBox="${-P} ${-P*.7} ${W+2*P} ${Hh+P*1.7}"><rect x="0" y="0" width="${W}" height="${Hh}" fill="${C2.lite}" stroke="#2b2f38" stroke-width="${th}"/><line x1="${-P*.3}" y1="${Hh}" x2="${W+P*.3}" y2="${Hh}" stroke="#14182b" stroke-width="${th*.8}"/>`;
+ let g=`<svg viewBox="${-P} ${-P*.7} ${W+2*P} ${Hh+P*1.7+fs*4}"><rect x="0" y="0" width="${W}" height="${Hh}" fill="${C2.lite}" stroke="#2b2f38" stroke-width="${th}"/><line x1="${-P*.3}" y1="${Hh}" x2="${W+P*.3}" y2="${Hh}" stroke="#14182b" stroke-width="${th*.8}"/>`;
  blk.filter(b=>b.wall===wall).forEach(b=>{const x=(b.pos-b.w/2)*s,y=Hh-(b.sill+b.h)*s;g+=`<rect x="${x}" y="${y}" width="${b.w*s}" height="${b.h*s}" fill="#fff" stroke="#9aa1b5" stroke-width="${th*.3}" stroke-dasharray="${th} ${th*.6}"/>`});
  ops.filter(o=>o.wall===wall).forEach(o=>{const x=(o.pos-o.w/2)*s,y=Hh-(o.sill+o.h)*s;g+=`<rect x="${x}" y="${y}" width="${o.w*s}" height="${o.h*s}" fill="${o.t==='door'?'#c79a72':C2.glass}" stroke="${o.t==='door'?C2.door:'#5d8fb0'}" stroke-width="${th*.4}"/>`+txt(x+o.w*s/2,y+o.h*s/2,o.t==='door'?L('pintu','door'):L('jendela','window'),fs*.6,C2.ink,'middle',600)});
  g+=txt(0,Hh+fs*1.6,wall==='L'||wall==='R'?L('← dinding depan','← front wall'):L('← sudut kiri','← left corner'),fs*.7,C2.mut,'start',600)+txt(W,Hh+fs*1.6,N(ln,2)+' m',fs*.7,C2.mut,'end',600)+`<g transform="translate(${-fs*.8},${Hh/2}) rotate(-90)">${txt(0,0,N(H,2)+' m',fs*.7,C2.mut)}</g>`;
@@ -461,6 +493,14 @@ function elevSVG(wall){
   if((it.m==='tricorner'&&it.arm>0)||it.m==='soffit'){const aw=it.m==='soffit'?(W-2*lw)/2:it.arm*s,ax=atLeft?lw:W-lw-aw;g+=`<rect x="${ax}" y="0" width="${aw}" height="${it.leg*s}" fill="${c[2]}" fill-opacity=".75"/>`}});
  items.filter(i=>i.wall===wall&&i.t!=='trap'&&i.t!=='ceil').forEach((it,i)=>{const x=(it.pos-it.w/2)*s,y=Hh-(it.y0+it.h)*s;g+=paint(it.m,x,y,it.w*s,it.h*s,it.alt?[c[1],c[0],c[2]]:c,th*.15)+txt(x+it.w*s/2,y-fs*.3,it.code,fs*.7,C2.blue,'middle',700)});
  g+=`<line x1="0" y1="${Hh-120}" x2="${W}" y2="${Hh-120}" stroke="${C2.amber}" stroke-width="${th*.35}" stroke-dasharray="${th*1.5} ${th}"/>`+txt(W-fs*.3,Hh-120-fs*.35,L('tinggi telinga 120 cm','ear height 120 cm'),fs*.6,'#8a6500','end',600);
+ const its=items.filter(i=>i.wall===wall&&i.t!=='trap'&&i.t!=='ceil').sort((a,b)=>a.pos-b.pos),dc='#d93a3a',df=fs*.5;
+ its.forEach(it=>{const x=(it.pos)*s,yb=Hh-it.y0*s,yt=Hh-(it.y0+it.h)*s;
+  g+=`<line x1="${x}" y1="${Hh}" x2="${x}" y2="${yb}" stroke="${dc}" stroke-width="${th*.22}" stroke-dasharray="${th*.8} ${th*.5}"/>`+txt(x+fs*.15,Hh-(it.y0*s)/2,cm(it.y0),df,dc,'start',700);
+  g+=`<line x1="${x}" y1="0" x2="${x}" y2="${yt}" stroke="${dc}" stroke-width="${th*.22}" stroke-dasharray="${th*.8} ${th*.5}"/>`+txt(x+fs*.15,yt/2+df*.3,cm(H-it.y0-it.h),df,dc,'start',700)});
+ if(its.length){const ed=[0];its.forEach(i=>{ed.push(i.pos-i.w/2,i.pos+i.w/2)});ed.push(ln);const yy=Hh+fs*3,lab=[];
+  for(let k=0;k<ed.length-1;k++){const a=ed[k],b=ed[k+1];if(b-a<.005)continue;const pan=k%2===1;g+=`<line x1="${a*s}" y1="${yy}" x2="${b*s}" y2="${yy}" stroke="${pan?C2.blue:dc}" stroke-width="${th*.3}"/><line x1="${a*s}" y1="${yy-fs*.35}" x2="${a*s}" y2="${yy+fs*.35}" stroke="#5b6275" stroke-width="${th*.2}"/>`;
+   g+=txt((a+b)/2*s,yy+(k%2?fs*1.05:-fs*.35),cm(b-a),df*1.05,pan?C2.blue:dc,'middle',700)}
+  g+=`<line x1="${ln*s}" y1="${yy-fs*.35}" x2="${ln*s}" y2="${yy+fs*.35}" stroke="#5b6275" stroke-width="${th*.2}"/>`+txt(0,yy+fs*2.3,L('Rantai ukuran (cm): merah = jarak kosong, biru = lebar panel. Angka merah vertikal = jarak ke lantai / ke plafon.','Dimension chain (cm): red = gaps, blue = panel widths. Vertical red = to floor / to ceiling.'),df*1.05,C2.mut,'start',500)}
  return g+'</svg>';
 }
 // ---- details ----
@@ -679,7 +719,23 @@ function problems(){const r=RES,p=[],m0=mid(r.T0),ratio=m0/r.Tt;
  if(r.clusters.length)p.push([L('Penumpukan nada bass','Stacked resonances'),L(`Nada sekitar ${r.clusters.map(f=>f+' Hz').join(', ')} lebih keras dari nada lain.`,`Notes around ${r.clusters.map(f=>f+' Hz').join(', ')} are louder.`)]);
  if(r.propBad)p.push([L('Proporsi ruang kurang baik','Poor proportions'),L('Dua ukuran ruang sama / kelipatan — bass trap wajib.','Two dimensions are equal / multiples — traps essential.')]);
  return p}
-function wallTable(){const r=RES,rows=[];const why={refl:L('titik pantulan pertama','first reflection point'),front:L('di belakang speaker','behind speakers'),rear:L('dinding belakang (pantulan balik)','rear wall return'),behind:L('di belakang pembicara','behind the talker'),bg:L('latar kamera / di belakang kepala','camera background'),face:L('di depan wajah','in front of the talker'),head:L('di atas kepala tempat tidur','above the headboard'),fill:L('pengisi selang-seling (hilangkan gema)','staggered fill (echo)'),ceil:L('memutus pantulan lantai–plafon','breaks floor–ceiling echo')};
+function verify(){const r=RES,ch=[],P=r.items.filter(i=>i.t==='panel'),hit=(a,b)=>a.wall===b.wall&&Math.abs(a.pos-b.pos)<(a.w+b.w)/2-.005&&a.y0<b.sill+b.h-.005&&a.y0+a.h>b.sill+.005;
+ const m1=mid(r.T1),soft=v=>r.pkg==='hemat'?v<=r.TT[2]*1.65:v<=r.TT[2]*1.3&&v<=.45;ch.push([m1<=r.TT[2]*1.02?true:soft(m1)?'warn':false,L('Waktu gema (rumus Eyring)','Reverberation (Eyring)'),`${N(m1,2)} s · target ≤ ${N(r.TT[2],2)} s`+(m1>r.TT[2]*1.02&&soft(m1)?r.pkg==='hemat'?L(' — paket hemat: gema berkurang jelas, tapi belum ideal; pilih Standar untuk hasil ideal',' — budget package: clearly better but not ideal'):L(' — gema sudah hilang (di bawah 0,45 s); untuk standar studio profesional tambah cloud / plafon akustik',' — echo is gone (<0.45 s); for pro-studio spec add clouds / acoustic ceiling'):'')]);
+ if(m1<r.TT[1]*.8)ch.push(['warn',L('Tidak terlalu "kering"','Not over-damped'),`${N(m1,2)} s < ${N(r.TT[1],2)} s — `+L('ruang mulai terasa pengap; boleh kurangi 1–2 panel atau pilih paket lebih rendah','may feel stuffy; remove 1–2 panels or pick a lighter package')]);else ch.push([true,L('Tidak terlalu "kering"','Not over-damped'),`${N(m1,2)} s ≥ ${N(r.TT[1]*.8,2)} s`]);
+ const sab=r.A1.map(a=>0.161*r.V/Math.max(a,.01));ch.push([mid(sab)<=r.TT[2]*1.2?true:(mid(sab)<=.5||r.pkg==='hemat'&&mid(sab)<=r.TT[2]*1.9)?'warn':false,L('Cek silang rumus Sabine (lebih ketat)','Cross-check (Sabine, stricter)'),`${N(mid(sab),2)} s`]);
+ ch.push([r.T1[0]<=Math.max(r.TT[2]*1.8,.6)?true:r.pkg==='hemat'?'warn':false,L('Bass 125 Hz setelah treatment','Bass at 125 Hz after'),`${N(r.T1[0],2)} s (${L('sebelum','before')} ${N(r.T0[0],2)} s)`]);
+ const onWin=(w,z,y)=>r.ops.some(o=>o.wall===w&&Math.abs(o.pos-z)<=o.w/2+.35&&y>=o.sill-.05&&y<=o.sill+o.h+.05),byTrap=(w,z)=>r.items.some(t=>t.t==='trap'&&({L:[0,2],R:[1,3]}[w]||[]).includes(t.corner)&&((t.corner<2?z:r.D-z)<=t.leg+.22));
+ r.RP.forEach(q=>{const ok=P.some(i=>i.wall===q.wall&&Math.abs(i.pos-q.z)<=i.w/2+.05&&i.y0<=1.25&&i.y0+i.h>=1.15);const lab=L('Titik pantulan ','Reflection point ')+wallName(q.wall).toLowerCase()+' '+cm(q.z)+' cm';
+  if(ok)ch.push([true,lab,L('tertutup panel','covered')]);else if(byTrap(q.wall,q.z))ch.push([true,lab,L('tertutup bass trap di sudut','covered by the corner trap')]);else if(onWin(q.wall,q.z,1.2))ch.push(['warn',lab,L('jatuh di jendela — pasang tirai tebal berlipat (min. 2× lebar jendela) saat dipakai','falls on a window — fit heavy pleated curtains')]);else ch.push([false,lab,L('belum tertutup','not covered')])});
+ if(r.kind==='talk'||r.kind==='cam'){const pp=r.ppl[0];['L','R'].forEach(w=>{const ok=P.some(it=>it.wall===w&&Math.abs(it.pos-pp.z)<=it.w/2+.6);const lab=L('Panel di samping pembicara – ','Panel beside talker – ')+wallName(w).toLowerCase();if(ok)ch.push([true,lab,'OK']);else if(onWin(w,pp.z,1.15))ch.push(['warn',lab,L('posisi itu jendela — pasang tirai tebal berlipat','a window is there — fit heavy curtains')]);else ch.push([false,lab,L('tidak ada','missing')])})}
+ if(MAT.wall[S.wall].a[3]<.12)[['L','R'],['F','B']].forEach(([a,b])=>{const cv=w=>P.filter(i=>i.wall===w&&i.y0<1.8&&i.y0+i.h>.9).reduce((t,i)=>t+i.w,0)/r.len[w];const c=cv(a)+cv(b);ch.push([c>=.25||r.pkg==='hemat'&&c>=.12,L('Gema bolak-balik ','Flutter ')+wallName(a).replace(/Dinding |wall/,'').trim()+'–'+wallName(b).replace(/Dinding |wall/,'').trim(),`${R(c*100)}% ${L('panjang dinding tertutup di tinggi 90–180 cm','of wall length covered at 0.9–1.8 m')}`])});
+ const clash=P.filter(i=>r.ops.some(o=>hit(i,o))||r.blk.some(b=>hit(i,b))).length;ch.push([clash===0,L('Tidak menutup jendela / pintu / lemari','Clear of windows / doors / wardrobe'),clash?clash+L(' panel bertabrakan',' clashes'):L('aman','clear')]);
+ const ov=P.filter((a,i)=>P.some((b,j)=>j>i&&a.wall===b.wall&&Math.abs(a.pos-b.pos)<(a.w+b.w)/2-.005&&a.y0<b.y0+b.h-.005&&a.y0+a.h>b.y0+.005)).length;ch.push([ov===0,L('Panel tidak saling tumpang tindih','No overlapping panels'),ov?ov+'':L('aman','clear')]);
+ const outB=P.filter(i=>i.pos-i.w/2<-.001||i.pos+i.w/2>r.len[i.wall]+.001||i.y0<0||i.y0+i.h>r.H+.001).length;ch.push([outB===0,L('Semua panel di dalam bidang dinding','All panels within the wall'),outB?outB+'':'OK']);
+ const cl=r.items.filter(i=>i.t==='ceil');if(cl.length){const mn=Math.min(...cl.map(i=>r.H-i.drop-i.h));ch.push([mn>=2.1,L('Tinggi bebas di bawah item plafon','Head clearance under ceiling items'),`${cm(mn)} cm (min 210)`])}
+ return ch}
+function verifyHTML(){const ch=verify(),ok=ch.filter(c=>c[0]===true).length,wn=ch.filter(c=>c[0]==='warn').length;return `<p class="sub">${ok}/${ch.length} ${L('pemeriksaan lulus','checks passed')}${wn?` · ${wn} ${L('catatan (perlu tirai)','notes (curtains)')}`:''}</p><div class="scroll"><table>${ch.map(c=>`<tr><td style="width:28px;font-size:18px;color:${c[0]===true?'#1f8a5b':c[0]==='warn'?'#b7791f':'#d93a3a'}">${c[0]===true?'✓':c[0]==='warn'?'⚠':'✗'}</td><td><b>${c[1]}</b><br><small style="color:#5b6275">${c[2]}</small></td></tr>`).join('')}</table></div>`}
+function wallTable(){const r=RES,rows=[];const why={refl:L('titik pantulan pertama','first reflection point'),front:L('di belakang speaker','behind speakers'),rear:L('dinding belakang (pantulan balik)','rear wall return'),behind:L('di belakang pembicara','behind the talker'),bg:L('latar kamera / di belakang kepala','camera background'),face:L('di depan wajah','in front of the talker'),head:L('di atas kepala tempat tidur','above the headboard'),fill:L('pengisi selang-seling (hilangkan gema)','staggered fill (echo)'),ceil:L('memutus pantulan lantai–plafon','breaks floor–ceiling echo'),flutter:L('pemutus gema bolak-balik','flutter breaker')};
  ['F','B','L','R','C'].forEach(w=>{const its=r.items.filter(i=>i.wall===w&&i.t!=='trap');const n=its.length;const rs={};its.forEach(i=>{const k=i.t==='diff'?L('difuser','diffuser'):why[i.role]||'';rs[k]=(rs[k]||0)+1});
   const blk=r.blk.filter(b=>b.wall===w&&b.h>2).length?L(' · area lemari dikosongkan',' · wardrobe area left clear'):'';const op=r.ops.filter(o=>o.wall===w).length?L(` · ${r.ops.filter(o=>o.wall===w).length} bukaan dihindari`,` · ${r.ops.filter(o=>o.wall===w).length} openings avoided`):'';
   rows.push(`<tr><td>${wallName(w)}</td><td class="n">${n}</td><td>${n?Object.entries(rs).map(([k,v])=>`${v}× ${k}`).join(', '):L('tidak perlu panel','no panels needed')}${w!=='C'?op+blk:''}</td></tr>`)});
@@ -693,6 +749,14 @@ function boq(){const it=RES.items,H=RES.H,rows=[];let rw=0,fab=0,tim=0;
  const cl=it.filter(i=>i.t==='ceil');if(cl.length){const m=cl[0].m;rows.push({k:'c_'+m,name:CM[m][lang],spec:m==='cloud'?'120×120×10 cm':'120×60×5 cm',n:cl.length});cl.forEach(()=>{rw+=m==='cloud'?.144:.036;fab+=m==='cloud'?3.2:1.6;tim+=m==='cloud'?4.8:0})}
  return {rows,mat:[{k:'rw',name:L('Rockwool papan 60×120×5 cm','Rockwool board 60×120×50'),n:Math.ceil(rw/.036*1.1),u:L('lembar','boards')},{k:'fab',name:L('Kain akustik / felt','Acoustic fabric / felt'),n:Math.ceil(fab),u:'m²'},{k:'tim',name:L('Kayu rangka / lis','Frame timber'),n:Math.ceil(tim*1.1),u:L('m lari','lin. m')}]}}
 function specT(m,H){return {chunk:`60×60 × ${cm(H)} cm`,tricorner:`45×45 + ${L('lengan','arms')}`,straddle:`60 × ${cm(H)} cm`,curve:`R60 × ${cm(H)} cm`,tube:`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`,slatc:`60×60 × ${cm(H)} cm`,soffit:`45×45 + soffit`,membran:'50×50×25 cm',gobo:'60×180×15 cm',curvslat:`R60 × ${cm(H)} cm`}[m]}
+function schedHTML(){const r=RES;let h='';['F','B','L','R'].forEach(w=>{const its=r.items.filter(i=>i.wall===w&&i.t!=='trap'&&i.t!=='ceil').sort((a,b)=>a.pos-b.pos);if(!its.length)return;
+  const ref=w==='L'||w==='R'?L('dinding depan','front wall'):L('sudut kiri','left corner');
+  h+=`<h3>${wallName(w)} <small style="font-weight:500;color:#5b6275">· ${L('acuan: ','datum: ')}${ref} ${L('& lantai jadi','& finished floor')}</small></h3><div class="scroll"><table><tr><th>${L('Kode','Code')}</th><th>Item</th><th class="r">${L('Tepi kiri dari ','Left edge from ')}${ref}</th><th class="r">${L('Jarak dari panel sebelumnya','Gap to previous')}</th><th class="r">${L('Bawah dari lantai','Bottom above floor')}</th><th class="r">${L('Atas ke plafon','Top to ceiling')}</th><th class="r">${L('Menonjol dari dinding','Projects from wall')}</th></tr>`;
+  let prev=null;its.forEach(i=>{const le=i.pos-i.w/2;h+=`<tr><td><span class="tag ${i.t==='diff'?'d':''}">${i.code}</span></td><td>${PM[i.m][lang]}<br><small style="color:#5b6275">${cm(i.w)} × ${cm(i.h)} × ${cm(i.d)} cm</small></td><td class="r"><b>${cm(le)}</b></td><td class="r">${prev==null?'–':cm(le-prev)}</td><td class="r"><b>${cm(i.y0)}</b></td><td class="r">${cm(r.H-i.y0-i.h)}</td><td class="r">${cm(i.d+.03)}</td></tr>`;prev=i.pos+i.w/2});
+  h+=`<tr><td colspan="7" style="color:#5b6275;font-size:12px">${L('Sisa dari tepi panel terakhir ke ujung dinding: ','Last panel edge to wall end: ')}${cm(r.len[w]-prev)} cm · ${L('panjang dinding','wall length')} ${cm(r.len[w])} cm</td></tr></table></div>`});
+ const cl=r.items.filter(i=>i.t==='ceil');if(cl.length)h+=`<h3>${L('Plafon','Ceiling')} <small style="font-weight:500;color:#5b6275">· ${L('acuan: dinding depan & dinding kiri','datum: front & left walls')}</small></h3><div class="scroll"><table><tr><th>${L('Kode','Code')}</th><th>Item</th><th class="r">${L('Tepi depan dari dinding depan','Front edge from front wall')}</th><th class="r">${L('Tepi kiri dari dinding kiri','Left edge from left wall')}</th><th class="r">${L('Turun dari plafon','Drop')}</th><th class="r">${L('Tinggi bebas di bawahnya','Clearance below')}</th></tr>${cl.map(i=>`<tr><td><span class="tag c">${i.code}</span></td><td>${CM[i.m][lang]}<br><small style="color:#5b6275">${cm(i.w)} × ${cm(i.m==='cloud'?i.d:i.h)} × ${i.m==='cloud'?10:5} cm</small></td><td class="r"><b>${cm(i.z-(i.m==='cloud'?i.d:.05)/2)}</b></td><td class="r"><b>${cm(i.x-i.w/2)}</b></td><td class="r">${cm(i.drop)}</td><td class="r">${cm(r.H-i.drop-i.h)}</td></tr>`).join('')}</table></div>`;
+ const tr=r.items.filter(i=>i.t==='trap');if(tr.length)h+=`<h3>${L('Sudut (bass trap)','Corners (bass traps)')}</h3><div class="scroll"><table><tr><th>${L('Kode','Code')}</th><th>Item</th><th>${L('Sudut','Corner')}</th><th class="r">${L('Ukuran','Size')}</th></tr>${tr.map(i=>`<tr><td><span class="tag t">${i.code}</span></td><td>${TM[i.m][lang]}</td><td>${cornerName(i.corner)}</td><td class="r">${specT(i.m,r.H)}</td></tr>`).join('')}</table></div>`;
+ return h}
 function rowItem(it){const tg=it.t==='trap'?'t':it.t==='ceil'?'c':it.t==='diff'?'d':'';let name,loc,pos;
  if(it.t==='trap'){name='Bass trap · '+TM[it.m][lang];loc=L('Sudut ','Corner ')+cornerName(it.corner);pos=specT(it.m,RES.H)}
  else if(it.t==='ceil'){name=CM[it.m][lang];loc=L('Plafon','Ceiling');pos=L(`${cm(it.z)} cm dari dinding depan, ${cm(it.x)} cm dari kiri, turun ${cm(it.drop)} cm`,`${cm(it.z)} cm from front, ${cm(it.x)} cm from left, ${cm(it.drop)} cm drop`)}
@@ -722,14 +786,15 @@ function renderOut(){
  <div class="svgbox" id="draw">${tab==='plan'?planSVG('sol'):elevSVG(tab)}</div>
  <div class="prob sol"><b>${L('Prinsip penempatan','Placement logic')}</b><span>${{listen:L('Panel dipasang tepat di titik pantulan pertama dinding kiri-kanan (cek dengan cermin dari posisi dengar), di belakang speaker, dan dinding belakang. Cloud di atas antara speaker dan pendengar. Bass trap di semua sudut.','Panels at the first reflection points, behind the speakers and on the rear wall; cloud above; traps in all corners.'),talk:L('Panel di empat dinding setinggi kepala duduk supaya pantulan tidak masuk mikrofon, cloud di atas meja.','Panels on all four walls at seated head height; cloud over the table.'),cam:L('Panel di belakang kepala (latar kamera), di depan wajah, dan di samping kiri-kanan.','Panels behind the head, in front of the face, and both sides.'),live:L('Panel selang-seling di semua dinding — tidak saling berhadapan — supaya gema putus tanpa membuat ruang "mati".','Staggered panels on all walls so echo breaks without deadening the room.'),room:L('Satu panel utama di atas kepala tempat tidur, lalu panel selang-seling di dinding lain; area lemari dan jendela dikosongkan.','A main panel above the headboard, then staggered panels elsewhere; wardrobe and windows left clear.'),speech:L('Plafon dulu (paling efektif untuk ruang rapat), lalu dua dinding yang bersebelahan secara selang-seling.','Ceiling first, then two adjacent walls, staggered.'),venue:L('Plafon dulu (baffle/cloud di atas meja), lalu dinding selang-seling.','Ceiling first over the tables, then staggered walls.')}[r.kind]}</span></div>
  ${r.notes.map(n=>`<div class="prob sol"><b>${L('Catatan','Note')}</b><span>${n}</span></div>`).join('')}</section>`;
+ h+=`<section class="card"><div class="num">${L('Uji otomatis','Automatic checks')}</div><h2>${L('Hasil uji desain','Design verification')}</h2>${verifyHTML()}<p class="note">${L('Diuji dengan data ruang yang Bapak isi: luas & material setiap bidang, koefisien serap tiap model per frekuensi, posisi titik pantulan, dan posisi bukaan & perabot.','Tested against your room data: surface areas and materials, per-frequency absorption of each model, reflection geometry, openings and furniture.')}</p></section>`;
  h+=`<section class="card"><div class="num">05 · ${L('Detail konstruksi','Construction details')}</div><h2>${L('Ukuran, isi & penutup','Size, core & cover')}</h2><p class="sub">${L('Gambar kerja untuk tukang. Ukuran dalam cm.','Shop drawings. Dimensions in cm.')}</p>
  ${used.map(k=>{const sv=detailSVG(k);const nm=(PM[k]||TM[k]||CM[k])[lang];return `<h3>${nm}</h3><div class="svgbox d3" data-k="${k}" style="padding:0;overflow:hidden"><p class="note" style="padding:10px">${L('Gambar 3D butuh internet','3D needs internet')}</p></div><div class="svgbox">${sv}</div>${CALL.length?`<ol style="margin:4px 0 8px;padding-left:22px;font-size:13.5px">${CALL.map(x=>`<li>${x}</li>`).join('')}</ol>`:''}${specFor(k)}`}).join('')}
  <div class="prob sol" style="margin-top:14px"><b>${L('Aturan material','Material rules')}</b><span>${L('Kain penutup harus tembus udara (mudah ditiup) — kain rapat / plastik membuat panel tidak menyerap. Bass trap tebal pakai rockwool 40–60 kg/m³; panel 5–10 cm pakai 60–80 kg/m³. Rongga udara di belakang panel menambah serapan bass. Pakai sarung tangan & masker saat memotong rockwool.','Covers must be breathable. Thick traps use 40–60 kg/m³ wool; 50–100 mm panels use 60–80 kg/m³. An air gap behind adds bass absorption. Wear gloves and a mask when cutting.')}</span></div></section>`;
- h+=`<section class="card"><div class="num">06 · ${L('Daftar pemasangan','Installation schedule')}</div><h2>${L('Posisi tiap item','Where each item goes')}</h2><div class="scroll"><table><tr><th>${L('Kode','Code')}</th><th>Item</th><th>${L('Letak','Location')}</th><th>${L('Posisi (tengah item)','Position (centre)')}</th></tr>${r.items.map(rowItem).join('')}</table></div></section>`;
+ h+=`<section class="card"><div class="num">06 · ${L('Daftar pemasangan','Installation schedule')}</div><h2>${L('Ukuran pemasangan tiap panel','Set-out dimensions for every panel')}</h2><p class="sub">${L('Semua ukuran dalam cm, diukur ke TEPI panel (bukan tengah). Tukang cukup ukur dari acuan lalu tandai.','All dimensions in cm to panel EDGES. Measure from the datum and mark.')}</p>${schedHTML()}</section>`;
  h+=`<section class="card"><div class="num">07 · ${L('Bukti hitungan','The numbers')}</div><h2>${L('Waktu gema per frekuensi','Reverberation by frequency')}</h2><div class="svgbox">${rtSVG()}</div>
  <div class="legend"><span><i style="background:${C2.red}"></i>${L('sebelum','before')}</span><span><i style="background:${C2.blue}"></i>${L('sesudah','after')}</span><span><i style="background:#dff3ea"></i>${L('rentang ideal','ideal range')}</span></div>
  <div class="scroll" style="margin-top:8px"><table><tr><th>Hz</th>${B.map(b=>`<th class="r">${b}</th>`).join('')}</tr><tr><td>${L('Sebelum','Before')}</td>${r.T0.map(v=>`<td class="r">${N(v,2)}</td>`).join('')}</tr><tr><td>${L('Sesudah','After')}</td>${r.T1.map(v=>`<td class="r">${N(v,2)}</td>`).join('')}</tr></table></div>
- <p class="note">${L('Dihitung untuk ruang kosong; perabot dan orang menambah serapan, jadi hasil nyata biasanya sedikit lebih baik. Ukur ulang setelah pemasangan.','Empty-room figures; furniture and people add absorption. Measure after install.')}</p></section>`;
+ <p class="note">${L('Hitungan sudah memasukkan perkiraan serapan perabot & orang sesuai fungsi ruang (kasur, sofa, meja-kursi, dll.). Ukur ulang dengan aplikasi pengukur RT60 setelah pemasangan untuk penyetelan akhir.','Includes estimated absorption of typical furniture and occupants. Measure RT60 after install for final tuning.')}</p></section>`;
  h+=`<section class="card"><div class="num">08 · ${L('Kebutuhan & biaya','Quantities & cost')}</div><h2>${L('Daftar kebutuhan','Bill of quantities')}</h2><p class="sub">${L('Isi harga satuan; total dihitung otomatis dan tersimpan di HP ini.','Enter unit prices; totals are saved on this phone.')}</p>
  <div class="scroll"><table><tr><th>Item</th><th class="r">${L('Jml','Qty')}</th><th class="r">${L('Harga satuan (Rp)','Unit price (Rp)')}</th><th class="r">Total</th></tr>${bq.rows.map(x=>prow(x.k,x.name+`<br><small style="color:#5b6275">${x.spec}</small>`,x.n,L('unit','pcs'))).join('')}
  <tr><td colspan="4" style="font-weight:700;padding-top:14px">${L('Material utama (untuk produksi)','Main materials')}</td></tr>${bq.mat.map(x=>prow(x.k,x.name,x.n,x.u)).join('')}<tr><td colspan="3"><b>Total</b></td><td class="r"><b id="gt">–</b></td></tr></table></div>
