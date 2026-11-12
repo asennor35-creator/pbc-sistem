@@ -1,0 +1,33 @@
+{
+  "name": "PBC Analisis Akustik Ruang",
+  "short_name": "PBC Akustik",
+  "description": "Analisis acoustic treatment: denah 3D, posisi wall panel & bass trap, detail, kebutuhan material.",
+  "id": "./akustik/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "id",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0d2259",
+  "icons": [
+    {
+      "src": "../icon-v2-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "../icon-v2-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "../icon-v2-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

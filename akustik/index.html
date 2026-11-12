@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PBC Analisis Akustik Ruang</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d2259">
+<link rel="icon" href="../icon-v2-192.png">
+<link rel="apple-touch-icon" href="../icon-v2-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{--navy:#0d2259;--blue:#2346c0;--blue2:#dfe6fb;--amber:#f2b705;--red:#d93a3a;--red2:#fde4e4;--ink:#14182b;--mut:#5b6275;--line:#e3e6ee;--bg:#f6f7fb;--ok:#1f8a5b;--ok2:#dff3ea}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:15px;line-height:1.5}
+header{background:var(--navy);color:#fff;padding:18px 18px 22px}
+.brand{display:flex;align-items:center;gap:10px;justify-content:space-between}.logo{display:flex;align-items:center;gap:10px}
+.mark{width:34px;height:34px;border-radius:8px;background:var(--blue);display:grid;place-items:center;font-weight:700;color:#fff;border:2px solid var(--amber)}
+.logo b{display:block;font-size:14px;letter-spacing:.08em}.logo small{display:block;font-size:10.5px;opacity:.75;letter-spacing:.06em}
+.lang{display:flex;border:1px solid rgba(255,255,255,.35);border-radius:999px;overflow:hidden}.lang button{background:none;border:0;color:#fff;padding:6px 12px;font:600 12px Inter;cursor:pointer}.lang button.on{background:var(--amber);color:var(--navy)}
+h1{font-size:22px;margin:16px 0 4px;line-height:1.25}header p{margin:0;opacity:.8;font-size:13.5px}
+main{max-width:880px;margin:0 auto;padding:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 14px}
+.card h2{font-size:17px;margin:0 0 2px}.card h3{font-size:15px;margin:16px 0 6px}.card .sub{color:var(--mut);font-size:13px;margin:0 0 12px}
+.num{font:500 11px 'JetBrains Mono',monospace;color:var(--blue);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.grid2,.g3m{grid-template-columns:1fr}}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--mut);margin-bottom:4px}
+input,select{width:100%;padding:11px 10px;border:1px solid #cfd4e1;border-radius:10px;font:500 15px Inter;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--blue2);border-color:var(--blue)}
+.field{margin-bottom:10px}
+.btn{width:100%;padding:14px;border:0;border-radius:12px;background:var(--blue);color:#fff;font:700 16px Inter;cursor:pointer;margin-top:6px}
+.btn.ghost{background:#fff;color:var(--blue);border:1.5px solid var(--blue);font-size:14px;padding:11px}.btn.sm{width:auto;padding:8px 12px;font-size:13px;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:620px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:10px 12px}.kpi small{display:block;color:var(--mut);font-size:11.5px}.kpi b{font-size:20px}
+.kpi.bad{background:var(--red2);border-color:#f5c2c2}.kpi.bad b{color:var(--red)}.kpi.good{background:var(--ok2);border-color:#bfe5d2}.kpi.good b{color:var(--ok)}
+.prob{border-left:4px solid var(--red);background:#fff7f7;padding:10px 12px;border-radius:0 10px 10px 0;margin:8px 0}.prob b{display:block;font-size:14px}.prob span{font-size:13.5px;color:#3a3f52}
+.sol{border-left-color:var(--blue);background:#f4f6fe}
+.note{font-size:12.5px;color:var(--mut);margin-top:8px}
+svg{width:100%;height:auto;display:block}
+.svgbox{border:1px solid var(--line);border-radius:12px;background:#fff;padding:6px;margin:8px 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12px;color:var(--mut);margin-top:6px}.legend i{display:inline-block;width:14px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.03em}td.r,th.r{text-align:right}
+.tag{display:inline-block;font:600 11px 'JetBrains Mono',monospace;background:var(--blue);color:#fff;border-radius:5px;padding:1px 5px;white-space:nowrap}
+.tag.t{background:#1d1f24}.tag.c{background:#6b7fd6}.tag.d{background:var(--amber);color:var(--navy)}
+.price{width:110px;padding:7px;font-size:13px;text-align:right}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:6px 0;padding-bottom:2px}
+.tabs button{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font:600 12.5px Inter;color:var(--mut);cursor:pointer}.tabs button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.scroll{overflow-x:auto}
+.ops{border:1px solid var(--line);border-radius:12px;padding:10px;margin:6px 0 10px}
+.oprow{display:grid;grid-template-columns:1.1fr 1.1fr .8fr .8fr .8fr .8fr 34px;gap:6px;align-items:end;margin-bottom:8px}.oprow input,.oprow select{padding:8px 6px;font-size:13px}.oprow label{font-size:10.5px}
+.x{border:0;background:#fde4e4;color:var(--red);border-radius:8px;height:36px;font-weight:700;cursor:pointer}
+@media(max-width:560px){.oprow{grid-template-columns:1fr 1fr 1fr}.oprow .x{grid-column:3}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:flex;align-items:center;gap:6px;border:1px solid #cfd4e1;border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer;background:#fff}.chip input{width:auto;margin:0}
+.models{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}@media(min-width:620px){.models{grid-template-columns:repeat(4,1fr)}}
+.model{position:relative;border:1.5px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;background:#fff;text-align:left;font:inherit;color:inherit}
+.model.on{border-color:var(--blue);background:#f4f6fe;box-shadow:0 0 0 2px var(--blue2)}
+.model svg{height:72px}.model b{display:block;font-size:12.5px;margin-top:4px}.model small{display:block;font-size:11px;color:var(--mut);line-height:1.35}
+.rec{position:absolute;top:6px;right:6px;background:#dff3ea;color:#11643f;font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px}
+.pals{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}@media(min-width:620px){.pals{grid-template-columns:repeat(4,1fr)}}
+.pal{border:1.5px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;background:#fff;font:inherit;text-align:left}
+.pal.on{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue2)}.pal div{display:flex;height:28px;border-radius:7px;overflow:hidden}.pal div i{flex:1}.pal b{display:block;font-size:12px;margin-top:5px}
+.pkgs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.pkg{border:1.5px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;background:#fff;font:inherit;text-align:left}
+.pkg.on{border-color:var(--blue);background:#f4f6fe;box-shadow:0 0 0 2px var(--blue2)}.pkg b{display:block;font-size:13.5px}.pkg small{display:block;font-size:11.5px;color:var(--mut)}.pkg em{display:block;font-style:normal;font-weight:700;font-size:16px;margin-top:2px}
+#v3wrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#eef0f5;margin:8px 0}
+#v3{width:100%;display:block;touch-action:none}
+.v3bar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.v3hint{position:absolute;left:8px;bottom:8px;font-size:11px;background:rgba(255,255,255,.85);padding:3px 8px;border-radius:6px;color:var(--mut)}
+.modal{position:fixed;inset:0;background:rgba(10,15,30,.75);display:none;align-items:center;justify-content:center;padding:16px;z-index:9}
+.modal.on{display:flex}.modal div{background:#fff;border-radius:14px;padding:12px;max-width:640px;width:100%}.modal img{width:100%;border-radius:8px;display:block}
+.spec{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px;margin-top:6px}.spec dt{color:var(--mut);font-weight:600}.spec dd{margin:0}
+.wt td:first-child{font-weight:700;white-space:nowrap}.wt td.n{font-size:18px;font-weight:700;color:var(--blue);text-align:center}
+footer{text-align:center;color:var(--mut);font-size:12px;padding:10px 0 30px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:10}.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+ <div class="brand"><div class="logo"><div class="mark">P</div><div><b>PRATAMA</b><small>BUILD &amp; CONSTRUCTION</small></div></div>
+ <div class="lang"><button id="lid">ID</button><button id="len">EN</button></div></div>
+ <h1 id="ttl"></h1><p id="tsub"></p>
+</header>
+<main><section class="card" id="inputCard"></section><div id="out"></div></main>
+<footer>Pratama Build &amp; Construction · pratamabuild.id · WA 0857-4502-6574</footer>
+<div class="modal" id="modal"><div><img id="mimg" alt=""><p class="note" id="mtxt"></p><button class="btn ghost" id="mclose"></button></div></div>
+<div class="toast" id="toast"></div>
+<script>
+// ================= DATA =================
+const B=[125,250,500,1000,2000,4000];
+const MAT={
+ floor:{keramik:{id:'Keramik / granit',en:'Ceramic / granite tile',a:[.01,.01,.01,.01,.02,.02],c:0xe4e4e2},spc:{id:'SPC / vinyl',en:'SPC / vinyl',a:[.02,.03,.03,.03,.03,.02],c:0xc49a6c},
+  kayu:{id:'Lantai kayu / parket',en:'Timber floor',a:[.15,.11,.10,.07,.06,.07],c:0xb5834f},karpet:{id:'Karpet tebal',en:'Heavy carpet',a:[.02,.06,.14,.37,.60,.65],c:0x8f94a0},beton:{id:'Beton / acian',en:'Bare concrete',a:[.01,.01,.02,.02,.02,.02],c:0xc4c4c2}},
+ wall:{tembok:{id:'Tembok bata plester + cat',en:'Painted plastered brick',a:[.01,.02,.02,.03,.04,.05]},gypsum:{id:'Dinding kedap PBC (2 lapis gypsum)',en:'PBC soundproof wall (2× gypsum)',a:[.15,.10,.06,.05,.05,.05]},
+  beton:{id:'Beton ekspos',en:'Exposed concrete',a:[.01,.01,.02,.02,.02,.03]},kayu:{id:'Panel kayu / multiplex',en:'Timber panelling',a:[.28,.22,.17,.09,.10,.11]}},
+ ceil:{gypsum:{id:'Plafon gypsum biasa',en:'Standard gypsum ceiling',a:[.29,.10,.05,.04,.07,.09]},gypsum2:{id:'Plafon kedap PBC (2 lapis gypsum)',en:'PBC isolated ceiling (2× gypsum)',a:[.15,.10,.06,.05,.05,.05]},
+  beton:{id:'Pelat beton',en:'Concrete slab',a:[.01,.01,.02,.02,.02,.02]},akustik:{id:'Plafon akustik (mineral fiber)',en:'Mineral fibre acoustic tile',a:[.30,.55,.70,.80,.85,.80]}}
+};
+const GLASS=[.35,.25,.18,.12,.07,.04],DOOR=[.14,.10,.06,.08,.10,.10];
+const USE={
+ kamar:{id:'Kamar tidur',en:'Bedroom',k:'room',T:[.5,.4,.6]},
+ podcast:{id:'Podcast / rekam vokal',en:'Podcast / vocal recording',k:'talk',T:[.25,.2,.3]},
+ konten:{id:'Ruang konten / streaming',en:'Content / streaming room',k:'cam',T:[.3,.25,.4]},
+ mixing:{id:'Studio mixing / mastering',en:'Mixing / mastering room',k:'listen',T:null},
+ rekaman:{id:'Studio rekaman (live room)',en:'Recording live room',k:'live',T:[.4,.3,.6]},
+ band:{id:'Ruang latihan band / drum',en:'Band / drum rehearsal room',k:'live',T:[.4,.3,.5]},
+ theater:{id:'Home theater',en:'Home cinema',k:'listen',T:[.35,.3,.45]},
+ rapat:{id:'Ruang rapat / kelas',en:'Meeting room / classroom',k:'speech',T:[.55,.45,.6]},
+ kafe:{id:'Kafe / restoran',en:'Café / restaurant',k:'venue',T:[.7,.5,.9]}
+};
+// absorption curves (per m2 face)
+const A10=[.6,1,1,1,1,.95],A5=[.22,.68,.98,1,1,.95],ASLAT=[.45,.85,.9,.75,.55,.4],ARIB=[.35,.85,1,1,.95,.9],APERF=[.4,.9,.85,.6,.4,.3],ADIF=[.1,.15,.2,.2,.2,.2],APYR=[.2,.45,.75,.85,.9,.9],ASTR=[.15,.5,.85,.95,.95,.9];
+// wall panel models. w,h in m (h:'full' => full height), d depth, af = absorbing face fraction of bbox, y: 'ear' centre at ear height | 'full' | 'mid'
+const PM={
+ kotak:{id:'Panel kain kotak',en:'Fabric panel',w:.6,h:1.2,d:.12,af:1,a:A10,y:'ear',sect:'fab10',rec:['mixing','band','theater','rekaman']},
+ lebar:{id:'Panel kain lebar',en:'Wide fabric panel',w:1.2,h:.6,d:.07,af:1,a:A5,y:'ear',sect:'fab5',rec:['rapat','kafe','kamar']},
+ hex:{id:'Heksagon sarang lebah',en:'Honeycomb hexagons',w:.9,h:.8,d:.05,af:.68,a:A5,y:'ear',sect:'fab5',rec:['podcast','konten','kamar','kafe']},
+ bulat:{id:'Panel bulat',en:'Round panels',w:.9,h:.9,d:.05,af:.78,a:A5,y:'ear',sect:'fab5',rec:['kafe','rapat','konten']},
+ slat:{id:'Kisi kayu (slat)',en:'Timber slat panel',w:.6,h:'full',d:.12,af:1,a:ASLAT,y:'full',sect:'wood',rec:['rekaman','rapat','theater','kamar','konten']},
+ wave:{id:'Gelombang PBC',en:'PBC wave panel',w:.6,h:'full',d:.2,af:1.05,a:ARIB,y:'full',sect:'wave',rec:['rekaman','band','kafe']},
+ arch:{id:'Lengkung arch',en:'Arch panel',w:.9,h:1.8,d:.05,af:.92,a:A5,y:'low',sect:'fab5',rec:['kamar','konten','kafe']},
+ diag:{id:'Garis miring',en:'Diagonal strips',w:1.0,h:1.5,d:.05,af:.6,a:A5,y:'ear',sect:'fab5',rec:['konten','kafe','rapat']},
+ ribbed:{id:'Kain beralur (channel)',en:'Channel-tufted fabric',w:.6,h:'full',d:.07,af:1,a:ARIB,y:'full',sect:'fab5',rec:['theater','kamar','mixing']},
+ fluted:{id:'Fluted setengah tabung',en:'Fluted half-round',w:.6,h:'full',d:.08,af:1.1,a:ARIB,y:'full',sect:'fab5',rec:['theater','kamar','kafe']},
+ perf:{id:'Kayu berlubang',en:'Perforated timber',w:.6,h:'full',d:.1,af:1,a:APERF,y:'full',sect:'perf',rec:['rapat','rekaman','theater']},
+ tri:{id:'Mozaik segitiga',en:'Triangle mosaic',w:1.0,h:.6,d:.05,af:.6,a:A5,y:'ear',sect:'fab5',rec:['konten','podcast','kafe']},
+ tiles:{id:'Mozaik kotak 3D',en:'3D tile mosaic',w:.9,h:.9,d:.07,af:1,a:A5,y:'ear',sect:'fab5',rec:['podcast','konten','band']},
+ pyramid:{id:'Piramida 3D',en:'3D pyramid panel',w:.6,h:.6,d:.1,af:1.2,a:APYR,y:'ear',sect:'fab5',rec:['podcast','band']},
+ strips:{id:'Garis horizontal (felt)',en:'Horizontal felt strips',w:1.2,h:.9,d:.04,af:.7,a:ASTR,y:'ear',sect:'fab5',rec:['rapat','kamar','kafe']},
+ art:{id:'Kain bergambar',en:'Printed art panel',w:1.2,h:.8,d:.05,af:1,a:A5,y:'ear',sect:'fab5',rec:['kafe','rapat','kamar']},
+ batu:{id:'Batu organik',en:'Organic pebbles',w:1.0,h:.7,d:.05,af:.62,a:A5,y:'ear',sect:'fab5',rec:['kafe','kamar','konten']},
+ skyline:{id:'Skyline difuser',en:'Skyline diffuser',w:.6,h:.6,d:.15,af:1,a:ADIF,y:'ear',sect:'diff',diff:1,rec:['mixing','rekaman','theater']},
+ head:{id:'Headboard empuk',en:'Upholstered headboard',w:2.0,h:1.1,d:.08,af:1,a:A5,y:'bed',sect:'fab5',only:'kamar',rec:['kamar']}
+};
+const TM={
+ chunk:{id:'Superchunk segitiga',en:'Superchunk',a:[.95,1,1,1,1,.95],leg:.6},
+ tri:{id:'Tri-corner',en:'Tri-corner',a:[.95,1,1,1,1,.95],leg:.45},
+ straddle:{id:'Panel miring',en:'Corner straddle',a:[.85,1,1,1,1,.95],leg:.45},
+ curve:{id:'Lengkung seperempat',en:'Quarter-round',a:[.8,1,1,1,.95,.9],leg:.6},
+ tube:{id:'Tabung bulat',en:'Tube trap',a:[.6,.9,1,1,.95,.9],leg:.5},
+ slatc:{id:'Sudut kisi kayu',en:'Slatted corner',a:[.9,.95,.9,.75,.55,.45],leg:.6},
+ soffit:{id:'Soffit memanjang',en:'Full-length soffit',a:[.95,1,1,1,1,.95],leg:.45},
+ membran:{id:'Kotak membran',en:'Membrane box',a:[.9,.6,.3,.2,.15,.12],leg:.5},
+ gobo:{id:'Panel berdiri',en:'Free-standing panel',a:[.7,1,1,1,1,.95],leg:.55},
+ curvslat:{id:'Lengkung kisi kayu',en:'Curved slat corner',a:[.75,.95,.9,.75,.55,.45],leg:.6}
+};
+const CM={cloud:{id:'Cloud gantung',en:'Suspended cloud',a:[.6,1,1,1,1,.95]},baffle:{id:'Baffle vertikal',en:'Vertical baffles',a:[.3,.7,.95,1,1,.95]},none:{id:'Tanpa plafon',en:'No ceiling items',a:null}};
+const PAL={
+ pasir:{id:'Pasir & kayu',en:'Sand & oak',c:['#d6c7ab','#a7865d','#5e4a37']},
+ sage:{id:'Sage',en:'Sage',c:['#a8b59a','#6e8064','#3b4636']},
+ terakota:{id:'Terakota',en:'Terracotta',c:['#c56b4b','#e2b79e','#6e3424']},
+ arang:{id:'Arang',en:'Charcoal',c:['#4a4d52','#8c9096','#232427']},
+ walnut:{id:'Hitam & walnut',en:'Black & walnut',c:['#2a2a2c','#7a5537','#141415']},
+ mocca:{id:'Mocca',en:'Mocha',c:['#8d715d','#c9b39b','#4a3a2f']},
+ zaitun:{id:'Zaitun',en:'Olive',c:['#77753f','#b9ab6e','#3c3b25']},
+ anggur:{id:'Merah anggur',en:'Burgundy',c:['#6f2836','#c69a8c','#2e1a1f']},
+ tulang:{id:'Putih tulang',en:'Bone white',c:['#ece5d8','#c8bfae','#7f776b']},
+ teal:{id:'Teal',en:'Teal',c:['#2f6b6b','#9cc4bc','#1b3a3c']},
+ mustard:{id:'Navy & mustard',en:'Navy & mustard',c:['#23304f','#d6a23e','#141b2e']},
+ lavender:{id:'Abu lavender',en:'Lavender grey',c:['#9d97ad','#d6d2de','#4b4658']}
+};
+let lang='id';try{lang=localStorage.getItem('pbcak_lang')||'id'}catch(e){}
+const L=(a,b)=>lang==='id'?a:b;
+const N=(v,d=2)=>(+v).toLocaleString(lang==='id'?'id-ID':'en-GB',{minimumFractionDigits:d,maximumFractionDigits:d});
+const R=Math.round,cm=v=>R(v*100),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const def={name:'',D:5,W:4,H:3,use:'kamar',floor:'spc',wall:'tembok',ceil:'gypsum',
+ ops:[{t:'win',wall:'L',pos:1.4,w:1.0,h:1.2,sill:.9},{t:'win',wall:'L',pos:3.4,w:1.0,h:1.2,sill:.9},{t:'door',wall:'F',pos:.75,w:.9,h:2.1,sill:0}],
+ cx:{echo:true,bass:false,flutter:false},mT:'chunk',mP:'auto',mC:'cloud',pal:'pasir',pkg:'std'};
+let S=JSON.parse(JSON.stringify(def));try{const s=JSON.parse(localStorage.getItem('pbcak3')||'null');if(s)S={...S,...s}}catch(e){}
+let PR={};try{PR=JSON.parse(localStorage.getItem('pbcak_pr')||'{}')}catch(e){}
+let RES=null,ALL=null,tab='plan',showLbl=true;
+const pcol=()=>PAL[S.pal].c;
+const pmodel=()=>S.mP==='auto'?recList()[0]:S.mP;
+function recList(){return Object.keys(PM).filter(k=>PM[k].rec.includes(S.use)&&!PM[k].diff)}
+
+// ================= 2D PAINTERS (shared: icons, elevations, details) =================
+function hexPts(cx,cy,r){let p=[];for(let i=0;i<6;i++){const a=Math.PI/3*i+Math.PI/6;p.push((cx+r*Math.cos(a)).toFixed(1)+','+(cy+r*Math.sin(a)).toFixed(1))}return p.join(' ')}
+function paint(shape,x,y,w,h,c,sw=1){const [c0,c1,c2]=c;const st=`stroke="#00000033" stroke-width="${sw}"`;let g='';
+ switch(shape){
+ case 'kotak':case 'lebar':g=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${w*.03}" fill="${c0}" ${st}/>`;break;
+ case 'hex':{const r=Math.min(w/5.2,h/4.5),cx=x+w/2,cy=y+h/2,dx=r*1.732,cs=[[0,0,c0],[dx,0,c1],[-dx,0,c1],[dx/2,1.5*r,c0],[-dx/2,1.5*r,c2],[dx/2,-1.5*r,c2],[-dx/2,-1.5*r,c0]];cs.forEach(([a,b,cc])=>g+=`<polygon points="${hexPts(cx+a,cy+b,r*.95)}" fill="${cc}" ${st}/>`);break}
+ case 'bulat':g=`<circle cx="${x+w*.42}" cy="${y+h*.45}" r="${Math.min(w,h)*.4}" fill="${c0}" ${st}/><circle cx="${x+w*.8}" cy="${y+h*.78}" r="${Math.min(w,h)*.2}" fill="${c1}" ${st}/>`;break;
+ case 'slat':{g=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#1e1f22"/>`;const n=11,bw=w/n;for(let i=0;i<n;i++)g+=`<rect x="${x+i*bw+bw*.15}" y="${y}" width="${bw*.7}" height="${h}" fill="${c1}" stroke="#00000022"/>`;break}
+ case 'wave':g=`<path d="M${x} ${y+h}C${x-w*.4} ${y+h*.6} ${x+w*.6} ${y+h*.4} ${x+w*.1} ${y}h${w*.8}C${x+w*1.4} ${y+h*.4} ${x+w*.4} ${y+h*.6} ${x+w} ${y+h}z" fill="${c0}" ${st}/>`;break;
+ case 'arch':g=`<path d="M${x} ${y+h}V${y+w/2}A${w/2} ${w/2} 0 0 1 ${x+w} ${y+w/2}V${y+h}z" fill="${c0}" ${st}/><path d="M${x+w*.2} ${y+h}V${y+w/2+w*.05}A${w*.3} ${w*.3} 0 0 1 ${x+w*.8} ${y+w/2+w*.05}V${y+h}" fill="none" stroke="${c1}" stroke-width="${sw*2}"/>`;break;
+ case 'diag':{const pw=w*.22;[[0,c0],[1,c1],[2,c0],[3,c2]].forEach(([i,cc])=>{const x0=x+i*w*.26;g+=`<path d="M${x0} ${y+h}L${x0+pw*.9} ${y}h${pw}L${x0+pw} ${y+h}z" fill="${cc}" ${st}/>`});break}
+ case 'ribbed':{g=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${w*.08}" fill="${c0}" ${st}/>`;for(let i=1;i<6;i++)g+=`<line x1="${x+i*w/6}" y1="${y+2}" x2="${x+i*w/6}" y2="${y+h-2}" stroke="${c2}" stroke-opacity=".45" stroke-width="${sw*1.2}"/>`;break}
+ case 'fluted':{const n=6,bw=w/n;for(let i=0;i<n;i++)g+=`<rect x="${x+i*bw}" y="${y}" width="${bw}" height="${h}" rx="${bw/2}" fill="${i%2?c0:c0}" ${st}/><rect x="${x+i*bw+bw*.55}" y="${y+bw*.4}" width="${bw*.25}" height="${h-bw*.8}" rx="${bw*.12}" fill="#ffffff" fill-opacity=".18"/>`;break}
+ case 'perf':{g=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c1}" ${st}/>`;const st2=w/6;for(let yy=y+st2/2;yy<y+h;yy+=st2)for(let xx=x+st2/2;xx<x+w;xx+=st2)g+=`<circle cx="${xx}" cy="${yy}" r="${st2*.16}" fill="#2a1d10"/>`;break}
+ case 'tri':{const n=5,tw=w/n*1.6;for(let i=0;i<n;i++){const x0=x+i*w/n*.95,up=i%2==0;g+=up?`<path d="M${x0} ${y+h}L${x0+tw/2} ${y}L${x0+tw} ${y+h}z" fill="${[c0,c1,c2][i%3]}" ${st}/>`:`<path d="M${x0} ${y}L${x0+tw} ${y}L${x0+tw/2} ${y+h}z" fill="${[c1,c0,c2][i%3]}" ${st}/>`}break}
+ case 'tiles':{for(let i=0;i<3;i++)for(let j=0;j<3;j++)g+=`<rect x="${x+i*w/3+1}" y="${y+j*h/3+1}" width="${w/3-2}" height="${h/3-2}" fill="${(i+j)%2?c1:c0}" ${st}/>`;break}
+ case 'pyramid':{for(let i=0;i<2;i++)for(let j=0;j<2;j++){const x0=x+i*w/2,y0=y+j*h/2,ww=w/2,hh=h/2;g+=`<rect x="${x0}" y="${y0}" width="${ww}" height="${hh}" fill="${c0}" ${st}/><path d="M${x0} ${y0}L${x0+ww} ${y0+hh}M${x0+ww} ${y0}L${x0} ${y0+hh}" stroke="${c2}" stroke-opacity=".5" stroke-width="${sw}"/><path d="M${x0} ${y0}L${x0+ww/2} ${y0+hh/2}L${x0} ${y0+hh}z" fill="#000" fill-opacity=".12"/>`}break}
+ case 'strips':{for(let i=0;i<6;i++)g+=`<rect x="${x+(i%2)*w*.12}" y="${y+i*h/6+h*.02}" width="${w*(i%2?.88:1)}" height="${h/6*.6}" rx="${h*.03}" fill="${[c0,c1,c0,c2,c0,c1][i]}" ${st}/>`;break}
+ case 'art':g=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c1}" ${st}/><path d="M${x} ${y+h}L${x+w*.35} ${y+h*.4}L${x+w*.55} ${y+h*.7}L${x+w*.75} ${y+h*.35}L${x+w} ${y+h}z" fill="${c0}"/><circle cx="${x+w*.78}" cy="${y+h*.25}" r="${h*.12}" fill="${c2}"/>`;break;
+ case 'batu':g=`<ellipse cx="${x+w*.32}" cy="${y+h*.45}" rx="${w*.3}" ry="${h*.36}" fill="${c0}" ${st}/><ellipse cx="${x+w*.72}" cy="${y+h*.35}" rx="${w*.18}" ry="${h*.22}" fill="${c1}" ${st}/><ellipse cx="${x+w*.7}" cy="${y+h*.8}" rx="${w*.22}" ry="${h*.17}" fill="${c2}" ${st}/>`;break;
+ case 'skyline':{const sh=[3,1,4,2,5,2,4,1,3,5,2,4,1,3,2,5,4,1,2,3,5,1,4,2,3];for(let i=0;i<5;i++)for(let j=0;j<5;j++){const v=sh[i*5+j];g+=`<rect x="${x+i*w/5}" y="${y+j*h/5}" width="${w/5}" height="${h/5}" fill="hsl(33,${35+v*5}%,${82-v*7}%)" stroke="#00000022"/>`}break}
+ case 'head':{g=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h*.12}" fill="${c0}" ${st}/>`;for(let i=1;i<8;i++)g+=`<line x1="${x+i*w/8}" y1="${y+3}" x2="${x+i*w/8}" y2="${y+h-3}" stroke="${c2}" stroke-opacity=".35" stroke-width="${sw*1.5}"/>`;break}
+ }
+ return g}
+function iconPanel(k){return `<svg viewBox="0 0 100 72">${paint(k,PM[k].w>=1?18:PM[k].h==='full'||PM[k].h>=1.5?34:26,4,PM[k].w>=1?64:PM[k].h==='full'||PM[k].h>=1.5?32:48,64,pcol(),1)}</svg>`}
+const ITRAP={
+ chunk:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 66V26l34 40z" fill="${c[2]}"/>`,
+ tri:c=>`<path d="M14 6v60h74M14 6h74" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M14 6h12v60H14z" fill="${c[2]}"/><path d="M26 6h54l-6 8H26z" fill="${c[2]}"/>`,
+ straddle:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 30l26 36" stroke="${c[2]}" stroke-width="9"/>`,
+ curve:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 22a44 44 0 0 1 44 44" fill="none" stroke="${c[2]}" stroke-width="9"/>`,
+ tube:c=>`<ellipse cx="50" cy="12" rx="15" ry="5" fill="${c[1]}"/><path d="M35 12v50a15 5 0 0 0 30 0V12" fill="${c[2]}"/>`,
+ slatc:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 66V26l34 40z" fill="${c[2]}"/><g stroke="${c[1]}" stroke-width="3"><path d="M24 31l27 33M29 37l18 24M34 43l9 13"/></g>`,
+ soffit:c=>`<path d="M8 10h84M8 10v56" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M8 10h84v7L8 30z" fill="${c[2]}"/>`,
+ membran:c=>`<path d="M18 6v60" stroke="#9aa1b5" stroke-width="3"/><rect x="20" y="16" width="26" height="42" fill="${c[1]}"/><rect x="24" y="20" width="18" height="34" fill="${c[0]}"/>`,
+ gobo:c=>`<rect x="36" y="4" width="28" height="50" rx="2" fill="${c[2]}"/><path d="M40 54l-6 12M60 54l6 12" stroke="#5b6275" stroke-width="3"/>`,
+ curvslat:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 22a44 44 0 0 1 44 44" fill="none" stroke="${c[1]}" stroke-width="9" stroke-dasharray="4 3"/>`};
+const ICEIL={cloud:c=>`<path d="M10 8h80" stroke="#9aa1b5" stroke-width="3"/><path d="M28 8v16M72 8v16" stroke="#5b6275"/><rect x="22" y="24" width="56" height="9" fill="${c[0]}"/>`,baffle:c=>`<path d="M10 8h80" stroke="#9aa1b5" stroke-width="3"/>${[20,40,60,80].map((x,i)=>`<path d="M${x} 8v8" stroke="#5b6275"/><rect x="${x-3}" y="16" width="6" height="30" fill="${c[i%2]}"/>`).join('')}`,none:()=>`<path d="M10 8h80" stroke="#9aa1b5" stroke-width="3"/><path d="M40 25l20 20M60 25 40 45" stroke="#c3c7d1" stroke-width="3"/>`};
+const MDESC={
+ kotak:()=>L('60×120, tebal 12, rockwool 10 cm','60×120, 12 cm, 100 mm wool'),lebar:()=>L('120×60, tebal 7, rockwool 5 cm','120×60, 7 cm, 50 mm wool'),
+ hex:()=>L('7 heksagon sisi 17 cm, tebal 5','7 hexagons, 17 cm sides'),bulat:()=>L('Ø 72 + Ø 36 cm, tebal 5','Ø 72 + Ø 36 cm, 5 cm'),
+ slat:()=>L('60 × setinggi dinding, bilah 4×2','60 × full height, 40×20 slats'),wave:()=>L('lebar 60, tebal 6–20','60 wide, 6–20 cm deep'),
+ arch:()=>L('90×180, atas melengkung','90×180, arched top'),diag:()=>L('4 bilah miring 22×150','4 slanted strips 22×150'),
+ ribbed:()=>L('60 × setinggi dinding, alur jahit','60 × full height, stitched channels'),fluted:()=>L('6 setengah tabung Ø10','6 half-rounds Ø10'),
+ perf:()=>L('multiplex berlubang + rockwool','perforated ply + wool'),tri:()=>L('segitiga 30–35 cm, 3 warna','30–35 cm triangles'),
+ tiles:()=>L('9 kotak 30×30, dua ketebalan','9 tiles 30×30, two depths'),pyramid:()=>L('4 piramida 30×30, tinggi 10','4 pyramids 30×30'),
+ strips:()=>L('6 bilah felt horizontal','6 horizontal felt bars'),art:()=>L('120×80, kain cetak motif','120×80 printed fabric'),
+ batu:()=>L('3 bentuk batu, felt / kain','3 pebble shapes'),skyline:()=>L('60×60, balok kayu beda tinggi','60×60 timber blocks'),
+ head:()=>L('selebar kasur + 40, tinggi 110','bed width + 40, 110 tall'),
+ chunk:()=>L('60×60, lantai–plafon','60×60, floor–ceiling'),tri_t:()=>'',
+ cloud:()=>L('120×120×10, gantung 20 cm','120×120×10, hung 20 cm'),baffle:()=>L('120×60×5, berjajar','120×60×5 in rows'),none:()=>L('tidak dipasang','none')};
+const TDESC={chunk:()=>L('60×60 lantai–plafon. Bass paling banyak.','60×60 floor–ceiling. Most bass.'),tri:()=>L('45×45 + lengan di plafon','45×45 + ceiling arms'),straddle:()=>L('10 cm + rongga, hemat','10 cm + cavity, economical'),curve:()=>L('R 60, rapi untuk hunian','R 60, tidy for homes'),tube:()=>L('Ø40 × 150, bisa dipindah','Ø40 × 150, movable'),slatc:()=>L('segitiga 60, muka bilah kayu','60 triangle, timber slat face'),soffit:()=>L('sudut 45 + soffit penuh dinding depan & belakang','45 corner + full soffits'),membran:()=>L('kotak 50×50, untuk bass sangat rendah','50×50 box, very low bass'),gobo:()=>L('60×180×15 berkaki, fleksibel','60×180×15 on feet'),curvslat:()=>L('R 60, bilah kayu melengkung','R 60, curved slats')};
+
+// ================= INPUT =================
+function opt(obj,sel){return Object.entries(obj).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v[lang]}</option>`).join('')}
+const WALLS=()=>({F:L('Depan','Front'),B:L('Belakang','Rear'),L:L('Kiri','Left'),R:L('Kanan','Right')});
+function opRow(o,i){const w=WALLS();return `<div class="oprow" data-i="${i}">
+ <div><label>${L('Jenis','Type')}</label><select data-k="t"><option value="win" ${o.t==='win'?'selected':''}>${L('Jendela','Window')}</option><option value="door" ${o.t==='door'?'selected':''}>${L('Pintu','Door')}</option></select></div>
+ <div><label>${L('Dinding','Wall')}</label><select data-k="wall">${Object.entries(w).map(([k,v])=>`<option value="${k}" ${o.wall===k?'selected':''}>${v}</option>`).join('')}</select></div>
+ <div><label>${L('Jarak (m)','Offset (m)')}</label><input data-k="pos" type="number" step="0.1" inputmode="decimal" value="${o.pos}"></div>
+ <div><label>${L('Lebar','Width')}</label><input data-k="w" type="number" step="0.1" inputmode="decimal" value="${o.w}"></div>
+ <div><label>${L('Tinggi','Height')}</label><input data-k="h" type="number" step="0.1" inputmode="decimal" value="${o.h}"></div>
+ <div><label>${L('Dari lantai','Sill')}</label><input data-k="sill" type="number" step="0.1" inputmode="decimal" value="${o.sill}"></div>
+ <button class="x" data-del="${i}" aria-label="hapus">×</button></div>`}
+function panelCards(){const rec=recList();const keys=Object.keys(PM).filter(k=>!PM[k].only||PM[k].only===S.use).sort((a,b)=>(rec.includes(b)?1:0)-(rec.includes(a)?1:0));
+ return `<div class="models"><button class="model ${S.mP==='auto'?'on':''}" data-g="mP" data-m="auto"><svg viewBox="0 0 100 72"><text x="50" y="44" text-anchor="middle" font-size="26" font-weight="700" fill="#1f8a5b">AUTO</text></svg><b>${L('Rekomendasi otomatis','Auto recommendation')}</b><small>${L('Dipilihkan: ','Picks: ')}${PM[rec[0]][lang]}</small></button>`+
+ keys.map(k=>`<button class="model ${S.mP===k?'on':''}" data-g="mP" data-m="${k}">${rec.includes(k)?`<span class="rec">${L('Rekomendasi','Recommended')}</span>`:''}${iconPanel(k)}<b>${PM[k][lang]}</b><small>${MDESC[k]()}</small></button>`).join('')+'</div>'}
+function trapCards(){return `<div class="models">${Object.entries(TM).map(([k,v])=>`<button class="model ${S.mT===k?'on':''}" data-g="mT" data-m="${k}"><svg viewBox="0 0 100 72">${ITRAP[k](pcol())}</svg><b>${v[lang]}</b><small>${TDESC[k]()}</small></button>`).join('')}</div>`}
+function ceilCards(){return `<div class="models">${Object.entries(CM).map(([k,v])=>`<button class="model ${S.mC===k?'on':''}" data-g="mC" data-m="${k}"><svg viewBox="0 0 100 72">${ICEIL[k](pcol())}</svg><b>${v[lang]}</b><small>${MDESC[k]()}</small></button>`).join('')}</div>`}
+function palCards(){return `<div class="pals">${Object.entries(PAL).map(([k,v])=>`<button class="pal ${S.pal===k?'on':''}" data-p="${k}"><div>${v.c.map(c=>`<i style="background:${c}"></i>`).join('')}</div><b>${v[lang]}</b></button>`).join('')}</div>`}
+function renderInput(){
+ document.getElementById('ttl').textContent=L('Analisis Akustik Ruang','Room Acoustic Analysis');
+ document.getElementById('tsub').textContent=L('Isi data cek lokasi → denah 3D, titik gema, jumlah panel per dinding, model & warna, detail ukuran, dan kebutuhan material.','Enter the site check → 3D plan, echo points, panels per wall, models & colours, construction details and quantities.');
+ document.getElementById('lid').className=lang==='id'?'on':'';document.getElementById('len').className=lang==='en'?'on':'';document.getElementById('mclose').textContent=L('Tutup','Close');
+ document.getElementById('inputCard').innerHTML=`
+ <div class="num">01 · ${L('Data ruang','Room data')}</div><h2>${L('Hasil cek lokasi','Site check')}</h2>
+ <p class="sub">${L('Ukuran dalam meter, dari permukaan dalam. Dinding DEPAN = sisi lebar yang dihadap (speaker / TV / meja / kaki tempat tidur). Tempat tidur menempel di dinding BELAKANG.','Metres, inside faces. FRONT wall = the width side people face (speakers / screen / desk / foot of the bed). The bed headboard sits on the REAR wall.')}</p>
+ <div class="field"><label>${L('Nama proyek / klien (opsional)','Project / client (optional)')}</label><input id="i_name" value="${S.name||''}" placeholder="${L('mis. Kamar Mr. John','e.g. Mr John bedroom')}"></div>
+ <div class="grid3"><div class="field"><label>${L('Panjang (m)','Length (m)')}</label><input id="i_D" type="number" inputmode="decimal" step="0.1" value="${S.D}"></div>
+  <div class="field"><label>${L('Lebar (m)','Width (m)')}</label><input id="i_W" type="number" inputmode="decimal" step="0.1" value="${S.W}"></div>
+  <div class="field"><label>${L('Tinggi (m)','Height (m)')}</label><input id="i_H" type="number" inputmode="decimal" step="0.1" value="${S.H}"></div></div>
+ <div class="field"><label>${L('Ruang ini untuk apa?','What is the room for?')}</label><select id="i_use">${opt(USE,S.use)}</select></div>
+ <div class="grid3 g3m"><div class="field"><label>${L('Lantai','Floor')}</label><select id="i_floor">${opt(MAT.floor,S.floor)}</select></div>
+  <div class="field"><label>${L('Dinding','Walls')}</label><select id="i_wall">${opt(MAT.wall,S.wall)}</select></div>
+  <div class="field"><label>${L('Plafon','Ceiling')}</label><select id="i_ceil">${opt(MAT.ceil,S.ceil)}</select></div></div>
+ <label>${L('Jendela & pintu','Windows & doors')}</label>
+ <div class="ops" id="ops">${S.ops.map(opRow).join('')}
+  <p class="note" style="margin:0 0 8px">${L('Jarak = dari dinding depan (dinding kiri/kanan) atau dari sudut kiri (dinding depan/belakang) ke tengah jendela/pintu.','Offset = from the front wall (side walls) or from the left corner (front/rear walls) to the centre of the opening.')}</p>
+  <div style="display:flex;gap:8px"><button class="btn ghost sm" id="addW">＋ ${L('Jendela','Window')}</button><button class="btn ghost sm" id="addD">＋ ${L('Pintu','Door')}</button></div></div>
+ <label>${L('Keluhan yang dirasakan','What the client hears')}</label>
+ <div class="chips" style="margin-bottom:6px"><label class="chip"><input type="checkbox" id="c_echo" ${S.cx.echo?'checked':''}>${L('Suara menggema, tidak langsung hilang','Echoey, sound lingers')}</label>
+  <label class="chip"><input type="checkbox" id="c_bass" ${S.cx.bass?'checked':''}>${L('Bass berdengung / "boom"','Boomy bass')}</label>
+  <label class="chip"><input type="checkbox" id="c_flutter" ${S.cx.flutter?'checked':''}>${L('Tepuk tangan berbunyi "dzing"','Hand clap rings ("zing")')}</label></div>
+ <h3>${L('Palet warna','Colour palette')}</h3><div id="palBox">${palCards()}</div>
+ <h3>${L('Model wall panel','Wall panel model')}</h3><div id="pBox">${panelCards()}</div>
+ <h3>${L('Model bass trap','Bass trap model')}</h3><div id="tBox">${trapCards()}</div>
+ <h3>${L('Plafon','Ceiling')}</h3><div id="cBox">${ceilCards()}</div>
+ <button class="btn" id="go" style="margin-top:14px">${L('Analisis ruang','Analyse room')}</button>`;
+ bindInput();
+}
+function bindInput(){
+ const ic=document.getElementById('inputCard');
+ ic.querySelectorAll('.model').forEach(b=>b.onclick=()=>{S[b.dataset.g]=b.dataset.m;ic.querySelectorAll(`.model[data-g="${b.dataset.g}"]`).forEach(x=>x.classList.toggle('on',x===b))});
+ ic.querySelectorAll('.pal').forEach(b=>b.onclick=()=>{S.pal=b.dataset.p;document.getElementById('palBox').innerHTML=palCards();document.getElementById('pBox').innerHTML=panelCards();document.getElementById('tBox').innerHTML=trapCards();document.getElementById('cBox').innerHTML=ceilCards();bindInput()});
+ document.getElementById('i_use').onchange=()=>{S.use=document.getElementById('i_use').value;if(PM[S.mP]&&PM[S.mP].only&&PM[S.mP].only!==S.use)S.mP='auto';document.getElementById('pBox').innerHTML=panelCards();bindInput()};
+ document.getElementById('addW').onclick=()=>{readInput();S.ops.push({t:'win',wall:'R',pos:1.5,w:1,h:1.2,sill:.9});renderInput()};
+ document.getElementById('addD').onclick=()=>{readInput();S.ops.push({t:'door',wall:'B',pos:.8,w:.9,h:2.1,sill:0});renderInput()};
+ ic.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{readInput();S.ops.splice(+b.dataset.del,1);renderInput()});
+ ic.querySelectorAll('.oprow select[data-k="t"]').forEach(s=>s.onchange=()=>{const r=s.closest('.oprow');const v=s.value==='door'?[0,2.1,.9]:[.9,1.2,1];r.querySelector('[data-k="sill"]').value=v[0];r.querySelector('[data-k="h"]').value=v[1];r.querySelector('[data-k="w"]').value=v[2]});
+ document.getElementById('go').onclick=()=>{readInput();analyseAll();setTimeout(()=>document.getElementById('out').scrollIntoView({behavior:'smooth'}),50)};
+}
+function readInput(){
+ const g=id=>document.getElementById('i_'+id),n=(v,d)=>{v=parseFloat(String(v).replace(',','.'));return isFinite(v)?v:d};
+ S.name=g('name').value.trim();S.D=clamp(n(g('D').value,5),1.5,40);S.W=clamp(n(g('W').value,4),1.5,40);S.H=clamp(n(g('H').value,3),2,10);
+ S.use=g('use').value;S.floor=g('floor').value;S.wall=g('wall').value;S.ceil=g('ceil').value;
+ S.ops=[...document.querySelectorAll('.oprow')].map(r=>{const q=k=>r.querySelector(`[data-k="${k}"]`).value;return {t:q('t'),wall:q('wall'),pos:Math.max(0,n(q('pos'),1)),w:clamp(n(q('w'),1),.3,10),h:clamp(n(q('h'),1),.3,10),sill:Math.max(0,n(q('sill'),0))}});
+ S.cx={echo:document.getElementById('c_echo').checked,bass:document.getElementById('c_bass').checked,flutter:document.getElementById('c_flutter').checked};
+ try{localStorage.setItem('pbcak3',JSON.stringify(S))}catch(e){}
+}
+
+// ================= ACOUSTICS & LAYOUT =================
+let SURF=1;
+const rtOf=(V,A)=>A.map(a=>{const al=Math.min(.95,Math.max(a,.01)/SURF);return 0.161*V/(-SURF*Math.log(1-al))});
+const mid=a=>(a[2]+a[3])/2;
+function target(V){const u=USE[S.use];if(u.T)return u.T;const tm=clamp(0.25*Math.cbrt(V/100),.2,.4);return [tm,Math.max(.2,tm-.05),Math.min(.4,tm+.05)]}
+function modes(dim,tag){const r=[];for(let n=1;n<30;n++){const f=n*343/(2*dim);if(f>300)break;r.push({f,dim:tag,n})}return r}
+function cornerName(c){return [L('depan-kiri','front-left'),L('depan-kanan','front-right'),L('belakang-kiri','rear-left'),L('belakang-kanan','rear-right')][c]}
+function wallName(w){return {L:L('Dinding kiri','Left wall'),R:L('Dinding kanan','Right wall'),F:L('Dinding depan','Front wall'),B:L('Dinding belakang','Rear wall'),C:L('Plafon','Ceiling')}[w]}
+function analyseAll(){ALL={};['hemat','std','max'].forEach(p=>ALL[p]=analyse(p));RES=ALL[S.pkg];renderOut()}
+function analyse(pkg){
+ const u=USE[S.use],kind=u.k,Wf=S.W,D=S.D,H=S.H,V=Wf*D*H,len={F:Wf,B:Wf,L:D,R:D};
+ const ops=S.ops.map(o=>({...o,pos:clamp(o.pos,o.w/2,len[o.wall]-o.w/2),h:Math.min(o.h,H-o.sill-.02)}));
+ const doorA=ops.filter(o=>o.t==='door').reduce((t,o)=>t+o.w*o.h,0),glass=ops.filter(o=>o.t==='win').reduce((t,o)=>t+o.w*o.h,0);
+ const wallGross=2*(Wf+D)*H,wallNet=Math.max(0,wallGross-doorA-glass),Stot=2*Wf*D+wallGross;
+ const fl=MAT.floor[S.floor].a,ce=MAT.ceil[S.ceil].a,wa=MAT.wall[S.wall].a;
+ const A0=B.map((_,i)=>Wf*D*(fl[i]+ce[i])+wallNet*wa[i]+doorA*DOOR[i]+glass*GLASS[i]);
+ SURF=Stot;const T0=rtOf(V,A0),TT=target(V),Tt=TT[0];
+ const goal={hemat:TT[2]*1.6,std:TT[2]*.98,max:TT[0]}[pkg];
+ const items=[],notes=[],blk=[],furn=[];let cnt={P:0,BT:0,C:0,D:0};
+ const add=o=>{const k=o.t==='trap'?'BT':o.t==='ceil'?'C':o.t==='diff'?'D':'P';o.code=k+(++cnt[k]);if(k==='P'||k==='C')o.alt=cnt[k]%3===0;items.push(o);return o};
+ const mk=pmodel(),pm=PM[mk];
+ const ph=m=>PM[m].h==='full'?Math.min(2.4,H-.3):PM[m].h;
+ const py=(m,cy)=>{const M=PM[m],h=ph(m);if(M.y==='full')return clamp((H-h)/2,.1,.3);if(M.y==='low')return clamp(.4,0,H-h-.1);return clamp(cy-h/2,.25,H-h-.1)};
+ const tleg=S.mT==='tube'||S.mT==='gobo'||S.mT==='membran'?.55:TM[S.mT].leg;
+ const hitOp=(wall,pos,w,y0,h)=>ops.concat(blk).some(o=>o.wall===wall&&Math.abs(o.pos-pos)<(o.w+w)/2+.05&&y0<o.sill+o.h+.03&&y0+h>o.sill-.03);
+ const hitIt=(wall,pos,w,y0,h)=>items.some(it=>it.wall===wall&&it.t!=='trap'&&Math.abs(it.pos-pos)<(it.w+w)/2+.05&&y0<it.y0+it.h+.05&&y0+h>it.y0-.05);
+ const edge=()=>items.some(i=>i.t==='trap')?tleg+.05:.1;
+ function place(wall,pos,cy,role,m,y0o){m=m||mk;const M=PM[m],w=M.w,h=ph(m),y0=y0o!=null?y0o:py(m,cy);if(h>H-.15)return null;
+  for(const dp of [0,.25,-.25,.5,-.5,.75,-.75,1,-1]){const p=pos+dp;if(p-w/2<edge()||p+w/2>len[wall]-edge())continue;if(hitOp(wall,p,w,y0,h)||hitIt(wall,p,w,y0,h))continue;
+   return add({t:M.diff?'diff':'panel',m,wall,pos:p,w,h,y0,d:M.d,role})}return null}
+ // ---- bass traps ----
+ const cornerBlocked=c=>{const x=c%2?Wf:0,z=c<2?0:D;return ops.some(o=>{if(o.t!=='door'&&o.sill>.3)return false;if(o.wall==='F'&&z===0||o.wall==='B'&&z===D)return Math.abs(o.pos-x)<o.w/2+tleg;if(o.wall==='L'&&x===0||o.wall==='R'&&x===Wf)return Math.abs(o.pos-z)<o.w/2+tleg;return false})};
+ let wantTraps=[];
+ if(kind==='listen'||kind==='live'||kind==='talk'||kind==='cam')wantTraps=[0,1,2,3];
+ else if(kind==='room')wantTraps=S.cx.bass?[0,1,2,3]:[0,1];else if(kind==='speech')wantTraps=V<70||S.cx.bass?[0,1,2,3]:[0,1];
+ else wantTraps=S.cx.bass?[0,1,2,3]:[];
+ if(pkg==='hemat'&&wantTraps.length>2&&!S.cx.bass&&kind!=='listen'&&kind!=='live')wantTraps=wantTraps.slice(0,2);
+ const armLen=Math.min(1.2,Wf/2-.5);
+ wantTraps.forEach(c=>{if(cornerBlocked(c)){notes.push(L(`Sudut ${cornerName(c)} terpakai pintu, jadi bass trap di sudut itu ditiadakan.`,`The ${cornerName(c)} corner is taken by a door, so no trap there.`));return}
+  add({t:'trap',m:S.mT,corner:c,leg:tleg,h:S.mT==='tube'?Math.min(1.5,H-.3):S.mT==='gobo'?Math.min(1.8,H-.3):S.mT==='membran'?Math.min(1.2,H-.6):H,arm:S.mT==='tri'?armLen:0})});
+ // ---- furniture & people ----
+ let spk=[],lis=null,ppl=[];const earS=1.15,earT=1.2;
+ const freeSeg=(wall,w)=>{const ls=len[wall],m=edge()+.05;for(let p=ls/2;p>=w/2+m;p-=.1)for(const q of [p,ls-p]){if(q-w/2<m||q+w/2>ls-m)continue;if(!ops.some(o=>o.wall===wall&&Math.abs(o.pos-q)<(o.w+w)/2+.05))return q}return null};
+ if(S.use==='kamar'){
+  const bw=Math.min(1.8,Wf-1.4),bl=Math.min(2.05,D-1.4);furn.push({k:'bed',x:Wf/2,z:D-bl/2-.02,w:bw,l:bl});
+  blk.push({wall:'B',pos:Wf/2,w:bw+.05,sill:0,h:.55});
+  [Wf/2-bw/2-.3,Wf/2+bw/2+.3].forEach(x=>{if(x>.35&&x<Wf-.35){furn.push({k:'ns',x,z:D-.23});blk.push({wall:'B',pos:x,w:.48,sill:0,h:.65})}});
+  const ww=Math.min(2.0,D-2.6);
+  if(ww>=1.0){for(const wl of ['R','L']){const q=freeSeg(wl,ww);if(q!=null){furn.push({k:'ward',wall:wl,pos:q,w:ww});blk.push({wall:wl,pos:q,w:ww,sill:0,h:2.15});break}}}
+ }
+ if(kind==='listen'){const ly=(S.use==='theater'?.5:.38)*D,lx=Wf/2;let d=Math.min(Wf*.55,Wf-.8,(ly-.35)/.866,2.2);d=Math.max(d,.8);let sy=ly-.866*d;if(sy<.35){sy=.35;d=(ly-sy)/.866}
+  lis={x:lx,z:ly};spk=[{x:lx-d/2,z:sy},{x:lx+d/2,z:sy}]}
+ else if(kind==='talk'){ppl=[{x:Wf/2-.6,z:D*.45},{x:Wf/2+.6,z:D*.45}]}
+ else if(kind==='cam'){ppl=[{x:Wf/2,z:D*.62}]}
+ // ---- essential placements (reasoned) ----
+ if(kind==='listen'){
+  ['L','R'].forEach(w=>{const r=spk.map(s=>{const wx=w==='L'?0:Wf,dS=Math.abs(wx-s.x),dL=Math.abs(wx-lis.x);return s.z+(lis.z-s.z)*dS/(dS+dL)}).sort((a,b)=>a-b);
+   if(pm.w>=.85||r[1]-r[0]<pm.w*1.6){if(pm.w>=.85)place(w,(r[0]+r[1])/2,earT,'refl');else{const c=(r[0]+r[1])/2;place(w,c-pm.w/2-.01,earT,'refl');place(w,c+pm.w/2+.01,earT,'refl')}}else r.forEach(p=>place(w,p,earT,'refl'))});
+  spk.forEach(s=>place('F',s.x,earT,'front','kotak'));
+  if(D-lis.z>=2.4&&Wf>=2.4&&S.use!=='band'){[-.31,.31].forEach(o=>place('B',Wf/2+o,earT,'rear','skyline'))}
+  if(pkg!=='hemat')[Wf/2-.95,Wf/2+.95,Wf/2].forEach(p=>place('B',p,earT,'rear','kotak'));
+ }else if(kind==='talk'){const tz=D*.45;place('L',tz,earS,'refl');place('R',tz,earS,'refl');place('F',Wf/2,earS,'behind');place('B',Wf/2,earS,'behind')}
+ else if(kind==='cam'){const pz=D*.62;place('B',Wf/2,earS,'bg');place('F',Wf/2,earS,'face');place('L',pz,earS,'refl');place('R',pz,earS,'refl')}
+ else if(kind==='room'){if(mk==='head')place('B',Wf/2,1.1,'head','head',.5);else place('B',Wf/2,1.4,'head',mk,Math.max(.95,py(mk,1.45)));}
+ // ---- ceiling ----
+ const ceilOK=S.mC!=='none'&&H>=2.4;if(S.mC!=='none'&&H<2.4)notes.push(L('Plafon di bawah 2,4 m: item plafon tidak dipasang supaya tidak terbentur kepala.','Ceiling below 2.4 m: no hanging items.'));
+ const addCeil=(x,z)=>{if(!ceilOK)return null;const cw=1.2,cd=S.mC==='cloud'?1.2:.05;if(x-cw/2<.3||x+cw/2>Wf-.3||z-.6<.3||z+.6>D-.3)return null;
+  if(items.some(i=>i.t==='ceil'&&Math.abs(i.x-x)<(S.mC==='cloud'?1.3:1.25)&&Math.abs(i.z-z)<(S.mC==='cloud'?1.3:.7)))return null;
+  return add({t:'ceil',m:S.mC,x,z,w:cw,d:cd,h:S.mC==='cloud'?.1:.6,drop:S.mC==='cloud'?(H>=2.7?.2:.08):.15,wall:'C',role:'ceil'})};
+ if(S.mC==='cloud'&&pkg!=='hemat'){if(kind==='listen')addCeil(lis.x,(spk[0].z+lis.z)/2);if(kind==='talk')addCeil(Wf/2,D*.45);if(kind==='cam')addCeil(Wf/2,D*.62-.4);if(kind==='live')addCeil(Wf/2,D*.62)}
+ // ---- absorption ----
+ function after(){let cover=0;const A=B.map(()=>0);
+  items.forEach(it=>{let a,face,cov=0;
+   if(it.t==='panel'||it.t==='diff'){const M=PM[it.m];a=M.a;face=it.w*it.h*M.af;cov=it.w*it.h*Math.min(1,M.af)}
+   else if(it.t==='trap'){a=TM[it.m].a;const h=it.h,m=it.m;
+    if(m==='chunk'||m==='slatc'){face=it.leg*Math.SQRT2*h;cov=2*it.leg*h}else if(m==='tri'){face=it.leg*Math.SQRT2*(h+2*it.arm);cov=2*it.leg*h}
+    else if(m==='soffit'){const sl=Wf-2*it.leg;face=it.leg*Math.SQRT2*(h+(it.corner<2?sl/2:sl/2));cov=2*it.leg*h}
+    else if(m==='straddle'){face=.6*h;cov=.84*h}else if(m==='curve'||m==='curvslat'){face=Math.PI/2*.6*h;cov=1.2*h}
+    else if(m==='tube'){face=Math.PI*.2*h*1.6;cov=0}else if(m==='gobo'){face=.6*h*1.6;cov=0}else{face=.5*h*2;cov=.5*h*2}}
+   else{a=CM[it.m].a;face=it.m==='cloud'?it.w*it.d*1.15:2*it.w*it.h}
+   it.face=face;cover+=cov;B.forEach((_,i)=>A[i]+=face*a[i])});
+  return B.map((_,i)=>A[i]+Wf*D*(fl[i]+ce[i])+Math.max(0,wallNet-cover)*wa[i]+doorA*DOOR[i]+glass*GLASS[i])}
+ // ---- fill candidates (staggered) ----
+ const step=Math.max(pm.w+.35,.95);
+ const row=(wall,start)=>{const r=[];for(let p=start;p<=len[wall]-.3;p+=step)r.push({wall,pos:p});return r};
+ const ceilGrid=()=>{const r=[];if(!ceilOK)return r;const sx=S.mC==='cloud'?1.8:.9,sz=S.mC==='cloud'?1.8:.9;for(let z=.9;z<=D-.9;z+=sz)for(let x=.9;x<=Wf-.9+1e-6;x+=sx)r.push({ceil:1,x,z});return r};
+ const inter=(...arrs)=>{const o=[];const m=Math.max(...arrs.map(a=>a.length));for(let i=0;i<m;i++)arrs.forEach(a=>{if(a[i])o.push(a[i])});return o};
+ const so=step/2,cy=kind==='speech'||kind==='venue'||kind==='room'?1.4:earT;let C=[];
+ if(kind==='listen'){for(let p=lis.z+.7;p<=D-.4;p+=step)C.push([{wall:'L',pos:p},{wall:'R',pos:p}]);for(let p=.6;p<lis.z-.4;p+=step)C.push([{wall:'L',pos:p},{wall:'R',pos:p}]);C.push(...ceilGrid().map(c=>[c]),...row('F',.5).map(c=>[c]),...row('B',.5).map(c=>[c]))}
+ else if(kind==='talk'||kind==='cam'||kind==='live'){C.push(...inter(row('L',.6),row('R',.6+so),row('F',.6),row('B',.6+so)).map(c=>[c]),...ceilGrid().map(c=>[c]))}
+ else if(kind==='room'){C.push(...inter(row('L',.6),row('R',.6+so),row('F',.6+so),row('B',.6)).map(c=>[c]),...ceilGrid().map(c=>[c]))}
+ else if(kind==='speech'){const cg=ceilGrid();C.push(...cg.slice(0,Math.ceil(cg.length/2)).map(c=>[c]),...inter(row('L',.6),row('B',.6),row('R',.6+so),row('F',.6+so)).map(c=>[c]),...cg.slice(Math.ceil(cg.length/2)).map(c=>[c]))}
+ else{C.push(...ceilGrid().map(c=>[c]),...inter(row('L',.6),row('B',.6),row('R',.6+so),row('F',.6+so)).map(c=>[c]))}
+ let A1=after(),T1=rtOf(V,A1),ci=0;
+ while(mid(T1)>goal&&ci<C.length){C[ci++].forEach(c=>{if(c.ceil)addCeil(c.x,c.z);else place(c.wall,c.pos,cy,'fill')});A1=after();T1=rtOf(V,A1)}
+ if(mid(T1)>goal){const C2=[];['L','R','F','B'].forEach(w=>{for(let p=.45;p<=len[w]-.45;p+=pm.w+.1)C2.push({wall:w,pos:p})});C2.sort((a,b)=>Math.abs(a.pos-len[a.wall]/2)-Math.abs(b.pos-len[b.wall]/2));
+  for(const c of C2){if(mid(T1)<=goal)break;if(place(c.wall,c.pos,cy,'fill')){A1=after();T1=rtOf(V,A1)}}}
+ if(mid(T1)>goal&&mk!=='kotak'){let added=0;const C3=[];['L','R','F','B'].forEach(w=>{for(let p=.45;p<=len[w]-.45;p+=.7)C3.push({wall:w,pos:p})});C3.sort((a,b)=>Math.abs(a.pos-len[a.wall]/2)-Math.abs(b.pos-len[b.wall]/2));
+  for(const c of C3){if(mid(T1)<=goal)break;if(place(c.wall,c.pos,cy,'fill','kotak')){added++;A1=after();T1=rtOf(V,A1)}}
+  if(added)notes.push(L(`Model ${PM[mk].id.toLowerCase()} saja belum cukup menyerap untuk ruang ini, jadi ditambah ${added} panel kain kotak 10 cm (warna sama) sebagai pendukung.`,`The chosen model alone is not enough here, so ${added} thick fabric panels were added in the same colours.`))}
+ if(pkg!=='hemat'&&mid(T1)>TT[2]*1.02)notes.push(L('Dinding yang tersedia tidak cukup untuk mencapai target dengan model ini. Pilih model yang lebih tebal (panel kain kotak 10 cm) atau tambah cloud plafon.','Not enough free wall to reach the target with this model. Use a thicker model or add ceiling clouds.'));
+ if(mid(T1)<TT[1]*.85)notes.push(L('Ruang kecil ini sudah cukup "kering". Kalau terasa pengap, kurangi panel atau ganti sebagian dengan difuser.','This small room is already dry; if stuffy, remove a few panels or swap for diffusers.'));
+ const md=[...modes(D,'P'),...modes(Wf,'L'),...modes(H,'T')].sort((a,b)=>a.f-b.f);
+ const clusters=[];for(let i=1;i<md.length;i++){const a=md[i-1],b=md[i];if(b.f<200&&a.dim!==b.dim&&(b.f-a.f)/a.f<.04){const f=R((a.f+b.f)/2);if(!clusters.some(x=>Math.abs(x-f)<3))clusters.push(f)}}
+ const dims=[H,Wf,D].sort((a,b)=>a-b),ratio=dims.map(v=>v/dims[0]);let propBad=false;for(let i=0;i<3;i++)for(let j=i+1;j<3;j++){const r=dims[j]/dims[i];if(Math.abs(r-R(r))<.06)propBad=true}
+ return {pkg,Wf,D,H,V,Stot,A0,T0,TT,Tt,A1,T1,items,lis,spk,ppl,kind,md,clusters,ratio,propBad,glass,doorA,ops,notes,len,furn,blk,mk};
+}
+
+// ================= 2D DRAWINGS =================
+const C2={navy:'#0d2259',blue:'#2346c0',red:'#d93a3a',amber:'#f2b705',lite:'#f2f3f6',ink:'#14182b',mut:'#5b6275',wood:'#c9a06a',glass:'#9ecbe6',door:'#8a5a3c'};
+function txt(x,y,s,fs,fill=C2.ink,anchor='middle',w=500){return `<text x="${x}" y="${y}" font-size="${fs}" font-family="Inter" font-weight="${w}" fill="${fill}" text-anchor="${anchor}">${s}</text>`}
+function itemCol(it,i){const c=pcol();if(it.t==='trap')return c[2];if(it.t==='diff')return C2.wood;return it.alt?c[1]:c[0]}
+function planSVG(mode){
+ const {Wf,D,items,lis,spk,ppl,kind,ops,furn}=RES;const s=100,P=Math.max(Wf,D)*14+40,W=Wf*s,Hh=D*s,fs=Math.max(Wf,D)*4.2,th=Math.max(Wf,D)*3.2,c=pcol();
+ let g=`<svg viewBox="${-P} ${-P} ${W+2*P} ${Hh+2*P}"><defs><marker id="ar${mode}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${C2.red}"/></marker></defs>`;
+ g+=`<rect x="0" y="0" width="${W}" height="${Hh}" fill="${C2.lite}" stroke="#2b2f38" stroke-width="${th}"/>`;
+ furn.forEach(f=>{if(f.k==='bed')g+=`<rect x="${(f.x-f.w/2)*s}" y="${(f.z-f.l/2)*s}" width="${f.w*s}" height="${f.l*s}" rx="${th}" fill="#fff" stroke="#9aa1b5" stroke-width="${th*.3}"/>`+txt(f.x*s,f.z*s,L('kasur','bed'),fs*.7,C2.mut);
+  if(f.k==='ns')g+=`<rect x="${(f.x-.22)*s}" y="${(f.z-.2)*s}" width="${.44*s}" height="${.4*s}" fill="#fff" stroke="#9aa1b5" stroke-width="${th*.3}"/>`;
+  if(f.k==='ward'){const x=f.wall==='L'?th/2:W-th/2-.6*s;g+=`<rect x="${x}" y="${(f.pos-f.w/2)*s}" width="${.6*s}" height="${f.w*s}" fill="#fff" stroke="#9aa1b5" stroke-width="${th*.3}"/>`+`<g transform="translate(${x+.3*s},${f.pos*s}) rotate(90)">${txt(0,fs*.25,L('lemari','wardrobe'),fs*.7,C2.mut)}</g>`}});
+ ops.forEach(o=>{const a=(o.pos-o.w/2)*s,b=(o.pos+o.w/2)*s,col=o.t==='door'?C2.door:C2.glass,sw=th*1.4;
+  if(o.wall==='F')g+=`<line x1="${a}" y1="0" x2="${b}" y2="0" stroke="${col}" stroke-width="${sw}"/>`;if(o.wall==='B')g+=`<line x1="${a}" y1="${Hh}" x2="${b}" y2="${Hh}" stroke="${col}" stroke-width="${sw}"/>`;
+  if(o.wall==='L')g+=`<line x1="0" y1="${a}" x2="0" y2="${b}" stroke="${col}" stroke-width="${sw}"/>`;if(o.wall==='R')g+=`<line x1="${W}" y1="${a}" x2="${W}" y2="${b}" stroke="${col}" stroke-width="${sw}"/>`;
+  if(o.t==='door'){const r=o.w*s;let p='';if(o.wall==='B')p=`M${a} ${Hh}A${r} ${r} 0 0 1 ${b} ${Hh-r}`;else if(o.wall==='F')p=`M${a} 0A${r} ${r} 0 0 0 ${b} ${r}`;else if(o.wall==='L')p=`M0 ${a}A${r} ${r} 0 0 1 ${r} ${b}`;else p=`M${W} ${a}A${r} ${r} 0 0 0 ${W-r} ${b}`;g+=`<path d="${p}" fill="none" stroke="${C2.door}" stroke-width="${th*.3}" stroke-dasharray="${th} ${th*.6}"/>`}});
+ g+=txt(W/2,-P*.42,L('DINDING DEPAN','FRONT WALL'),fs*.85,C2.mut,'middle',600)+txt(W/2,Hh+P*.55,L('DINDING BELAKANG','REAR WALL'),fs*.85,C2.mut,'middle',600);
+ g+=`<g transform="translate(${-P*.45},${Hh/2}) rotate(-90)">${txt(0,0,L('KIRI','LEFT'),fs*.85,C2.mut,'middle',600)}</g><g transform="translate(${W+P*.55},${Hh/2}) rotate(90)">${txt(0,0,L('KANAN','RIGHT'),fs*.85,C2.mut,'middle',600)}</g>`;
+ g+=`<line x1="0" y1="${-P*.2}" x2="${W}" y2="${-P*.2}" stroke="#9aa1b5" stroke-width="${th*.4}"/>`+txt(W/2,-P*.25,N(Wf,2)+' m',fs*.8,C2.mut)+`<line x1="${W+P*.2}" y1="0" x2="${W+P*.2}" y2="${Hh}" stroke="#9aa1b5" stroke-width="${th*.4}"/><g transform="translate(${W+P*.3},${Hh/2}) rotate(90)">${txt(0,0,N(D,2)+' m',fs*.8,C2.mut)}</g>`;
+ if(mode==='prob'){
+  [[0,0],[W,0],[0,Hh],[W,Hh]].forEach(([x,y])=>{for(let k=1;k<=3;k++)g+=`<circle cx="${x}" cy="${y}" r="${k*Math.min(W,Hh)*.07}" fill="none" stroke="${C2.red}" stroke-opacity="${.55-k*.13}" stroke-width="${th*.6}"/>`});
+  const fy=Hh*.62,fx=W*.82;g+=`<line x1="${th}" y1="${fy}" x2="${W-th}" y2="${fy}" stroke="${C2.red}" stroke-width="${th*.6}" stroke-dasharray="${th*2} ${th}" marker-start="url(#arprob)" marker-end="url(#arprob)"/>`+txt(W/2,fy-fs*.6,L('gema bolak-balik (flutter)','flutter echo'),fs*.75,C2.red,'middle',600);
+  g+=`<line x1="${fx}" y1="${th}" x2="${fx}" y2="${Hh-th}" stroke="${C2.red}" stroke-width="${th*.6}" stroke-dasharray="${th*2} ${th}" marker-start="url(#arprob)" marker-end="url(#arprob)"/>`;
+  if(kind==='listen'){['L','R'].forEach(w=>spk.forEach(sp=>{const wx=w==='L'?0:Wf,dS=Math.abs(wx-sp.x),dL=Math.abs(wx-lis.x),z=sp.z+(lis.z-sp.z)*dS/(dS+dL);g+=`<polyline points="${sp.x*s},${sp.z*s} ${wx*s},${z*s} ${lis.x*s},${lis.z*s}" fill="none" stroke="${C2.red}" stroke-width="${th*.5}"/><circle cx="${wx*s}" cy="${z*s}" r="${th*1.6}" fill="${C2.red}"/>`}))}
+  else if(ppl.length){const p=ppl[0];['L','R','F','B'].forEach(w=>{const q=w==='L'?[0,p.z]:w==='R'?[Wf,p.z]:w==='F'?[p.x,0]:[p.x,D];g+=`<line x1="${p.x*s}" y1="${p.z*s}" x2="${q[0]*s}" y2="${q[1]*s}" stroke="${C2.red}" stroke-width="${th*.5}" marker-end="url(#arprob)"/>`})}
+ }
+ if(mode==='sol'){
+  items.forEach(it=>{const col=itemCol(it);
+   if(it.t==='trap'){const lg=it.leg*s,cc=it.corner,sx=cc%2?-1:1,sy=cc<2?1:-1,x0=cc%2?W:0,y0=cc<2?0:Hh;
+    if(['chunk','tri','slatc','soffit'].includes(it.m))g+=`<polygon points="${x0},${y0} ${x0+sx*lg},${y0} ${x0},${y0+sy*lg}" fill="${col}"/>`;
+    else if(it.m==='straddle')g+=`<line x1="${x0+sx*lg}" y1="${y0}" x2="${x0}" y2="${y0+sy*lg}" stroke="${col}" stroke-width="${.1*s}"/>`;
+    else if(it.m==='tube')g+=`<circle cx="${x0+sx*.27*s}" cy="${y0+sy*.27*s}" r="${.2*s}" fill="${col}"/>`;
+    else if(it.m==='gobo'||it.m==='membran')g+=`<line x1="${x0+sx*lg}" y1="${y0+sy*.05*s}" x2="${x0+sx*.05*s}" y2="${y0+sy*lg}" stroke="${col}" stroke-width="${(it.m==='gobo'?.15:.25)*s}"/>`;
+    else g+=`<path d="M${x0+sx*lg} ${y0}A${lg} ${lg} 0 0 ${sx*sy>0?1:0} ${x0} ${y0+sy*lg}" fill="none" stroke="${col}" stroke-width="${.1*s}"/>`;
+    g+=txt(x0+sx*lg*.38,y0+sy*lg*.38+fs*.25,it.code,fs*.62,'#fff','middle',700)}
+   else if(it.t==='ceil'){const x=(it.x-it.w/2)*s,y=(it.z-it.d/2)*s;g+=`<rect x="${x}" y="${y}" width="${it.w*s}" height="${Math.max(it.d*s,th)}" fill="${col}" fill-opacity=".35" stroke="${col}" stroke-width="${th*.5}" stroke-dasharray="${th*1.5} ${th}"/>`+txt(it.x*s,it.z*s+(it.m==='cloud'?fs*.3:-fs*.4),it.code,fs*.62,C2.navy,'middle',700)}
+   else{const dep=Math.max(it.d*s*1.3,th*1.2);let x,y,w,h;
+    if(it.wall==='L'){x=th/2;y=(it.pos-it.w/2)*s;w=dep;h=it.w*s}if(it.wall==='R'){x=W-th/2-dep;y=(it.pos-it.w/2)*s;w=dep;h=it.w*s}
+    if(it.wall==='F'){x=(it.pos-it.w/2)*s;y=th/2;w=it.w*s;h=dep}if(it.wall==='B'){x=(it.pos-it.w/2)*s;y=Hh-th/2-dep;w=it.w*s;h=dep}
+    g+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" stroke="${C2.ink}" stroke-width="${th*.2}"/>`;
+    const lx=it.wall==='L'?x+w+fs*.25:it.wall==='R'?x-fs*.25:x+w/2,ly=it.wall==='F'?y+h+fs*.95:it.wall==='B'?y-fs*.35:y+h/2+fs*.3;
+    g+=txt(lx,ly,it.code,fs*.62,C2.blue,it.wall==='L'?'start':it.wall==='R'?'end':'middle',700)}});
+ }
+ if(kind==='listen'){spk.forEach(sp=>{g+=`<rect x="${sp.x*s-th*2.5}" y="${sp.z*s-th*2}" width="${th*5}" height="${th*4}" rx="${th*.6}" fill="#14182b"/>`});g+=`<circle cx="${lis.x*s}" cy="${lis.z*s}" r="${th*2.6}" fill="${C2.amber}" stroke="#14182b" stroke-width="${th*.4}"/>`}
+ ppl.forEach(p=>{g+=`<circle cx="${p.x*s}" cy="${p.z*s}" r="${th*2.4}" fill="${C2.amber}" stroke="#14182b" stroke-width="${th*.4}"/>`});
+ return g+'</svg>';
+}
+function elevSVG(wall){
+ const {H,items,ops,len,blk}=RES;const ln=len[wall],s=100,P=Math.max(ln,H)*10+30,W=ln*s,Hh=H*s,fs=Math.max(ln,H)*4.3,th=Math.max(ln,H)*2.6,c=pcol();
+ let g=`<svg viewBox="${-P} ${-P*.7} ${W+2*P} ${Hh+P*1.7}"><rect x="0" y="0" width="${W}" height="${Hh}" fill="${C2.lite}" stroke="#2b2f38" stroke-width="${th}"/><line x1="${-P*.3}" y1="${Hh}" x2="${W+P*.3}" y2="${Hh}" stroke="#14182b" stroke-width="${th*.8}"/>`;
+ blk.filter(b=>b.wall===wall).forEach(b=>{const x=(b.pos-b.w/2)*s,y=Hh-(b.sill+b.h)*s;g+=`<rect x="${x}" y="${y}" width="${b.w*s}" height="${b.h*s}" fill="#fff" stroke="#9aa1b5" stroke-width="${th*.3}" stroke-dasharray="${th} ${th*.6}"/>`});
+ ops.filter(o=>o.wall===wall).forEach(o=>{const x=(o.pos-o.w/2)*s,y=Hh-(o.sill+o.h)*s;g+=`<rect x="${x}" y="${y}" width="${o.w*s}" height="${o.h*s}" fill="${o.t==='door'?'#c79a72':C2.glass}" stroke="${o.t==='door'?C2.door:'#5d8fb0'}" stroke-width="${th*.4}"/>`+txt(x+o.w*s/2,y+o.h*s/2,o.t==='door'?L('pintu','door'):L('jendela','window'),fs*.6,C2.ink,'middle',600)});
+ g+=txt(0,Hh+fs*1.6,wall==='L'||wall==='R'?L('← dinding depan','← front wall'):L('← sudut kiri','← left corner'),fs*.7,C2.mut,'start',600)+txt(W,Hh+fs*1.6,N(ln,2)+' m',fs*.7,C2.mut,'end',600)+`<g transform="translate(${-fs*.8},${Hh/2}) rotate(-90)">${txt(0,0,N(H,2)+' m',fs*.7,C2.mut)}</g>`;
+ items.filter(i=>i.t==='trap').forEach(it=>{const on={L:[0,2],R:[1,3],F:[0,1],B:[2,3]}[wall];if(!on.includes(it.corner))return;
+  const atLeft=(wall==='L'&&it.corner===0)||(wall==='R'&&it.corner===1)||(wall==='F'&&it.corner===0)||(wall==='B'&&it.corner===2);
+  const lw=it.leg*s,x=atLeft?0:W-lw,y=Hh-it.h*s-(it.m==='membran'?.3*s:0);g+=`<rect x="${x}" y="${y}" width="${lw}" height="${it.h*s}" fill="${c[2]}" fill-opacity=".9"/>`+txt(x+lw/2,y+it.h*s/2,it.code,fs*.7,'#fff','middle',700);
+  if((it.m==='tri'&&it.arm>0)||it.m==='soffit'){const aw=it.m==='soffit'?(W-2*lw)/2:it.arm*s,ax=atLeft?lw:W-lw-aw;g+=`<rect x="${ax}" y="0" width="${aw}" height="${it.leg*s}" fill="${c[2]}" fill-opacity=".75"/>`}});
+ items.filter(i=>i.wall===wall&&i.t!=='trap'&&i.t!=='ceil').forEach((it,i)=>{const x=(it.pos-it.w/2)*s,y=Hh-(it.y0+it.h)*s;g+=paint(it.m,x,y,it.w*s,it.h*s,it.alt?[c[1],c[0],c[2]]:c,th*.15)+txt(x+it.w*s/2,y-fs*.3,it.code,fs*.7,C2.blue,'middle',700)});
+ g+=`<line x1="0" y1="${Hh-120}" x2="${W}" y2="${Hh-120}" stroke="${C2.amber}" stroke-width="${th*.35}" stroke-dasharray="${th*1.5} ${th}"/>`+txt(W-fs*.3,Hh-120-fs*.35,L('tinggi telinga 120 cm','ear height 120 cm'),fs*.6,'#8a6500','end',600);
+ return g+'</svg>';
+}
+// ---- details ----
+function dimH(x1,x2,y,lab,fs=17){return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#5b6275"/><line x1="${x1}" y1="${y-5}" x2="${x1}" y2="${y+5}" stroke="#5b6275"/><line x1="${x2}" y1="${y-5}" x2="${x2}" y2="${y+5}" stroke="#5b6275"/>`+txt((x1+x2)/2,y-6,lab,fs,C2.ink,'middle',600)}
+function dimV(x,y1,y2,lab,fs=17){return `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#5b6275"/><line x1="${x-5}" y1="${y1}" x2="${x+5}" y2="${y1}" stroke="#5b6275"/><line x1="${x-5}" y1="${y2}" x2="${x+5}" y2="${y2}" stroke="#5b6275"/><g transform="translate(${x-7},${(y1+y2)/2}) rotate(-90)">${txt(0,0,lab,fs,C2.ink,'middle',600)}</g>`}
+let CALL=[],CLY=-99;function callout(x,y,tx,ty,lab){if(!CALL.length)CLY=-99;ty=Math.max(ty,CLY+30);CLY=ty;CALL.push(lab);const n=CALL.length;return `<line x1="${x}" y1="${y}" x2="${tx}" y2="${ty}" stroke="#5b6275" stroke-width="1.2"/><circle cx="${x}" cy="${y}" r="3" fill="${C2.ink}"/><circle cx="${tx}" cy="${ty}" r="13" fill="${C2.blue}"/>`+txt(tx,ty+5.5,n,15,'#fff','middle',700)}
+const RW='#f0d98c',RWL='#c9a640',WD='#b07a3c',WALLC='#c9ced9';
+function hatch(x,y,w,h,id){return `<defs><pattern id="${id}" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="${RW}"/><path d="M0 5h10" stroke="${RWL}" stroke-width="1.2"/></pattern></defs><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#${id})"/>`}
+function sectSVG(kind,id){const c=pcol();
+ if(kind==='fab10'||kind==='fab5'){const t=kind==='fab10'?40:20;return `<g>${txt(110,0,L('POTONGAN','SECTION'),15,C2.mut,'middle',700)}<rect x="0" y="20" width="22" height="260" fill="${WALLC}"/><rect x="22" y="70" width="12" height="20" fill="${WD}"/><rect x="22" y="200" width="12" height="20" fill="${WD}"/>${hatch(52,40,t,200,id)}<rect x="44" y="34" width="8" height="212" fill="${WD}"/><rect x="${52+t}" y="34" width="8" height="212" fill="${WD}"/><rect x="${60+t}" y="30" width="4" height="220" fill="${c[0]}"/>${dimH(52,52+t,320,kind==='fab10'?'10 cm':'5 cm',15)}${callout(28,80,190,60,L('Z-clip / french cleat, rongga 2–5 cm ke dinding','Z-clip / French cleat, 2–5 cm gap'))}${callout(52+t/2,140,190,100,kind==='fab10'?L('Rockwool 10 cm (2×5 cm), 60 kg/m³','100 mm rockwool, 60 kg/m³'):L('Rockwool / glasswool board 5 cm, 60–80 kg/m³','50 mm rockwool/glasswool board, 60–80 kg/m³'))}${callout(56+t,200,190,140,L('Rangka kayu / MDF 2×(tebal isi), diawetkan; untuk bentuk lengkung pakai multiplex 9 mm dipotong CNC','Timber/MDF edge frame; shaped panels use CNC-cut 9 mm ply'))}${callout(62+t,230,190,180,L('Kain akustik tembus udara (polyester ≥70%), ditarik kencang, staples di belakang','Breathable acoustic fabric, stretched, stapled at back'))}</g>`}
+ if(kind==='wood'||kind==='perf')return `<g>${txt(150,0,L('POTONGAN DARI ATAS','PLAN SECTION'),15,C2.mut,'middle',700)}<rect x="0" y="230" width="300" height="24" fill="${WALLC}"/><rect x="0" y="180" width="300" height="50" fill="#fff" stroke="#c3c7d1" stroke-dasharray="4 3"/>${hatch(0,130,300,50,id)}<rect x="0" y="124" width="300" height="6" fill="#1e2026"/>${kind==='wood'?[...Array(7)].map((_,k)=>`<rect x="${6+k*42}" y="84" width="30" height="40" fill="${c[1]}" stroke="#00000033"/>`).join('')+dimH(6,36,72,'4 cm',15):`<rect x="0" y="104" width="300" height="20" fill="${c[1]}"/>`+[...Array(9)].map((_,k)=>`<rect x="${14+k*32}" y="104" width="6" height="20" fill="#fff"/>`).join('')}
+  ${callout(20,kind==='wood'?104:114,200,30,kind==='wood'?L('Bilah kayu / MDF veneer 4 × 2 cm, celah 1,5 cm','40 × 20 mm slats, 15 mm gaps'):L('Multiplex/MDF 18 mm berlubang Ø8 mm, jarak 32 mm (±5% terbuka)','18 mm ply/MDF, Ø8 holes at 32 mm'))}${callout(120,127,240,60,L('Kain / felt akustik hitam','Black acoustic felt'))}${callout(200,155,270,90,L('Rockwool 5 cm, 60 kg/m³','50 mm rockwool, 60 kg/m³'))}${callout(260,205,290,120,L('Reng kayu 2×5 cm, rongga 5 cm','20×50 battens, 50 mm gap'))}</g>`;
+ if(kind==='wave')return `<g>${txt(110,0,L('POTONGAN SAMPING','SIDE SECTION'),15,C2.mut,'middle',700)}<rect x="0" y="20" width="20" height="300" fill="${WALLC}"/><path d="M20 30 C110 90 30 160 110 220 S40 290 30 310 L20 310z" fill="#f3e9d6" stroke="${WD}" stroke-width="3"/><path d="M20 30 C110 90 30 160 110 220 S40 290 30 310" fill="none" stroke="${RWL}" stroke-width="16" stroke-opacity=".7"/>${callout(60,110,200,50,L('Rusuk multiplex 18 mm pola gelombang tiap 40 cm','18 mm ply wave ribs every 40 cm'))}${callout(75,160,200,90,L('Kulit multiplex lentur 3–4 mm di tepi','3–4 mm bendable ply edges'))}${callout(100,215,200,130,L('Rockwool 5 cm, 60 kg/m³ + kain akustik','50 mm rockwool + fabric'))}${callout(25,300,200,170,L('Rongga 6–20 cm mengikuti gelombang','6–20 cm cavity'))}</g>`;
+ if(kind==='diff')return `<g>${txt(140,0,L('POTONGAN','SECTION'),15,C2.mut,'middle',700)}<rect x="0" y="230" width="280" height="14" fill="${c[1]}"/>${[3,1,4,2,5,2,4].map((v,k)=>`<rect x="${k*40}" y="${230-v*24}" width="38" height="${v*24}" fill="hsl(33,45%,${80-v*6}%)" stroke="#00000033"/>`).join('')}${callout(100,140,240,40,L('Balok kayu 8,5×8,5 cm, 7 tinggi berbeda (2,5–15 cm)','85×85 mm timber blocks, 25–150 mm'))}${callout(60,236,240,80,L('Papan dasar multiplex 12 mm','12 mm ply base'))}${callout(180,120,240,120,L('Jarak minimal ke pendengar ±1,5–2,4 m','Keep ~1.5–2.4 m from listener'))}</g>`;
+ return ''}
+function detailSVG(k){CALL=[];CLY=-99;const c=pcol();
+ if(PM[k]){const M=PM[k],h=M.h==='full'?Math.min(2.4,RES.H-.3):M.h,sc=Math.min(160/M.w,250/h),w=M.w*sc,hh=h*sc;
+  return `<svg viewBox="0 0 660 380"><g transform="translate(40,30)">${txt(100,0,L('TAMPAK DEPAN','FRONT VIEW'),15,C2.mut,'middle',700)}${paint(k,100-w/2,20,w,hh,c,1.5)}${dimH(100-w/2,100+w/2,hh+50,cm(M.w)+' cm')}${dimV(100-w/2-16,20,20+hh,cm(h)+' cm')}</g><g transform="translate(300,30)">${sectSVG(M.sect,'h'+k)}</g></svg>`}
+ return trapDetail(k)}
+function trapDetail(k){const H=RES.H,c=pcol(),tc=c[2];const lg=(TM[k]||{}).leg||.6,sc=330;let g='<svg viewBox="0 0 660 360"><g transform="translate(40,40)">'+txt(120,-14,L('POTONGAN DARI ATAS','PLAN SECTION'),15,C2.mut,'middle',700)+`<rect x="0" y="0" width="22" height="260" fill="${WALLC}"/><rect x="0" y="0" width="260" height="22" fill="${WALLC}"/>`;const L0=22,P=lg*sc;
+ if(['chunk','tri','slatc','soffit'].includes(k)){g+=`<polygon points="${L0},${L0} ${L0+P},${L0} ${L0},${L0+P}" fill="${RW}"/>`+[1,2,3,4,5,6].map(i=>`<line x1="${L0}" y1="${L0+i*P/7}" x2="${L0+P-i*P/7}" y2="${L0}" stroke="${RWL}" stroke-width="1.2"/>`).join('')+`<line x1="${L0+P}" y1="${L0}" x2="${L0}" y2="${L0+P}" stroke="${tc}" stroke-width="6"/>`;
+  if(k==='slatc')for(let i=1;i<8;i++){const t=i/8;g+=`<rect x="${L0+P*t-6}" y="${L0+P*(1-t)-6}" width="12" height="12" fill="${c[1]}" transform="rotate(45 ${L0+P*t} ${L0+P*(1-t)})"/>`}
+  g+=dimH(L0,L0+P,250,cm(lg)+' cm')+callout(L0+P*.25,L0+P*.25,300,40,L(`Rockwool 40–60 kg/m³ dipotong segitiga ${cm(lg)}×${cm(lg)} cm, ditumpuk penuh`,`40–60 kg/m³ rockwool triangles, stacked solid`))+callout(L0+P*.55,L0+P*.45,300,80,k==='slatc'?L('Muka bilah kayu 4×2 cm, celah 2 cm, kain hitam di belakang','40×20 slats, 20 mm gaps, black fabric behind'):L('Kain akustik di sisi miring + lis kayu tiap ±60 cm','Acoustic fabric on the face + battens every ~60 cm'));
+  if(k==='tri'||k==='soffit')g+=callout(L0+5,L0+5,300,120,k==='tri'?L('Lengan horizontal segitiga 45×45 sepanjang ±120 cm di pertemuan dinding–plafon','45×45 arms ~120 cm along wall–ceiling'):L('Soffit segitiga 45×45 menerus sepanjang dinding depan & belakang','Continuous 45×45 soffit along front & rear walls'))}
+ else if(k==='straddle'){const a=.42*sc;g+=`<polygon points="${L0+a},${L0} ${L0},${L0+a} ${L0},${L0+a+30} ${L0+a+30},${L0}" fill="${RW}" stroke="${WD}" stroke-width="3"/><line x1="${L0+a+30}" y1="${L0}" x2="${L0}" y2="${L0+a+30}" stroke="${tc}" stroke-width="5"/>`+callout(L0+a/2+12,L0+a/2+12,300,40,L('Rockwool 10 cm 60–80 kg/m³ dalam rangka 2×10','100 mm rockwool 60–80 kg/m³'))+callout(L0+a/3,L0+a/3,300,80,L('Rongga segitiga di belakang (boleh diisi sisa rockwool)','Triangle cavity behind'))+callout(L0+a/2+22,L0+a/2+22,300,120,L('Kain akustik, lebar muka 60 cm','Fabric face, 60 cm wide'))}
+ else if(k==='curve'||k==='curvslat'){const r=P;g+=`<path d="M${L0+r} ${L0}A${r} ${r} 0 0 1 ${L0} ${L0+r}" fill="none" stroke="${k==='curve'?RW:c[1]}" stroke-width="30" ${k==='curvslat'?'stroke-dasharray="12 6"':''}/><path d="M${L0+r+16} ${L0}A${r+16} ${r+16} 0 0 1 ${L0} ${L0+r+16}" fill="none" stroke="${tc}" stroke-width="4"/>`+dimH(L0,L0+r,250,'R '+cm(lg)+' cm')+callout(L0+r*.7,L0+r*.7,300,40,k==='curve'?L('Rockwool 10 cm 40–60 kg/m³ mengikuti lengkung','100 mm rockwool, curved'):L('Bilah kayu melengkung 3×2 cm, celah 1,5 cm','Curved 30×20 slats, 15 mm gaps'))+callout(L0+r*.55,L0+r*.55,300,80,L('Rusuk multiplex 18 mm seperempat lingkaran tiap 60 cm','18 mm ply quarter-ribs every 60 cm'))+callout(L0+r*.25,L0+r*.25,300,120,L('Rongga udara di belakang','Air cavity behind'))}
+ else if(k==='tube'){g+=`<circle cx="${L0+.27*sc}" cy="${L0+.27*sc}" r="${.2*sc}" fill="${RW}" stroke="${tc}" stroke-width="6"/><circle cx="${L0+.27*sc}" cy="${L0+.27*sc}" r="${.1*sc}" fill="#fff" stroke="${RWL}"/>`+dimH(L0+.07*sc,L0+.47*sc,250,'Ø 40 cm')+callout(L0+.27*sc+.15*sc,L0+.27*sc,300,40,L('Tabung rockwool tebal 10 cm (lilit papan 40–60 kg/m³)','100 mm wool cylinder'))+callout(L0+.27*sc,L0+.27*sc,300,80,L('Rongga tengah Ø20 cm, tutup atas multiplex','Ø20 hollow core, ply cap'))+callout(L0+.27*sc-.2*sc,L0+.27*sc,300,120,L(`Kain akustik, tinggi ${cm(Math.min(1.5,H-.3))} cm, bisa dipindah`,`Fabric wrap, ${cm(Math.min(1.5,H-.3))} cm tall, movable`))}
+ else if(k==='membran'){g+=`<rect x="${L0}" y="${L0}" width="${.5*sc}" height="${.25*sc}" fill="#fff" stroke="${WD}" stroke-width="5"/>${hatch(L0+4,L0+4,.5*sc-8,.12*sc,'hm')}<rect x="${L0}" y="${L0+.25*sc}" width="${.5*sc}" height="6" fill="${c[1]}"/>`+dimH(L0,L0+.5*sc,250,'50 cm')+callout(L0+.25*sc,L0+.25*sc+3,300,40,L('Membran multiplex 3–4 mm / MDF tipis (bergetar menyerap bass)','3–4 mm ply membrane'))+callout(L0+.25*sc,L0+.08*sc,300,80,L('Rockwool 5 cm menempel ke belakang membran, rongga tertutup rapat','50 mm wool behind membrane, sealed box'))+callout(L0+4,L0+.15*sc,300,120,L('Kotak multiplex 18 mm 50×50×25 cm, sambungan dilem & disealant','18 mm ply box 50×50×25, glued and sealed'))}
+ else if(k==='gobo'){g+=`<line x1="${L0+.55*sc}" y1="${L0+.08*sc}" x2="${L0+.08*sc}" y2="${L0+.55*sc}" stroke="${RW}" stroke-width="40"/><line x1="${L0+.6*sc}" y1="${L0+.1*sc}" x2="${L0+.1*sc}" y2="${L0+.6*sc}" stroke="${tc}" stroke-width="4"/>`+callout(L0+.3*sc,L0+.3*sc,300,40,L('Panel 60×180, rockwool 15 cm (40–60 kg/m³), kain semua sisi','60×180, 150 mm wool, fabric all round'))+callout(L0+.1*sc,L0+.5*sc,300,80,L('Kaki besi/kayu, bisa digeser & dipakai sebagai sekat','Steel/timber feet, movable gobo'))}
+ g+='</g></svg>';return g}
+function specFor(k){const H=RES.H;const M=PM[k];
+ if(M){const h=M.h==='full'?Math.min(2.4,H-.3):M.h;const core={fab10:L('Rockwool papan 10 cm (2×5 cm), 60 kg/m³','100 mm rockwool board, 60 kg/m³'),fab5:L('Rockwool / glasswool papan 5 cm, 60–80 kg/m³','50 mm rockwool / glasswool board, 60–80 kg/m³'),wood:L('Kain/felt hitam + rockwool 5 cm 60 kg/m³ + rongga 5 cm','Black felt + 50 mm rockwool + 50 mm gap'),perf:L('Rockwool 5 cm 60 kg/m³ + rongga 5 cm','50 mm rockwool + 50 mm gap'),wave:L('Rockwool 5 cm 60 kg/m³, rongga 6–20 cm','50 mm rockwool, 6–20 cm cavity'),diff:L('Balok kayu solid (tidak ada isi)','Solid timber blocks')}[M.sect];
+  const cover={fab10:L('Kain akustik tembus udara warna ','Breathable fabric, colour ')+PAL[S.pal][lang],fab5:L('Kain akustik / felt PET warna ','Acoustic fabric / PET felt, colour ')+PAL[S.pal][lang],wood:L('Bilah kayu / MDF veneer, finishing natural / cat warna ','Timber / veneered MDF slats, natural or ')+PAL[S.pal][lang],perf:L('Multiplex/MDF berlubang, veneer kayu atau HPL','Perforated ply/MDF, veneer or HPL'),wave:L('Kain akustik + lis tepi, opsi LED strip','Fabric + edge trim, optional LED'),diff:L('Kayu jati belanda / meranti, cat atau natural','Pine / meranti, natural or painted')}[M.sect];
+  return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>${cm(M.w)} × ${cm(h)} cm</dd><dt>${L('Tebal','Depth')}</dt><dd>${cm(M.d)} cm</dd><dt>${L('Isi','Core')}</dt><dd>${core}</dd><dt>${L('Muka / penutup','Face')}</dt><dd>${cover}</dd><dt>${L('Pasang','Mount')}</dt><dd>${M.y==='full'?L('Lantai sampai ±15 cm di bawah plafon, disekrup ke reng','Floor to ~15 cm below ceiling, screwed to battens'):M.y==='bed'?L('Di atas kasur, bawah panel 50 cm dari lantai','Above the bed, bottom at 50 cm'):L('Tengah panel setinggi telinga, pakai Z-clip','Centre at ear height on Z-clips')}</dd></dl>`}
+ const T={chunk:L(`segitiga 60×60, tinggi ${cm(H)} cm`,`60×60 triangle, ${cm(H)} cm`),tri:L(`45×45 × ${cm(H)} cm + lengan 120 cm`,`45×45 × ${cm(H)} + 120 cm arms`),straddle:L(`muka 60 × ${cm(H)} cm, tebal 10`,`60 × ${cm(H)} face, 10 cm`),curve:L(`R 60 × ${cm(H)} cm`,`R 60 × ${cm(H)} cm`),tube:L(`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`,`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`),slatc:L(`segitiga 60×60 × ${cm(H)} cm, muka bilah kayu`,`60×60 × ${cm(H)}, slat face`),soffit:L('sudut 45×45 + soffit menerus','45×45 corners + continuous soffit'),membran:'50 × 50 × 25 cm',gobo:'60 × 180 × 15 cm',curvslat:L(`R 60 × ${cm(H)} cm, bilah kayu`,`R 60 × ${cm(H)}, slats`)}[k];
+ if(T)return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>${T}</dd><dt>${L('Catatan','Note')}</dt><dd>${L('Bass trap tebal pakai rockwool densitas rendah 40–60 kg/m³; yang terlalu padat justru kurang menyerap bass.','Thick traps use low-density 40–60 kg/m³ wool; very dense wool absorbs less bass.')}</dd></dl>`;
+ if(k==='cloud')return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>120 × 120 × 10 cm</dd><dt>${L('Isi','Core')}</dt><dd>${L('Rockwool 10 cm 60 kg/m³, rangka kayu 2×10','100 mm rockwool, 20×100 frame')}</dd><dt>${L('Gantung','Hang')}</dt><dd>${L('4 sling baja 1,5 mm, 20 cm di bawah plafon','4 × 1.5 mm wires, 20 cm drop')}</dd></dl>`;
+ if(k==='baffle')return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>120 × 60 × 5 cm</dd><dt>${L('Isi','Core')}</dt><dd>${L('Rockwool 5 cm 80 kg/m³, kain semua sisi','50 mm rockwool, fabric all round')}</dd><dt>${L('Gantung','Hang')}</dt><dd>${L('2 sling per baffle, jarak 60–90 cm','2 wires each, 60–90 cm apart')}</dd></dl>`;return ''}
+
+// ================= 3D =================
+let V3=null;
+function init3D(){
+ const cv=document.getElementById('v3');if(!cv)return;
+ if(!window.THREE){document.getElementById('v3wrap').innerHTML=`<p class="note" style="padding:16px">${L('Tampilan 3D butuh koneksi internet. Denah 2D di bawah tetap lengkap.','The 3D view needs an internet connection.')}</p>`;return}
+ const {Wf,D,H,items,ops,lis,spk,ppl,furn}=RES,c=pcol().map(h=>new THREE.Color(h).getHex());
+ const ren=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});ren.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xeef0f5);
+ scene.add(new THREE.HemisphereLight(0xffffff,0xc9cfdc,.62));const dl=new THREE.DirectionalLight(0xffffff,.5);dl.position.set(-3,8,-4);scene.add(dl);const dl2=new THREE.DirectionalLight(0xffffff,.25);dl2.position.set(4,5,6);scene.add(dl2);
+ const cam=new THREE.PerspectiveCamera(32,1,.05,200);
+ const edgeMat=new THREE.LineBasicMaterial({color:0x2b2f38,transparent:true,opacity:.42});
+ const M=(col,map)=>new THREE.MeshLambertMaterial({color:map?0xffffff:col,map:map||null,side:THREE.DoubleSide});
+ const E=(mesh,ang=25)=>{mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry,ang),edgeMat));return mesh};
+ const box=(w,h,d,col)=>E(new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(col)));
+ const ext=(shape,d,col)=>E(new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:d,bevelEnabled:false,curveSegments:24}),M(col)),30);
+ const root=new THREE.Group();scene.add(root);
+ // platform + floor
+ const pl=new THREE.Mesh(new THREE.BoxGeometry(Wf+.9,.18,D+.9),M(0xffffff));pl.position.set(Wf/2,-.15,D/2);root.add(E(pl));
+ const fl=new THREE.Mesh(new THREE.BoxGeometry(Wf,.06,D),M(MAT.floor[S.floor].c));fl.position.set(Wf/2,-.03,D/2);root.add(E(fl));
+ const len={F:Wf,B:Wf,L:D,R:D},walls={};
+ function wallMesh(w,h,holes){const sh=new THREE.Shape();sh.moveTo(-.1,0);sh.lineTo(len[w]+.1,0);sh.lineTo(len[w]+.1,h);sh.lineTo(-.1,h);sh.lineTo(-.1,0);
+  if(holes)ops.filter(o=>o.wall===w).forEach(o=>{const p=new THREE.Path(),y0=Math.max(.01,o.sill),y1=Math.min(h-.01,o.sill+o.h),x0=Math.max(.01,o.pos-o.w/2),x1=Math.min(len[w]-.01,o.pos+o.w/2);p.moveTo(x0,y0);p.lineTo(x0,y1);p.lineTo(x1,y1);p.lineTo(x1,y0);p.lineTo(x0,y0);sh.holes.push(p)});
+  const m=E(new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:.1,bevelEnabled:false}),M(0xfafafb)),30);
+  if(w==='F')m.position.z=-.1;if(w==='B')m.position.z=D;if(w==='L')m.rotation.y=-Math.PI/2;if(w==='R'){m.rotation.y=-Math.PI/2;m.position.x=Wf+.1}return m}
+ ['F','B','L','R'].forEach(w=>{const full=wallMesh(w,H,true),stub=wallMesh(w,.14,false);root.add(full);root.add(stub);walls[w]={full,stub}});
+ function onWall(w,pos,y0,gap,o){if(w==='F')o.position.set(pos,y0,gap);if(w==='B'){o.position.set(pos,y0,D-gap);o.rotation.y=Math.PI}if(w==='L'){o.position.set(gap,y0,pos);o.rotation.y=Math.PI/2}if(w==='R'){o.position.set(Wf-gap,y0,pos);o.rotation.y=-Math.PI/2}return o}
+ ops.forEach(o=>{const g=new THREE.Group();if(o.t==='win'){const gl=new THREE.Mesh(new THREE.PlaneGeometry(o.w,o.h),new THREE.MeshLambertMaterial({color:0x9ecbe6,transparent:true,opacity:.45,side:THREE.DoubleSide}));gl.position.set(0,o.h/2,-.05);g.add(gl);const fr=box(o.w,.04,.12,0xdfe3ea);fr.position.set(0,0,-.05);g.add(fr)}
+  else{const dr=box(o.w-.04,o.h-.02,.04,0xb58457);dr.position.set(0,o.h/2,-.05);g.add(dr)}root.add(onWall(o.wall,o.pos,o.sill,0,g))});
+ const labels=[];function label(t,x,y,z){const cn=document.createElement('canvas');cn.width=128;cn.height=64;const x2=cn.getContext('2d');x2.fillStyle='#2346c0';x2.beginPath();if(x2.roundRect)x2.roundRect(4,8,120,48,12);else x2.rect(4,8,120,48);x2.fill();x2.fillStyle='#fff';x2.font='bold 30px sans-serif';x2.textAlign='center';x2.textBaseline='middle';x2.fillText(t,64,33);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cn),depthTest:false}));const ls=Math.max(Wf,D)*.07;sp.scale.set(ls,ls/2,1);sp.position.set(x,y,z);sp.renderOrder=9;root.add(sp);labels.push(sp)}
+ function triPrism(a,b,cc,dir,col){const v=[a,b,cc].map(p=>new THREE.Vector3(...p)),d=new THREE.Vector3(...dir),u=v.map(p=>p.clone().add(d));const P=[];const t=(p,q,r)=>P.push(p.x,p.y,p.z,q.x,q.y,q.z,r.x,r.y,r.z);
+  t(v[0],v[2],v[1]);t(u[0],u[1],u[2]);[[0,1],[1,2],[2,0]].forEach(([i,j])=>{t(v[i],v[j],u[j]);t(v[i],u[j],u[i])});const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));geo.computeVertexNormals();return E(new THREE.Mesh(geo,M(col)),30)}
+ function waveGeo(w,h,ph){const n=40,secs=[];for(let i=0;i<=n;i++){const t=i/n,y=t*h,xc=.13*Math.sin(t*Math.PI*1.6+ph),z0=.02+.1*(.5+.5*Math.sin(t*Math.PI*2+ph)),d=.07;secs.push([[xc-w/2,y,z0],[xc+w/2,y,z0],[xc+w/2,y,z0+d],[xc-w/2,y,z0+d]])}
+  const P=[];const q=(a,b,cc,d)=>P.push(...a,...b,...cc,...a,...cc,...d);for(let i=0;i<n;i++){const A=secs[i],Bq=secs[i+1];for(let k=0;k<4;k++){const k2=(k+1)%4;q(A[k],A[k2],Bq[k2],Bq[k])}}[secs[0],secs[n]].forEach(s=>q(s[0],s[1],s[2],s[3]));
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));geo.computeVertexNormals();return geo}
+ function tex(draw,w=256,h=256){const cn=document.createElement('canvas');cn.width=w;cn.height=h;draw(cn.getContext('2d'),w,h);return new THREE.CanvasTexture(cn)}
+ const hx=v=>'#'+v.toString(16).padStart(6,'0');
+ function panelObj(it,cols){const g=new THREE.Group(),w=it.w,h=it.h,[c0,c1,c2]=cols;const at=(m,x,y,z)=>{m.position.set(x,y,z);g.add(m);return m};
+  switch(it.m){
+  case 'kotak':case 'lebar':at(box(w,h,it.d,c0),0,h/2,it.d/2);break;
+  case 'hex':{const r=Math.min(w/5.2,h/4.5)*.95,dx=r/ .95*1.732,R1=r/.95;[[0,0,c0],[dx,0,c1],[-dx,0,c1],[dx/2,1.5*R1,c0],[-dx/2,1.5*R1,c2],[dx/2,-1.5*R1,c2],[-dx/2,-1.5*R1,c0]].forEach(([a,b,cc],i)=>{const m=E(new THREE.Mesh(new THREE.CylinderGeometry(r,r,.05+(i%3)*.015,6),M(cc)),30);m.rotation.x=Math.PI/2;at(m,a,h/2+b,.03)});break}
+  case 'bulat':{const r1=Math.min(w,h)*.4,m1=E(new THREE.Mesh(new THREE.CylinderGeometry(r1,r1,.05,40),M(c0)),30);m1.rotation.x=Math.PI/2;at(m1,-w*.08,h*.55,.025);const m2=E(new THREE.Mesh(new THREE.CylinderGeometry(r1/2,r1/2,.06,32),M(c1)),30);m2.rotation.x=Math.PI/2;at(m2,w*.3,h*.22,.03);break}
+  case 'slat':{at(box(w,h,.06,0x1e1f22),0,h/2,.03);for(let k=0;k<11;k++){const s=new THREE.Mesh(new THREE.BoxGeometry(.04,h,.02),M(c1));at(s,-w/2+.03+k*.0545,h/2,.07)}break}
+  case 'wave':g.add(E(new THREE.Mesh(waveGeo(w,h,(it.pos*2.3)%6.28),M(c0)),35));break;
+  case 'arch':{const s=new THREE.Shape();s.moveTo(-w/2,0);s.lineTo(w/2,0);s.lineTo(w/2,h-w/2);s.absarc(0,h-w/2,w/2,0,Math.PI,false);s.lineTo(-w/2,0);g.add(ext(s,.05,c0));const s2=new THREE.Shape(),iw=w*.3;s2.moveTo(-iw,0);s2.lineTo(iw,0);s2.lineTo(iw,h-w/2);s2.absarc(0,h-w/2,iw,0,Math.PI,false);s2.lineTo(-iw,0);const m=ext(s2,.02,c1);m.position.z=.05;g.add(m);break}
+  case 'diag':{const pw=w*.22;[c0,c1,c0,c2].forEach((cc,i)=>{const x0=-w/2+i*w*.26,s=new THREE.Shape();s.moveTo(x0,0);s.lineTo(x0+pw,0);s.lineTo(x0+pw*1.9,h);s.lineTo(x0+pw*.9,h);s.lineTo(x0,0);g.add(ext(s,.05,cc))});break}
+  case 'ribbed':case 'head':{at(box(w,h,.03,c0),0,h/2,.015);const n=it.m==='head'?Math.round(w/.18):6,bw=w/n;for(let k=0;k<n;k++){const m=E(new THREE.Mesh(new THREE.CylinderGeometry(bw/2,bw/2,h-.02,16,1,false,0,Math.PI),M(c0)),50);m.rotation.y=-Math.PI/2;at(m,-w/2+bw/2+k*bw,h/2,.03)}break}
+  case 'fluted':{const n=6,bw=w/n;for(let k=0;k<n;k++){const m=E(new THREE.Mesh(new THREE.CylinderGeometry(bw/2,bw/2,h,16,1,false,0,Math.PI),M(c0)),50);m.rotation.y=-Math.PI/2;at(m,-w/2+bw/2+k*bw,h/2,0)}break}
+  case 'perf':{const t=tex((x,W,Hh)=>{x.fillStyle=hx(c1);x.fillRect(0,0,W,Hh);x.fillStyle='#2a1d10';for(let yy=8;yy<Hh;yy+=16)for(let xx=8;xx<W;xx+=16){x.beginPath();x.arc(xx,yy,3,0,6.3);x.fill()}},128,512);const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,.1),[M(c1),M(c1),M(c1),M(c1),M(0,t),M(c1)]);at(E(m),0,h/2,.05);break}
+  case 'tri':{const n=5,tw=w/n*1.6;for(let i=0;i<n;i++){const x0=-w/2+i*w/n*.95,s=new THREE.Shape();if(i%2==0){s.moveTo(x0,0);s.lineTo(x0+tw,0);s.lineTo(x0+tw/2,h)}else{s.moveTo(x0,h);s.lineTo(x0+tw,h);s.lineTo(x0+tw/2,0)}s.closePath();g.add(ext(s,.04+(i%2)*.02,[c0,c1,c2][i%3]))}break}
+  case 'tiles':{for(let i=0;i<3;i++)for(let j=0;j<3;j++){const dd=(i+j)%2?.07:.045;at(box(w/3-.02,h/3-.02,dd,(i+j)%2?c1:c0),-w/3+i*w/3,h/6+j*h/3,dd/2)}break}
+  case 'pyramid':{at(box(w,h,.02,c0),0,h/2,.01);for(let i=0;i<2;i++)for(let j=0;j<2;j++){const m=E(new THREE.Mesh(new THREE.ConeGeometry(w/2*.7,.1,4),M(c0)),20);m.rotation.x=Math.PI/2;m.rotation.y=Math.PI/4;at(m,-w/4+i*w/2,h/4+j*h/2,.07)}break}
+  case 'strips':{[c0,c1,c0,c2,c0,c1].forEach((cc,i)=>{const sw=w*(i%2?.88:1);at(box(sw,h/6*.6,.04,cc),(i%2)*w*.06,h-(i+.5)*h/6,.02)});break}
+  case 'art':{const t=tex((x,W,Hh)=>{x.fillStyle=hx(c1);x.fillRect(0,0,W,Hh);x.fillStyle=hx(c0);x.beginPath();x.moveTo(0,Hh);x.lineTo(W*.35,Hh*.4);x.lineTo(W*.55,Hh*.7);x.lineTo(W*.75,Hh*.35);x.lineTo(W,Hh);x.fill();x.fillStyle=hx(c2);x.beginPath();x.arc(W*.78,Hh*.25,Hh*.12,0,6.3);x.fill()},384,256);const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,.05),[M(c1),M(c1),M(c1),M(c1),M(0,t),M(c1)]);at(E(m),0,h/2,.025);break}
+  case 'batu':{[[-.18,.08,.3,.36,c0],[.22,.15,.18,.22,c1],[.2,-.2,.22,.17,c2]].forEach(([a,b,rx,ry,cc])=>{const s=new THREE.Shape();s.absellipse(0,0,rx*w,ry*h,0,Math.PI*2,false,0);const m=ext(s,.05,cc);m.position.set(a*w,h/2+b*h,0);g.add(m)});break}
+  case 'skyline':{const sh=[3,1,4,2,5,2,4,1,3,5,2,4,1,3,2,5,4,1,2,3,5,1,4,2,3];at(box(w,h,.012,0xb08a5a),0,h/2,.006);for(let i=0;i<5;i++)for(let j=0;j<5;j++){const v=sh[i*5+j],dd=.025*v;const m=new THREE.Mesh(new THREE.BoxGeometry(w/5-.004,h/5-.004,dd),M(new THREE.Color(`hsl(33,${35+v*5}%,${82-v*7}%)`).getHex()));at(m,-w/2+w/10+i*w/5,h/10+j*h/5,.012+dd/2)}break}
+  }return g}
+ const cornerRot=[0,-Math.PI/2,Math.PI/2,Math.PI];
+ items.forEach((it,idx)=>{
+  if(it.t==='trap'){const g=new THREE.Group(),cc=it.corner,h=it.h,lg=it.leg,tc=c[2];
+   if(['chunk','tri','slatc','soffit'].includes(it.m)){g.add(triPrism([0,0,0],[lg,0,0],[0,0,lg],[0,h,0],tc));
+    if(it.m==='slatc')for(let k=1;k<8;k++){const t=k/8,s=new THREE.Mesh(new THREE.BoxGeometry(.035,h,.02),M(c[1]));s.position.set(lg*t+.012,h/2,lg*(1-t)+.012);s.rotation.y=Math.PI/4;g.add(s)}
+    if(it.m==='tri'&&it.arm>0){g.add(triPrism([lg,h,0],[lg,h-lg,0],[lg,h,lg],[it.arm,0,0],tc));g.add(triPrism([0,h,lg],[0,h-lg,lg],[lg,h,lg],[0,0,it.arm],tc))}
+    if(it.m==='soffit'){const sl=(cc<2||cc>1)?(Wf-2*lg)/2:0;g.add(triPrism([lg,h,0],[lg,h-lg,0],[lg,h,lg],[sl,0,0],tc))}}
+   else if(it.m==='straddle'){const a=lg,p=box(a*1.414,h,.1,tc);p.position.set(a/2+.035,h/2,a/2+.035);p.rotation.y=Math.PI/4;g.add(p)}
+   else if(it.m==='curve'||it.m==='curvslat'){const cy=new THREE.Mesh(new THREE.CylinderGeometry(lg,lg,h,24,1,true,0,Math.PI/2),M(it.m==='curve'?tc:0x1e1f22));cy.position.y=h/2;g.add(E(cy,40));
+    if(it.m==='curvslat')for(let k=1;k<12;k++){const a=k/12*Math.PI/2,s=new THREE.Mesh(new THREE.BoxGeometry(.035,h,.02),M(c[1]));s.position.set((lg+.012)*Math.sin(a),h/2,(lg+.012)*Math.cos(a));s.rotation.y=a;g.add(s)}
+    const top=new THREE.Mesh(new THREE.CircleGeometry(lg,24,0,Math.PI/2),M(tc));top.rotation.x=Math.PI/2;top.position.y=h;g.add(top)}
+   else if(it.m==='tube'){const m=E(new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,h,32),M(tc)),40);m.position.set(.27,h/2,.27);g.add(m)}
+   else if(it.m==='gobo'){const p=box(.6,h,.15,tc);p.position.set(.3,h/2+.08,.3);p.rotation.y=Math.PI/4;g.add(p);[-1,1].forEach(s=>{const f=box(.04,.08,.4,0x555555);f.position.set(.3+s*.2,.04,.3-s*.2);f.rotation.y=Math.PI/4;g.add(f)})}
+   else{[[0,1],[1,0]].forEach(([a,b])=>{const bx=box(.5,h,.25,c[1]);bx.position.set(a?.125:.25+.01,h/2+.3,b?.125:.25+.01);bx.rotation.y=a?Math.PI/2:0;g.add(bx)})}
+   g.position.set(cc%2?Wf:0,0,cc<2?0:D);g.rotation.y=cornerRot[cc];root.add(g);label(it.code,cc%2?Wf-.25:.25,Math.min(h,H)*.55,cc<2?.25:D-.25)}
+  else if(it.t==='panel'||it.t==='diff'){const cols=it.alt?[c[1],c[0],c[2]]:c;const g=panelObj(it,cols);root.add(onWall(it.wall,it.pos,it.y0,.03,g));g.updateMatrixWorld();const lp=g.localToWorld(new THREE.Vector3(0,it.h+.12,.2));label(it.code,lp.x,Math.min(H-.08,it.y0+it.h+.14),lp.z)}
+  else if(it.t==='ceil'){const g=new THREE.Group();
+   if(it.m==='cloud'){const cl=box(it.w,.1,it.d,c[it.alt?1:0]);cl.position.y=H-it.drop-.05;g.add(cl);[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a*it.w*.4,H,b*it.d*.4),new THREE.Vector3(a*it.w*.4,H-it.drop,b*it.d*.4)]),edgeMat)))}
+   else{const bf=box(it.w,it.h,.05,c[it.alt?1:0]);bf.position.y=H-it.drop-it.h/2;g.add(bf);[-1,1].forEach(a=>g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a*.45,H,0),new THREE.Vector3(a*.45,H-it.drop,0)]),edgeMat)))}
+   g.position.set(it.x,0,it.z);root.add(g);label(it.code,it.x,H-it.drop-.3,it.z)}
+ });
+ // furniture
+ const FW=0xffffff;const fur=(w,h,d,x,y,z,col=FW,ry=0)=>{const b=box(w,h,d,col);b.position.set(x,y+h/2,z);b.rotation.y=ry;root.add(b);return b};
+ const cyl=(r,h,x,y,z,col=FW)=>{const m=E(new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,20),M(col)),40);m.position.set(x,y+h/2,z);root.add(m)};
+ const chair=(x,z,rot=0)=>{const g=new THREE.Group();const s=box(.45,.06,.45,FW);s.position.y=.45;g.add(s);const b=box(.45,.45,.06,FW);b.position.set(0,.7,.2);g.add(b);[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,cc])=>{const l=box(.03,.45,.03,0xdddddd);l.position.set(a*.19,.22,cc*.19);g.add(l)});g.position.set(x,0,z);g.rotation.y=rot;root.add(g)};
+ furn.forEach(f=>{if(f.k==='bed'){fur(f.w,.3,f.l,f.x,0,f.z,0xe9e6e0);fur(f.w-.04,.22,f.l-.06,f.x,.3,f.z+.02,0xffffff);fur(f.w,.06,f.l*.55,f.x,.52,f.z+f.l*.2,c[1]);fur(.6,.14,.36,f.x-f.w/4,.52,D-.32);fur(.6,.14,.36,f.x+f.w/4,.52,D-.32);
+   if(RES.mk!=='head')fur(f.w+.1,.5,.08,f.x,.3,D-.06,0xe9e6e0)}
+  if(f.k==='ns'){fur(.44,.5,.4,f.x,0,f.z);cyl(.07,.25,f.x,.5,f.z,0xf2e6c8)}
+  if(f.k==='ward'){const g=new THREE.Group();const b=box(f.w,2.1,.6,0xf4f2ee);b.position.set(0,1.05,.3);g.add(b);const n=Math.max(2,Math.round(f.w/.5));for(let i=1;i<n;i++){const l=box(.01,2.0,.01,0x9aa1b5);l.position.set(-f.w/2+i*f.w/n,1.05,.605);g.add(l)}root.add(onWall(f.wall,f.pos,0,0,g))}});
+ const u=S.use;
+ if(RES.kind==='listen'){spk.forEach(s=>{fur(.04,1,.04,s.x,0,s.z,0xcccccc);fur(.22,.36,.28,s.x,1,s.z,0x23252b)});
+  if(u==='mixing'){fur(1.6,.05,.75,lis.x,.75,lis.z-.55);fur(.05,.75,.6,lis.x-.75,0,lis.z-.55);fur(.05,.75,.6,lis.x+.75,0,lis.z-.55);chair(lis.x,lis.z+.05,Math.PI)}
+  else{const sw=Math.min(2.4,Wf-1.2);fur(sw,.4,.9,lis.x,0,lis.z);fur(sw,.45,.2,lis.x,.4,lis.z+.38);fur(Math.min(2.2,Wf-.8),1.2,.05,Wf/2,.75,.08,0x111318)}}
+ if(RES.kind==='talk'){cyl(.55,.04,Wf/2,.74,D*.45);cyl(.06,.74,Wf/2,0,D*.45);ppl.forEach((p,i)=>chair(p.x+(i?.25:-.25),p.z,i?Math.PI/2:-Math.PI/2))}
+ if(RES.kind==='cam'){fur(1.2,.05,.6,Wf/2,.74,D*.62-.45);chair(Wf/2,D*.62,Math.PI);fur(.03,1.5,.03,Wf/2,0,D*.3,0x333333);fur(.14,.1,.08,Wf/2,1.5,D*.3,0x222222)}
+ if(RES.kind==='live'){const dx=Wf/2,dz=D*.62;cyl(.28,.4,dx,0,dz+.2);cyl(.18,.28,dx-.45,0,dz-.1);cyl(.2,.5,dx+.5,0,dz);cyl(.15,.15,dx-.2,.6,dz-.25);cyl(.15,.15,dx+.2,.6,dz-.25);cyl(.22,.01,dx-.6,1.1,dz-.35,0xd9c38a);cyl(.22,.01,dx+.65,1.15,dz-.3,0xd9c38a);
+  if(u==='band'){fur(.6,.5,.35,.75,0,1.1,0xeeeeee);fur(.6,.5,.35,Wf-.75,0,1.1,0xeeeeee)}else chair(dx,dz-.9)}
+ if(u==='rapat'){const tw=Math.min(1.2,Wf-1.6),tl=Math.min(3,D-2);fur(tw,.05,tl,Wf/2,.74,D/2);fur(.1,.74,tl*.6,Wf/2,0,D/2);for(let k=0;k<Math.max(1,Math.floor(tl/.8));k++){const z=D/2-tl/2+.4+k*.8;chair(Wf/2-tw/2-.35,z,-Math.PI/2);chair(Wf/2+tw/2+.35,z,Math.PI/2)}}
+ if(u==='kafe'){for(let x=1.2;x<=Wf-1;x+=1.8)for(let z=1.2;z<=D-1;z+=1.8){cyl(.35,.03,x,.74,z);cyl(.04,.74,x,0,z);chair(x-.55,z,-Math.PI/2);chair(x+.55,z,Math.PI/2)}}
+ // camera
+ const diag=Math.hypot(Wf,D,H),R0=diag*.5/Math.tan(16*Math.PI/180)*1.15;const ctr=new THREE.Vector3(Wf/2,H*.38,D/2);let rad=R0,th=Math.PI+.62,ph=.92;
+ function size(){const w=cv.parentElement.clientWidth,h=Math.round(w*.82);ren.setSize(w,h,false);cv.style.height=h+'px';cam.aspect=w/h;cam.updateProjectionMatrix()}
+ function draw(){const hz=rad*Math.sin(ph);cam.position.set(ctr.x+hz*Math.sin(th),ctr.y+rad*Math.cos(ph),ctr.z+hz*Math.cos(th));cam.lookAt(ctr);const cp=cam.position,cut={F:cp.z<0,B:cp.z>D,L:cp.x<0,R:cp.x>Wf};Object.entries(walls).forEach(([k,w])=>{w.full.visible=!cut[k];w.stub.visible=cut[k]});labels.forEach(l=>l.visible=showLbl);ren.render(scene,cam)}
+ size();draw();
+ const pts=new Map();let pinch=0;
+ cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY})};
+ cv.onpointermove=e=>{if(!pts.has(e.pointerId))return;const p=pts.get(e.pointerId);if(pts.size===1){th-=(e.clientX-p.x)*.009;ph=clamp(ph-(e.clientY-p.y)*.007,.12,1.45);draw()}
+  p.x=e.clientX;p.y=e.clientY;if(pts.size===2){const [a,b]=[...pts.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch){rad=clamp(rad*pinch/d,R0*.35,R0*2.2);draw()}pinch=d}};
+ const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=0};cv.onpointerup=up;cv.onpointercancel=up;
+ cv.onwheel=e=>{e.preventDefault();rad=clamp(rad*(1+Math.sign(e.deltaY)*.08),R0*.35,R0*2.2);draw()};
+ window.onresize=()=>{size();draw()};
+ V3={draw,set:(t,p)=>{th=t;ph=p;draw()},ren,home:()=>{rad=R0;th=Math.PI+.62;ph=.92;draw()}};
+}
+let DLP=null;function getDL(){if(!DLP)DLP=(window.claude&&window.claude.use)?window.claude.use('downloads').catch(()=>null):Promise.resolve(null);return DLP}
+const fname=ext=>('PBC-Akustik-'+(S.name||USE[S.use].id)+'-'+new Date().toISOString().slice(0,10)).replace(/[^\w\- ]+/g,'').replace(/\s+/g,'-')+'.'+ext;
+function nativeSave(name,data){try{const b=data instanceof Blob?data:new Blob([data]);const u=URL.createObjectURL(b);const x=document.createElement('a');x.href=u;x.download=name;document.body.appendChild(x);x.click();x.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast(L('File disimpan ke Download','Saved to Downloads'));return true}catch(e){return false}}
+async function saveFile(name,data){const dl=await getDL();if(!dl)return nativeSave(name,data);try{await dl.save({filename:name,data});toast(L('File disimpan','File saved'));return true}catch(e){if(e&&e.code==='declined'){toast(L('Dibatalkan','Cancelled'));return true}if(e&&e.code==='rate_limited'){toast(L('Tunggu sebentar lalu coba lagi','Wait a moment and retry'));return true}return false}}
+async function snapDL(){if(!V3)return;V3.draw();const blob=await new Promise(r=>V3.ren.domElement.toBlob(r,'image/png'));if(!(await saveFile(fname('png'),blob)))snap()}
+function loadJS(src){return new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`)){ok();return}const sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)})}
+async function pdfDL(btn){const old=btn.textContent;btn.textContent=L('Menyiapkan PDF…','Preparing PDF…');btn.disabled=true;
+ try{await loadJS('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');await loadJS('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  if(V3)V3.draw();const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});const PW=210,PH=297,M=10,CW=PW-2*M;let y=M;
+  const hdr=await html2canvas(document.querySelector('header'),{scale:2,backgroundColor:'#0d2259',useCORS:true});const hh=CW*hdr.height/hdr.width;doc.addImage(hdr.toDataURL('image/jpeg',.9),'JPEG',M,y,CW,hh);y+=hh+4;
+  const dr=document.getElementById('draw'),oldDraw=dr.innerHTML;dr.innerHTML=planSVG('sol')+['F','B','L','R'].map(w=>`<p style="font-weight:700;margin:10px 0 0">${wallName(w)}</p>`+elevSVG(w)).join('');
+  const cards=[...document.querySelectorAll('#out .card')];
+  for(const c of cards){const cv=await html2canvas(c,{scale:2,backgroundColor:'#ffffff',useCORS:true,ignoreElements:el=>el.classList&&(el.classList.contains('v3bar')||el.classList.contains('v3hint')||el.classList.contains('tabs')||el.id==='copy'||el.id==='pdfBtn')});
+   const pxPerMm=cv.width/CW;let sy=0;while(sy<cv.height){let avail=PH-M-y;if(avail<30){doc.addPage();y=M;avail=PH-2*M}const sliceH=Math.min(cv.height-sy,Math.floor(avail*pxPerMm));
+    const part=document.createElement('canvas');part.width=cv.width;part.height=sliceH;part.getContext('2d').drawImage(cv,0,sy,cv.width,sliceH,0,0,cv.width,sliceH);
+    const hmm=sliceH/pxPerMm;doc.addImage(part.toDataURL('image/jpeg',.88),'JPEG',M,y,CW,hmm);y+=hmm+4;sy+=sliceH;if(sy<cv.height){doc.addPage();y=M}}}
+  dr.innerHTML=oldDraw;const blob=doc.output('blob');if(!(await saveFile(fname('pdf'),blob)))toast(L('Download tidak tersedia di tampilan ini','Downloads unavailable here'))}
+ catch(e){console.error(e);toast(L('Gagal membuat PDF — cek koneksi internet','Could not build the PDF — check connection'))}
+ btn.textContent=old;btn.disabled=false}
+function snap(){if(!V3)return;V3.draw();document.getElementById('mimg').src=V3.ren.domElement.toDataURL('image/png');document.getElementById('mtxt').textContent=L('Tekan lama pada gambar lalu pilih "Download gambar" untuk dikirim lewat WhatsApp.','Long-press the image and choose "Download image".');document.getElementById('modal').classList.add('on')}
+
+// ================= OUTPUT =================
+function problems(){const r=RES,p=[],m0=mid(r.T0),ratio=m0/r.Tt;
+ if(ratio>1.25)p.push([L('Gema terlalu panjang','Too much echo'),L(`Suara butuh ±${N(m0,2)} detik untuk hilang. Untuk ${USE[S.use].id.toLowerCase()} idealnya ${N(r.TT[1],2)}–${N(r.TT[2],2)} detik — sekarang ${N(m0/r.TT[2],1)}× lebih lama dari batas atas. Itu sebabnya suara "tidak langsung hilang".`,`Sound takes ~${N(m0,2)} s to die away; ${N(r.TT[1],2)}–${N(r.TT[2],2)} s is right here.`)]);
+ if(MAT.wall[S.wall].a[3]<.12||S.cx.flutter)p.push([L('Gema bolak-balik (flutter)','Flutter echo'),L('Dinding keras yang sejajar memantulkan suara bolak-balik — "dzing" saat tepuk tangan.','Parallel hard walls ping-pong the sound.')]);
+ if(r.kind==='listen')p.push([L('Pantulan awal dinding samping & plafon','Early reflections'),L('Suara speaker memantul di titik merah lalu sampai ke telinga terlambat — posisi suara dan detail kabur.','Speaker sound bounces off the red points and arrives late.')]);
+ if(r.kind==='talk'||r.kind==='cam')p.push([L('Pantulan masuk ke mikrofon','Reflections into the mic'),L('Pantulan dari dinding di sekitar orang yang bicara ikut terekam.','Nearby walls bounce the voice into the mic.')]);
+ if(r.T0[0]>r.Tt*1.5||S.cx.bass)p.push([L('Dengung bass di sudut','Corner bass build-up'),L(`Bass (125 Hz) bertahan ±${N(r.T0[0],2)} detik dan menumpuk di sudut.`,`Bass lingers ~${N(r.T0[0],2)} s in the corners.`)]);
+ if(r.clusters.length)p.push([L('Penumpukan nada bass','Stacked resonances'),L(`Nada sekitar ${r.clusters.map(f=>f+' Hz').join(', ')} lebih keras dari nada lain.`,`Notes around ${r.clusters.map(f=>f+' Hz').join(', ')} are louder.`)]);
+ if(r.propBad)p.push([L('Proporsi ruang kurang baik','Poor proportions'),L('Dua ukuran ruang sama / kelipatan — bass trap wajib.','Two dimensions are equal / multiples — traps essential.')]);
+ return p}
+function wallTable(){const r=RES,rows=[];const why={refl:L('titik pantulan pertama','first reflection point'),front:L('di belakang speaker','behind speakers'),rear:L('dinding belakang (pantulan balik)','rear wall return'),behind:L('di belakang pembicara','behind the talker'),bg:L('latar kamera / di belakang kepala','camera background'),face:L('di depan wajah','in front of the talker'),head:L('di atas kepala tempat tidur','above the headboard'),fill:L('pengisi selang-seling (hilangkan gema)','staggered fill (echo)'),ceil:L('memutus pantulan lantai–plafon','breaks floor–ceiling echo')};
+ ['F','B','L','R','C'].forEach(w=>{const its=r.items.filter(i=>i.wall===w&&i.t!=='trap');const n=its.length;const rs={};its.forEach(i=>{const k=i.t==='diff'?L('difuser','diffuser'):why[i.role]||'';rs[k]=(rs[k]||0)+1});
+  const blk=r.blk.filter(b=>b.wall===w&&b.h>2).length?L(' · area lemari dikosongkan',' · wardrobe area left clear'):'';const op=r.ops.filter(o=>o.wall===w).length?L(` · ${r.ops.filter(o=>o.wall===w).length} bukaan dihindari`,` · ${r.ops.filter(o=>o.wall===w).length} openings avoided`):'';
+  rows.push(`<tr><td>${wallName(w)}</td><td class="n">${n}</td><td>${n?Object.entries(rs).map(([k,v])=>`${v}× ${k}`).join(', '):L('tidak perlu panel','no panels needed')}${w!=='C'?op+blk:''}</td></tr>`)});
+ const tr=r.items.filter(i=>i.t==='trap');rows.push(`<tr><td>${L('Sudut','Corners')}</td><td class="n">${tr.length}</td><td>${tr.length?'bass trap '+TM[tr[0].m][lang].toLowerCase()+': '+tr.map(t=>cornerName(t.corner)).join(', '):L('tidak perlu','not needed')}</td></tr>`);
+ return `<div class="scroll"><table class="wt"><tr><th>${L('Bidang','Surface')}</th><th>${L('Jumlah','Qty')}</th><th>${L('Alasan','Reason')}</th></tr>${rows.join('')}</table></div>`}
+function boq(){const it=RES.items,H=RES.H,rows=[];let rw=0,fab=0,tim=0;
+ const grp={};it.filter(i=>i.t==='panel'||i.t==='diff').forEach(i=>{const k=i.m+'|'+cm(i.w)+'×'+cm(i.h);grp[k]=(grp[k]||0)+1});
+ Object.entries(grp).forEach(([k,n])=>{const [m,sz]=k.split('|'),M=PM[m],a=M.w*(M.h==='full'?Math.min(2.4,H-.3):M.h);rows.push({k:'p_'+k,name:M[lang],spec:sz+' cm',n});
+  if(M.sect!=='diff'){rw+=n*a*M.af*(M.sect==='fab10'?.1:.05);fab+=n*a*M.af*1.3;tim+=n*2*(M.w+a/M.w)}else tim+=n*3});
+ const tr=it.filter(i=>i.t==='trap');if(tr.length){const m=tr[0].m;rows.push({k:'t_'+m,name:'Bass trap · '+TM[m][lang],spec:specT(m,H),n:tr.length});tr.forEach(t=>{const vol={chunk:.18*H,slatc:.18*H,tri:.1*(H+2*t.arm),soffit:.1*(H+(RES.Wf-2*t.leg)/2),straddle:.06*H,curve:.094*H,curvslat:.05*H,tube:.11*t.h,membran:.0125*2,gobo:.16}[m]||.1;rw+=vol;fab+=Math.max(1,vol*6);tim+=t.h*2})}
+ const cl=it.filter(i=>i.t==='ceil');if(cl.length){const m=cl[0].m;rows.push({k:'c_'+m,name:CM[m][lang],spec:m==='cloud'?'120×120×10 cm':'120×60×5 cm',n:cl.length});cl.forEach(()=>{rw+=m==='cloud'?.144:.036;fab+=m==='cloud'?3.2:1.6;tim+=m==='cloud'?4.8:0})}
+ return {rows,mat:[{k:'rw',name:L('Rockwool papan 60×120×5 cm','Rockwool board 60×120×50'),n:Math.ceil(rw/.036*1.1),u:L('lembar','boards')},{k:'fab',name:L('Kain akustik / felt','Acoustic fabric / felt'),n:Math.ceil(fab),u:'m²'},{k:'tim',name:L('Kayu rangka / lis','Frame timber'),n:Math.ceil(tim*1.1),u:L('m lari','lin. m')}]}}
+function specT(m,H){return {chunk:`60×60 × ${cm(H)} cm`,tri:`45×45 + ${L('lengan','arms')}`,straddle:`60 × ${cm(H)} cm`,curve:`R60 × ${cm(H)} cm`,tube:`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`,slatc:`60×60 × ${cm(H)} cm`,soffit:`45×45 + soffit`,membran:'50×50×25 cm',gobo:'60×180×15 cm',curvslat:`R60 × ${cm(H)} cm`}[m]}
+function rowItem(it){const tg=it.t==='trap'?'t':it.t==='ceil'?'c':it.t==='diff'?'d':'';let name,loc,pos;
+ if(it.t==='trap'){name='Bass trap · '+TM[it.m][lang];loc=L('Sudut ','Corner ')+cornerName(it.corner);pos=specT(it.m,RES.H)}
+ else if(it.t==='ceil'){name=CM[it.m][lang];loc=L('Plafon','Ceiling');pos=L(`${cm(it.z)} cm dari dinding depan, ${cm(it.x)} cm dari kiri, turun ${cm(it.drop)} cm`,`${cm(it.z)} cm from front, ${cm(it.x)} cm from left, ${cm(it.drop)} cm drop`)}
+ else{name=PM[it.m][lang]+` ${cm(it.w)}×${cm(it.h)}`;loc=wallName(it.wall);pos=`${cm(it.pos)} cm ${it.wall==='L'||it.wall==='R'?L('dari dinding depan','from front wall'):L('dari sudut kiri','from left corner')}; ${L('bawah','bottom')} ${cm(it.y0)} cm`}
+ return `<tr><td><span class="tag ${tg}">${it.code}</span></td><td>${name}</td><td>${loc}</td><td>${pos}</td></tr>`}
+function rtSVG(){const {T0,T1,TT}=RES;const W=640,H=300,pl=48,pr=14,pt=16,pb=40,mx=Math.max(...T0,TT[2]*1.3)*1.1,X=i=>pl+i*(W-pl-pr)/5,Y=v=>pt+(H-pt-pb)*(1-v/mx);
+ let g=`<svg viewBox="0 0 ${W} ${H}"><rect x="${pl}" y="${Y(TT[2])}" width="${W-pl-pr}" height="${Y(TT[1])-Y(TT[2])}" fill="#dff3ea"/>`;for(let k=0;k<=4;k++){const v=mx*k/4;g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e3e6ee"/>`+txt(pl-8,Y(v)+4,N(v,1)+' s',11,C2.mut,'end')}
+ B.forEach((b,i)=>g+=txt(X(i),H-pb+20,b>=1000?b/1000+'k':b,11.5,C2.mut));const line=(a,c)=>`<polyline points="${a.map((v,i)=>X(i)+','+Y(v)).join(' ')}" fill="none" stroke="${c}" stroke-width="3"/>`+a.map((v,i)=>`<circle cx="${X(i)}" cy="${Y(v)}" r="4.5" fill="${c}"/>`).join('');
+ return g+line(T0,C2.red)+line(T1,C2.blue)+txt(W/2,H-4,'Hz',11,C2.mut)+'</svg>'}
+function renderOut(){
+ const r=RES;if(!r)return;const m0=mid(r.T0),m1=mid(r.T1),ok1=m1<=r.TT[2]*1.05,bq=boq();
+ const used=[...new Set(r.items.map(i=>i.t==='trap'||i.t==='ceil'?i.m:i.m))];
+ const pk=k=>{const a=ALL[k],n=a.items.filter(i=>i.t==='panel').length,c=a.items.filter(i=>i.t==='ceil').length,t=a.items.filter(i=>i.t==='trap').length;return `<button class="pkg ${S.pkg===k?'on':''}" data-pkg="${k}"><b>${{hemat:L('Hemat','Budget'),std:L('Standar','Standard'),max:L('Maksimal','Maximum')}[k]}</b><small>${n} panel · ${t} bass trap${c?' · '+c+' '+L('plafon','ceiling'):''}</small><em>${N(mid(a.T1),2)} s</em></button>`};
+ const rec=recList();
+ let h=`<section class="card"><div class="num">02 · ${L('Denah 3D','3D plan')}${S.name?' · '+S.name:''}</div><h2>${USE[S.use][lang]} · ${N(r.Wf,1)} × ${N(r.D,1)} × ${N(r.H,1)} m</h2>
+ <p class="sub">${L('Model: ','Model: ')}<b>${PM[r.mk][lang]}</b> · ${L('Palet: ','Palette: ')}${PAL[S.pal][lang]} · ${L('Geser untuk memutar, cubit untuk zoom.','Drag to rotate, pinch to zoom.')}</p>
+ <div id="v3wrap"><canvas id="v3"></canvas><div class="v3hint">${L('↻ geser untuk memutar','↻ drag to rotate')}</div></div>
+ <div class="v3bar"><button class="btn ghost sm" data-v="home">3D</button><button class="btn ghost sm" data-v="top">${L('Atas','Top')}</button><button class="btn ghost sm" data-v="lbl">${L('Kode on/off','Codes')}</button><button class="btn sm" data-v="snap">${L('Download gambar 3D','Download 3D image')}</button></div><button class="btn" id="pdfBtn" style="margin-top:10px">${L('Download laporan PDF lengkap','Download full PDF report')}</button>
+ <h3>${L('Pilih paket','Choose a package')}</h3><div class="pkgs">${pk('hemat')}${pk('std')}${pk('max')}</div>
+ <div class="kpis"><div class="kpi ${m0/r.TT[2]>1.25?'bad':'good'}"><small>${L('Gema sekarang','Echo now')}</small><b>${N(m0,2)} s</b></div><div class="kpi"><small>Target</small><b>${N(r.TT[1],2)}–${N(r.TT[2],2)} s</b></div><div class="kpi ${ok1?'good':'bad'}"><small>${L('Setelah treatment','After treatment')}</small><b>${N(m1,2)} s</b></div><div class="kpi"><small>${L('Bass sekarang','Bass now')}</small><b>${N(r.T0[0],2)} s</b></div></div>
+ <p class="note">${L(`Rekomendasi model untuk ${USE[S.use].id.toLowerCase()}: `,`Recommended for this room: `)}${rec.slice(0,4).map(k=>PM[k][lang]).join(', ')}.</p></section>`;
+ h+=`<section class="card"><div class="num">03 · ${L('Masalah','The problem')}</div><h2>${L('Titik gema di ruang ini','Where the echo comes from')}</h2><div class="svgbox">${planSVG('prob')}</div>
+ <div class="legend"><span><i style="background:${C2.red}"></i>${L('pantulan / gema','reflection / echo')}</span><span><i style="background:#f8caca"></i>${L('penumpukan bass','bass build-up')}</span><span><i style="background:${C2.glass}"></i>${L('jendela','window')}</span><span><i style="background:${C2.door}"></i>${L('pintu','door')}</span></div>
+ ${problems().map(p=>`<div class="prob"><b>${p[0]}</b><span>${p[1]}</span></div>`).join('')}</section>`;
+ h+=`<section class="card"><div class="num">04 · ${L('Solusi','The solution')}</div><h2>${L('Jumlah panel per dinding & alasannya','Panels per wall and why')}</h2>${wallTable()}
+ <div class="tabs" id="tabs" style="margin-top:12px">${[['plan',L('Denah','Plan')],['F',L('Depan','Front')],['L',L('Kiri','Left')],['R',L('Kanan','Right')],['B',L('Belakang','Rear')]].map(([k,t])=>`<button data-t="${k}" class="${tab===k?'on':''}">${t}</button>`).join('')}</div>
+ <div class="svgbox" id="draw">${tab==='plan'?planSVG('sol'):elevSVG(tab)}</div>
+ <div class="prob sol"><b>${L('Prinsip penempatan','Placement logic')}</b><span>${{listen:L('Panel dipasang tepat di titik pantulan pertama dinding kiri-kanan (cek dengan cermin dari posisi dengar), di belakang speaker, dan dinding belakang. Cloud di atas antara speaker dan pendengar. Bass trap di semua sudut.','Panels at the first reflection points, behind the speakers and on the rear wall; cloud above; traps in all corners.'),talk:L('Panel di empat dinding setinggi kepala duduk supaya pantulan tidak masuk mikrofon, cloud di atas meja.','Panels on all four walls at seated head height; cloud over the table.'),cam:L('Panel di belakang kepala (latar kamera), di depan wajah, dan di samping kiri-kanan.','Panels behind the head, in front of the face, and both sides.'),live:L('Panel selang-seling di semua dinding — tidak saling berhadapan — supaya gema putus tanpa membuat ruang "mati".','Staggered panels on all walls so echo breaks without deadening the room.'),room:L('Satu panel utama di atas kepala tempat tidur, lalu panel selang-seling di dinding lain; area lemari dan jendela dikosongkan.','A main panel above the headboard, then staggered panels elsewhere; wardrobe and windows left clear.'),speech:L('Plafon dulu (paling efektif untuk ruang rapat), lalu dua dinding yang bersebelahan secara selang-seling.','Ceiling first, then two adjacent walls, staggered.'),venue:L('Plafon dulu (baffle/cloud di atas meja), lalu dinding selang-seling.','Ceiling first over the tables, then staggered walls.')}[r.kind]}</span></div>
+ ${r.notes.map(n=>`<div class="prob sol"><b>${L('Catatan','Note')}</b><span>${n}</span></div>`).join('')}</section>`;
+ h+=`<section class="card"><div class="num">05 · ${L('Detail konstruksi','Construction details')}</div><h2>${L('Ukuran, isi & penutup','Size, core & cover')}</h2><p class="sub">${L('Gambar kerja untuk tukang. Ukuran dalam cm.','Shop drawings. Dimensions in cm.')}</p>
+ ${used.map(k=>{const sv=detailSVG(k);const nm=(PM[k]||TM[k]||CM[k])[lang];return `<h3>${nm}</h3><div class="svgbox">${sv}</div>${CALL.length?`<ol style="margin:4px 0 8px;padding-left:22px;font-size:13.5px">${CALL.map(x=>`<li>${x}</li>`).join('')}</ol>`:''}${specFor(k)}`}).join('')}
+ <div class="prob sol" style="margin-top:14px"><b>${L('Aturan material','Material rules')}</b><span>${L('Kain penutup harus tembus udara (mudah ditiup) — kain rapat / plastik membuat panel tidak menyerap. Bass trap tebal pakai rockwool 40–60 kg/m³; panel 5–10 cm pakai 60–80 kg/m³. Rongga udara di belakang panel menambah serapan bass. Pakai sarung tangan & masker saat memotong rockwool.','Covers must be breathable. Thick traps use 40–60 kg/m³ wool; 50–100 mm panels use 60–80 kg/m³. An air gap behind adds bass absorption. Wear gloves and a mask when cutting.')}</span></div></section>`;
+ h+=`<section class="card"><div class="num">06 · ${L('Daftar pemasangan','Installation schedule')}</div><h2>${L('Posisi tiap item','Where each item goes')}</h2><div class="scroll"><table><tr><th>${L('Kode','Code')}</th><th>Item</th><th>${L('Letak','Location')}</th><th>${L('Posisi (tengah item)','Position (centre)')}</th></tr>${r.items.map(rowItem).join('')}</table></div></section>`;
+ h+=`<section class="card"><div class="num">07 · ${L('Bukti hitungan','The numbers')}</div><h2>${L('Waktu gema per frekuensi','Reverberation by frequency')}</h2><div class="svgbox">${rtSVG()}</div>
+ <div class="legend"><span><i style="background:${C2.red}"></i>${L('sebelum','before')}</span><span><i style="background:${C2.blue}"></i>${L('sesudah','after')}</span><span><i style="background:#dff3ea"></i>${L('rentang ideal','ideal range')}</span></div>
+ <div class="scroll" style="margin-top:8px"><table><tr><th>Hz</th>${B.map(b=>`<th class="r">${b}</th>`).join('')}</tr><tr><td>${L('Sebelum','Before')}</td>${r.T0.map(v=>`<td class="r">${N(v,2)}</td>`).join('')}</tr><tr><td>${L('Sesudah','After')}</td>${r.T1.map(v=>`<td class="r">${N(v,2)}</td>`).join('')}</tr></table></div>
+ <p class="note">${L('Dihitung untuk ruang kosong; perabot dan orang menambah serapan, jadi hasil nyata biasanya sedikit lebih baik. Ukur ulang setelah pemasangan.','Empty-room figures; furniture and people add absorption. Measure after install.')}</p></section>`;
+ h+=`<section class="card"><div class="num">08 · ${L('Kebutuhan & biaya','Quantities & cost')}</div><h2>${L('Daftar kebutuhan','Bill of quantities')}</h2><p class="sub">${L('Isi harga satuan; total dihitung otomatis dan tersimpan di HP ini.','Enter unit prices; totals are saved on this phone.')}</p>
+ <div class="scroll"><table><tr><th>Item</th><th class="r">${L('Jml','Qty')}</th><th class="r">${L('Harga satuan (Rp)','Unit price (Rp)')}</th><th class="r">Total</th></tr>${bq.rows.map(x=>prow(x.k,x.name+`<br><small style="color:#5b6275">${x.spec}</small>`,x.n,L('unit','pcs'))).join('')}
+ <tr><td colspan="4" style="font-weight:700;padding-top:14px">${L('Material utama (untuk produksi)','Main materials')}</td></tr>${bq.mat.map(x=>prow(x.k,x.name,x.n,x.u)).join('')}<tr><td colspan="3"><b>Total</b></td><td class="r"><b id="gt">–</b></td></tr></table></div>
+ <p class="note">${L('Isi harga di baris unit jadi ATAU di baris material, jangan keduanya.','Price the finished units OR the materials, not both.')}</p>
+ <button class="btn ghost" id="copy">${L('Salin ringkasan untuk WhatsApp','Copy summary for WhatsApp')}</button></section>`;
+ document.getElementById('out').innerHTML=h;
+ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll('#tabs button').forEach(x=>x.className=x===b?'on':'');document.getElementById('draw').innerHTML=tab==='plan'?planSVG('sol'):elevSVG(tab)});
+ document.querySelectorAll('[data-pkg]').forEach(b=>b.onclick=()=>{S.pkg=b.dataset.pkg;try{localStorage.setItem('pbcak3',JSON.stringify(S))}catch(e){}RES=ALL[S.pkg];renderOut()});
+ document.querySelectorAll('.price').forEach(inp=>inp.oninput=()=>{PR[inp.dataset.k]=inp.value.replace(/\D/g,'');try{localStorage.setItem('pbcak_pr',JSON.stringify(PR))}catch(e){}totals()});totals();
+ document.getElementById('copy').onclick=copySummary;
+ document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{const v=b.dataset.v;if(!V3)return;if(v==='home')V3.home();if(v==='top')V3.set(Math.PI,.13);if(v==='lbl'){showLbl=!showLbl;V3.draw()}if(v==='snap')snapDL()});
+ document.getElementById('pdfBtn').onclick=e=>pdfDL(e.currentTarget);
+ V3=null;try{init3D()}catch(e){console.error(e);const w=document.getElementById('v3wrap');if(w)w.innerHTML=`<p class="note" style="padding:16px">3D: ${e.message}</p>`}
+}
+function prow(k,name,n,u){return `<tr><td>${name}</td><td class="r">${N(n,0)} ${u}</td><td class="r"><input class="price" inputmode="numeric" data-k="${k}" data-n="${n}" value="${PR[k]?(+PR[k]).toLocaleString('id-ID'):''}" placeholder="0"></td><td class="r" id="t_${k.replace(/[^\w]/g,'_')}">–</td></tr>`}
+function totals(){let g=0;document.querySelectorAll('.price').forEach(inp=>{const p=+(PR[inp.dataset.k]||0),t=p*(+inp.dataset.n);g+=t;const el=document.getElementById('t_'+inp.dataset.k.replace(/[^\w]/g,'_'));if(el)el.textContent=t?'Rp '+t.toLocaleString('id-ID'):'–';if(document.activeElement!==inp&&p)inp.value=p.toLocaleString('id-ID')});document.getElementById('gt').textContent=g?'Rp '+g.toLocaleString('id-ID'):'–'}
+function copySummary(){const r=RES,bq=boq();let t=`*${L('Analisis Akustik Ruang','Room Acoustic Analysis')} – Pratama Build & Construction*\n`;if(S.name)t+=S.name+'\n';
+ t+=`${USE[S.use][lang]} · ${N(r.Wf,1)} × ${N(r.D,1)} × ${N(r.H,1)} m\n${L('Paket','Package')}: ${{hemat:L('Hemat','Budget'),std:L('Standar','Standard'),max:L('Maksimal','Maximum')}[S.pkg]} · ${PAL[S.pal][lang]}\n\n${L('Gema sekarang','Echo now')}: ${N(mid(r.T0),2)} s\nTarget: ${N(r.TT[1],2)}–${N(r.TT[2],2)} s\n${L('Setelah treatment','After treatment')}: ${N(mid(r.T1),2)} s\n\n*${L('Solusi','Solution')}*\n`+bq.rows.map(x=>`• ${x.n}× ${x.name} (${x.spec})`).join('\n')+'\n\npratamabuild.id · WA 0857-4502-6574';
+ const done=()=>toast(L('Ringkasan disalin','Summary copied'));try{navigator.clipboard.writeText(t).then(done,()=>fb(t,done))}catch(e){fb(t,done)}}
+function fb(t,done){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}catch(e){toast('Gagal')}a.remove()}
+function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1800)}
+document.getElementById('mclose').onclick=()=>document.getElementById('modal').classList.remove('on');
+function setLang(l){lang=l;try{localStorage.setItem('pbcak_lang',l)}catch(e){}document.documentElement.lang=l;renderInput();if(RES)analyseAll()}
+document.getElementById('lid').onclick=()=>setLang('id');document.getElementById('len').onclick=()=>setLang('en');
+renderInput();analyseAll();
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('../sw.js').catch(()=>{});
+</script>
+</body>
+</html>
