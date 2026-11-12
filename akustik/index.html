@@ -557,14 +557,14 @@ function init3D(){
  const ext=(shape,d,col)=>E(new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:d,bevelEnabled:false,curveSegments:24}),M(col)),30);
  const root=new THREE.Group();scene.add(root);
  // platform + floor
- const pl=new THREE.Mesh(new THREE.BoxGeometry(Wf+.9,.18,D+.9),M(0xffffff));pl.position.set(Wf/2,-.15,D/2);root.add(E(pl));
- const fl=new THREE.Mesh(new THREE.BoxGeometry(Wf,.06,D),M(MAT.floor[S.floor].c));fl.position.set(Wf/2,-.03,D/2);root.add(E(fl));
+ const pl=new THREE.Mesh(new THREE.BoxGeometry(Wf+.9,.18,D+.9),M(0xffffff));pl.position.set(Wf/2,-.15,D/2);pl.userData.k='plat';root.add(E(pl));
+ const fl=new THREE.Mesh(new THREE.BoxGeometry(Wf,.06,D),M(MAT.floor[S.floor].c));fl.position.set(Wf/2,-.03,D/2);fl.userData.k='floor';root.add(E(fl));
  const len={F:Wf,B:Wf,L:D,R:D},walls={};
  function wallMesh(w,h,holes){const sh=new THREE.Shape();sh.moveTo(-.1,0);sh.lineTo(len[w]+.1,0);sh.lineTo(len[w]+.1,h);sh.lineTo(-.1,h);sh.lineTo(-.1,0);
   if(holes)ops.filter(o=>o.wall===w).forEach(o=>{const p=new THREE.Path(),y0=Math.max(.01,o.sill),y1=Math.min(h-.01,o.sill+o.h),x0=Math.max(.01,o.pos-o.w/2),x1=Math.min(len[w]-.01,o.pos+o.w/2);p.moveTo(x0,y0);p.lineTo(x0,y1);p.lineTo(x1,y1);p.lineTo(x1,y0);p.lineTo(x0,y0);sh.holes.push(p)});
   const m=E(new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:.1,bevelEnabled:false}),M(0xfafafb)),30);
   if(w==='F')m.position.z=-.1;if(w==='B')m.position.z=D;if(w==='L')m.rotation.y=-Math.PI/2;if(w==='R'){m.rotation.y=-Math.PI/2;m.position.x=Wf+.1}return m}
- ['F','B','L','R'].forEach(w=>{const full=wallMesh(w,H,true),stub=wallMesh(w,.14,false);root.add(full);root.add(stub);walls[w]={full,stub}});
+ ['F','B','L','R'].forEach(w=>{const full=wallMesh(w,H,true),stub=wallMesh(w,.14,false);full.userData.k='wall';stub.userData.k='stub';root.add(full);root.add(stub);walls[w]={full,stub}});
  function onWall(w,pos,y0,gap,o){if(w==='F')o.position.set(pos,y0,gap);if(w==='B'){o.position.set(pos,y0,D-gap);o.rotation.y=Math.PI}if(w==='L'){o.position.set(gap,y0,pos);o.rotation.y=Math.PI/2}if(w==='R'){o.position.set(Wf-gap,y0,pos);o.rotation.y=-Math.PI/2}return o}
  ops.forEach(o=>{const g=new THREE.Group();if(o.t==='win'){const gl=new THREE.Mesh(new THREE.PlaneGeometry(o.w,o.h),new THREE.MeshLambertMaterial({color:0x9ecbe6,transparent:true,opacity:.45,side:THREE.DoubleSide}));gl.position.set(0,o.h/2,-.05);g.add(gl);const fr=box(o.w,.04,.12,0xdfe3ea);fr.position.set(0,0,-.05);g.add(fr)}
   else{const dr=box(o.w-.04,o.h-.02,.04,0xb58457);dr.position.set(0,o.h/2,-.05);g.add(dr)}root.add(onWall(o.wall,o.pos,o.sill,0,g))});
@@ -686,7 +686,7 @@ return g}
  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=0};cv.onpointerup=up;cv.onpointercancel=up;
  cv.onwheel=e=>{e.preventDefault();rad=clamp(rad*(1+Math.sign(e.deltaY)*.08),R0*.35,R0*2.2);draw()};
  window.onresize=()=>{size();draw();DET.forEach(d=>{d.sz();d.dr()})};
- V3={draw,set:(t,p)=>{th=t;ph=p;draw()},ren,home:()=>{rad=R0;th=Math.PI+.62;ph=.92;draw()}};
+ V3={draw,scene,Wf,D,H,ops,set:(t,p)=>{th=t;ph=p;draw()},ren,home:()=>{rad=R0;th=Math.PI+.62;ph=.92;draw()}};
 }
 let DLP=null;function getDL(){if(!DLP)DLP=(window.claude&&window.claude.use)?window.claude.use('downloads').catch(()=>null):Promise.resolve(null);return DLP}
 const fname=ext=>('PBC-Akustik-'+(S.name||USE[S.use].id)+'-'+new Date().toISOString().slice(0,10)).replace(/[^\w\- ]+/g,'').replace(/\s+/g,'-')+'.'+ext;
@@ -700,12 +700,46 @@ async function pdfDL(btn){const old=btn.textContent;btn.textContent=L('Menyiapka
   const hdr=await html2canvas(document.querySelector('header'),{scale:2,backgroundColor:'#0d2259',useCORS:true});const hh=CW*hdr.height/hdr.width;doc.addImage(hdr.toDataURL('image/jpeg',.9),'JPEG',M,y,CW,hh);y+=hh+4;
   const dr=document.getElementById('draw'),oldDraw=dr.innerHTML;dr.innerHTML=planSVG('sol')+['F','B','L','R'].map(w=>`<p style="font-weight:700;margin:10px 0 0">${wallName(w)}</p>`+elevSVG(w)).join('');
   const cards=[...document.querySelectorAll('#out .card')];
-  for(const c of cards){const cv=await html2canvas(c,{scale:2,backgroundColor:'#ffffff',useCORS:true,ignoreElements:el=>el.classList&&(el.classList.contains('v3bar')||el.classList.contains('v3hint')||el.classList.contains('tabs')||el.id==='copy'||el.id==='pdfBtn')});
+  for(const c of cards){const cv=await html2canvas(c,{scale:2,backgroundColor:'#ffffff',useCORS:true,ignoreElements:el=>el.classList&&(el.classList.contains('v3bar')||el.classList.contains('v3hint')||el.classList.contains('tabs')||el.id==='copy'||el.id==='pdfBtn'||el.id==='renderBtn')});
    const pxPerMm=cv.width/CW;let sy=0;while(sy<cv.height){let avail=PH-M-y;if(avail<30){doc.addPage();y=M;avail=PH-2*M}const sliceH=Math.min(cv.height-sy,Math.floor(avail*pxPerMm));
     const part=document.createElement('canvas');part.width=cv.width;part.height=sliceH;part.getContext('2d').drawImage(cv,0,sy,cv.width,sliceH,0,0,cv.width,sliceH);
     const hmm=sliceH/pxPerMm;doc.addImage(part.toDataURL('image/jpeg',.88),'JPEG',M,y,CW,hmm);y+=hmm+4;sy+=sliceH;if(sy<cv.height){doc.addPage();y=M}}}
   dr.innerHTML=oldDraw;const blob=doc.output('blob');if(!(await saveFile(fname('pdf'),blob)))toast(L('Download tidak tersedia di tampilan ini','Downloads unavailable here'))}
  catch(e){console.error(e);toast(L('Gagal membuat PDF — cek koneksi internet','Could not build the PDF — check connection'))}
+ btn.textContent=old;btn.disabled=false}
+function noiseTex(kind,col){const cn=document.createElement('canvas'),z=512;cn.width=z;cn.height=z;const x=cn.getContext('2d');let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+ if(kind==='plank'){const c=new THREE.Color(col);for(let i=0;i<8;i++){const y0=i*z/8,sh=.85+rnd()*.3;x.fillStyle=`rgb(${R(c.r*255*sh)},${R(c.g*255*sh)},${R(c.b*255*sh)})`;x.fillRect(0,y0,z,z/8);for(let k=0;k<40;k++){x.strokeStyle=`rgba(60,35,15,${.05+rnd()*.08})`;x.beginPath();const yy=y0+rnd()*z/8;x.moveTo(0,yy);x.bezierCurveTo(z*.3,yy+rnd()*6-3,z*.6,yy+rnd()*6-3,z,yy);x.stroke()}x.fillStyle='rgba(40,25,10,.35)';x.fillRect(0,y0,z,1.5);x.fillRect((i*137)%z,y0,1.5,z/8)}}
+ else if(kind==='tile'){x.fillStyle='#e6e5e1';x.fillRect(0,0,z,z);x.fillStyle='#cfcdc7';for(let i=0;i<=4;i++){x.fillRect(i*z/4-1,0,2,z);x.fillRect(0,i*z/4-1,z,2)}}
+ else{x.fillStyle='#ffffff';x.fillRect(0,0,z,z);const id=x.getImageData(0,0,z,z),d=id.data,amp=kind==='fabric'?26:10;for(let i=0;i<d.length;i+=4){const v=255-rnd()*amp;d[i]=d[i+1]=d[i+2]=v}x.putImageData(id,0,0)}
+ const t=new THREE.CanvasTexture(cn);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;return t}
+function renderHQ(view,W=1400,Hpx=1000){const {scene,Wf,D,H,ops}=V3;const sc=scene.clone(true);const del=[];
+ const fab=noiseTex('fabric'),pla=noiseTex('plaster');const flc=MAT.floor[S.floor].c,flT=S.floor==='keramik'?noiseTex('tile'):S.floor==='karpet'||S.floor==='beton'?noiseTex('fabric'):noiseTex('plank',flc);flT.repeat.set(Wf/1.2,D/1.2);
+ sc.traverse(o=>{if(o.isLight||o.isSprite||o.type==='LineSegments'||o.userData.k==='plat'||o.userData.k==='stub')del.push(o);
+  if(o.isMesh){const m0=Array.isArray(o.material)?o.material[0]:o.material;const col=m0.color?m0.color.getHex():0xffffff;let mat;
+   if(o.userData.k==='floor')mat=new THREE.MeshStandardMaterial({color:S.floor==='keramik'||S.floor==='karpet'||S.floor==='beton'?flc:0xffffff,map:flT,roughness:.6,metalness:0});
+   else if(o.userData.k==='wall')mat=new THREE.MeshStandardMaterial({color:0xf3f1ec,map:pla,roughness:.95});
+   else if(m0.transparent)mat=new THREE.MeshStandardMaterial({color:0xcfe6f3,transparent:true,opacity:.25,roughness:.05,metalness:.1});
+   else if(Array.isArray(o.material))mat=o.material.map(mm=>new THREE.MeshStandardMaterial({color:mm.color?mm.color.getHex():0xffffff,map:mm.map||fab,roughness:.85}));
+   else mat=new THREE.MeshStandardMaterial({color:col,map:m0.map||fab,roughness:col===0xffffff?.7:.9,side:THREE.DoubleSide});
+   o.material=mat;o.castShadow=!m0.transparent&&o.userData.k!=='floor';o.receiveShadow=true}});
+ del.forEach(o=>o.parent&&o.parent.remove(o));
+ const ceil=new THREE.Mesh(new THREE.PlaneGeometry(Wf,D),new THREE.MeshStandardMaterial({color:0xfafafa,emissive:0x3a3836,roughness:.95,side:THREE.DoubleSide}));ceil.rotation.x=Math.PI/2;ceil.position.set(Wf/2,H,D/2);ceil.receiveShadow=true;if(view!=='top')sc.add(ceil);
+ sc.add(new THREE.HemisphereLight(0xfff6ea,0x9a9081,.7));
+ const nx=Math.max(1,R(Wf/1.6)),nz=Math.max(1,R(D/1.6));for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const sp=new THREE.SpotLight(0xffe0b5,.55,H*2.2,1.1,.85,1.5);sp.position.set((i+.5)*Wf/nx,H-.03,(j+.5)*D/nz);sp.target.position.set((i+.5)*Wf/nx,0,(j+.5)*D/nz);sc.add(sp);sc.add(sp.target);
+  const dl=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,.01,16),new THREE.MeshBasicMaterial({color:0xfff3d6}));dl.position.set((i+.5)*Wf/nx,H-.006,(j+.5)*D/nz);if(view!=='top')sc.add(dl)}
+ const win=ops.find(o=>o.t==='win')||{wall:'L',pos:D/2};const sun=new THREE.DirectionalLight(0xfff1d6,.9);const off={L:[-4,3.2,0],R:[4,3.2,0],F:[0,3.2,-4],B:[0,3.2,4]}[win.wall];const wp={L:[0,1.5,win.pos],R:[Wf,1.5,win.pos],F:[win.pos,1.5,0],B:[win.pos,1.5,D]}[win.wall];
+ sun.position.set(wp[0]+off[0],wp[1]+off[1],wp[2]+off[2]);sun.target.position.set(wp[0]-off[0]*.3,0,wp[2]-off[2]*.3);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);const sh=Math.max(Wf,D)+2;Object.assign(sun.shadow.camera,{left:-sh,right:sh,top:sh,bottom:-sh,near:.5,far:20});sun.shadow.bias=-.0005;sc.add(sun);sc.add(sun.target);
+ const fill=new THREE.DirectionalLight(0xffffff,.18);fill.position.set(Wf/2,H*2,D*2);sc.add(fill);
+ sc.background=new THREE.Color(0xeeeae4);
+ const cv=document.createElement('canvas');const r=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});r.setPixelRatio(1);r.setSize(W,Hpx,false);r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;r.outputEncoding=THREE.sRGBEncoding;r.toneMapping=THREE.ACESFilmicToneMapping;r.toneMappingExposure=1.05;
+ const cam=new THREE.PerspectiveCamera(view==='top'?35:58,W/Hpx,.05,100);
+ const back=Math.max(1.2,Wf*.55);if(view==='a'){cam.position.set(Wf*.62,1.5,D+back);cam.lookAt(Wf*.42,1.2,0);cam.near=back+.32}
+ else if(view==='b'){cam.position.set(Wf*.38,1.5,-back);cam.lookAt(Wf*.58,1.2,D);cam.near=back+.32}
+ else{const d=Math.hypot(Wf,D,H)*1.6;cam.position.set(Wf/2-d*.35,H+d*.75,-d*.45);cam.lookAt(Wf/2,H*.25,D/2)}
+ cam.updateProjectionMatrix();r.render(sc,cam);const url=cv.toDataURL('image/jpeg',.92);r.dispose();r.forceContextLoss();return url}
+async function makeRenders(btn){if(!V3)return;const box=document.getElementById('rbox');btn.disabled=true;const old=btn.textContent;btn.textContent=L('Membuat render…','Rendering…');await new Promise(r=>setTimeout(r,60));
+ const views=[['a',L('Dari belakang, menghadap dinding depan','From the rear, facing the front wall')],['b',L('Dari depan, menghadap dinding belakang','From the front, facing the rear wall')],['top',L('Tampak atas (tanpa plafon)','Overview (ceiling removed)')]];box.innerHTML='';
+ for(const [v,t] of views){try{const url=renderHQ(v);const d=document.createElement('div');d.style.margin='10px 0';d.innerHTML=`<img src="${url}" alt="" style="width:100%;border-radius:10px;display:block"><div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><small style="color:#5b6275">${t}</small><button class="btn ghost sm">${L('Download','Download')}</button></div>`;d.querySelector('button').onclick=async()=>{const b=await (await fetch(url)).blob();if(!(await saveFile(fname('jpg').replace('.jpg','-render-'+v+'.jpg'),b))){document.getElementById('mimg').src=url;document.getElementById('modal').classList.add('on')}};box.appendChild(d)}catch(e){console.error(e);box.innerHTML+=`<p class="note">Render: ${e.message}</p>`}await new Promise(r=>setTimeout(r,30))}
  btn.textContent=old;btn.disabled=false}
 function snap(){if(!V3)return;V3.draw();document.getElementById('mimg').src=V3.ren.domElement.toDataURL('image/png');document.getElementById('mtxt').textContent=L('Tekan lama pada gambar lalu pilih "Download gambar" untuk dikirim lewat WhatsApp.','Long-press the image and choose "Download image".');document.getElementById('modal').classList.add('on')}
 
@@ -774,7 +808,7 @@ function renderOut(){
  let h=`<section class="card"><div class="num">02 · ${L('Denah 3D','3D plan')}${S.name?' · '+S.name:''}</div><h2>${USE[S.use][lang]} · ${N(r.Wf,1)} × ${N(r.D,1)} × ${N(r.H,1)} m</h2>
  <p class="sub">${L('Model: ','Model: ')}<b>${PM[r.mk][lang]}</b> · ${L('Palet: ','Palette: ')}${PAL[S.pal][lang]} · ${L('Geser untuk memutar, cubit untuk zoom.','Drag to rotate, pinch to zoom.')}</p>
  <div id="v3wrap"><canvas id="v3"></canvas><div class="v3hint">${L('↻ geser untuk memutar','↻ drag to rotate')}</div></div>
- <div class="v3bar"><button class="btn ghost sm" data-v="home">3D</button><button class="btn ghost sm" data-v="top">${L('Atas','Top')}</button><button class="btn ghost sm" data-v="lbl">${L('Kode on/off','Codes')}</button><button class="btn sm" data-v="snap">${L('Download gambar 3D','Download 3D image')}</button></div><button class="btn" id="pdfBtn" style="margin-top:10px">${L('Download laporan PDF lengkap','Download full PDF report')}</button>
+ <div class="v3bar"><button class="btn ghost sm" data-v="home">3D</button><button class="btn ghost sm" data-v="top">${L('Atas','Top')}</button><button class="btn ghost sm" data-v="lbl">${L('Kode on/off','Codes')}</button><button class="btn sm" data-v="snap">${L('Download gambar 3D','Download 3D image')}</button></div><h3>${L('Render ruangan','Room renders')}</h3><p class="sub">${L('Gambar lebih nyata dari dalam ruangan: bayangan, lampu plafon, cahaya jendela, tekstur lantai & kain.','More realistic views from inside the room: shadows, downlights, window light, floor and fabric textures.')}</p><button class="btn ghost" id="renderBtn">${L('Buat render','Create renders')}</button><div id="rbox"></div><button class="btn" id="pdfBtn" style="margin-top:10px">${L('Download laporan PDF lengkap','Download full PDF report')}</button>
  <h3>${L('Pilih paket','Choose a package')}</h3><div class="pkgs">${pk('hemat')}${pk('std')}${pk('max')}</div>
  <div class="kpis"><div class="kpi ${m0/r.TT[2]>1.25?'bad':'good'}"><small>${L('Gema sekarang','Echo now')}</small><b>${N(m0,2)} s</b></div><div class="kpi"><small>Target</small><b>${N(r.TT[1],2)}–${N(r.TT[2],2)} s</b></div><div class="kpi ${ok1?'good':'bad'}"><small>${L('Setelah treatment','After treatment')}</small><b>${N(m1,2)} s</b></div><div class="kpi"><small>${L('Bass sekarang','Bass now')}</small><b>${N(r.T0[0],2)} s</b></div></div>
  <p class="note">${L(`Rekomendasi model untuk ${USE[S.use].id.toLowerCase()}: `,`Recommended for this room: `)}${rec.slice(0,4).map(k=>PM[k][lang]).join(', ')}.</p></section>`;
@@ -806,7 +840,7 @@ function renderOut(){
  document.querySelectorAll('.price').forEach(inp=>inp.oninput=()=>{PR[inp.dataset.k]=inp.value.replace(/\D/g,'');try{localStorage.setItem('pbcak_pr',JSON.stringify(PR))}catch(e){}totals()});totals();
  document.getElementById('copy').onclick=copySummary;
  document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{const v=b.dataset.v;if(!V3)return;if(v==='home')V3.home();if(v==='top')V3.set(Math.PI,.13);if(v==='lbl'){showLbl=!showLbl;V3.draw()}if(v==='snap')snapDL()});
- document.getElementById('pdfBtn').onclick=e=>pdfDL(e.currentTarget);
+ document.getElementById('pdfBtn').onclick=e=>pdfDL(e.currentTarget);document.getElementById('renderBtn').onclick=e=>makeRenders(e.currentTarget);
  [...DET.map(d=>d.ren),V3&&V3.ren].forEach(r=>{try{if(r){r.dispose();r.forceContextLoss()}}catch(e){}});V3=null;DET=[];try{init3D()}catch(e){console.error(e);const w=document.getElementById('v3wrap');if(w)w.innerHTML=`<p class="note" style="padding:16px">3D: ${e.message}</p>`}
 }
 function prow(k,name,n,u){return `<tr><td>${name}</td><td class="r">${N(n,0)} ${u}</td><td class="r"><input class="price" inputmode="numeric" data-k="${k}" data-n="${n}" value="${PR[k]?(+PR[k]).toLocaleString('id-ID'):''}" placeholder="0"></td><td class="r" id="t_${k.replace(/[^\w]/g,'_')}">–</td></tr>`}
