@@ -501,7 +501,7 @@ function specFor(k){const H=RES.H;const M=PM[k];
  if(k==='baffle')return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>120 × 60 × 5 cm</dd><dt>${L('Isi','Core')}</dt><dd>${L('Rockwool 5 cm 80 kg/m³, kain semua sisi','50 mm rockwool, fabric all round')}</dd><dt>${L('Gantung','Hang')}</dt><dd>${L('2 sling per baffle, jarak 60–90 cm','2 wires each, 60–90 cm apart')}</dd></dl>`;return ''}
 
 // ================= 3D =================
-let V3=null;
+let V3=null,DET=[];
 function init3D(){
  const cv=document.getElementById('v3');if(!cv)return;
  if(!window.THREE){document.getElementById('v3wrap').innerHTML=`<p class="note" style="padding:16px">${L('Tampilan 3D butuh koneksi internet. Denah 2D di bawah tetap lengkap.','The 3D view needs an internet connection.')}</p>`;return}
@@ -598,10 +598,11 @@ return g}
   if(u==='band'){fur(.6,.5,.35,.75,0,1.1,0xeeeeee);fur(.6,.5,.35,Wf-.75,0,1.1,0xeeeeee)}else chair(dx,dz-.9)}
  if(u==='rapat'){const tw=Math.min(1.2,Wf-1.6),tl=Math.min(3,D-2);fur(tw,.05,tl,Wf/2,.74,D/2);fur(.1,.74,tl*.6,Wf/2,0,D/2);for(let k=0;k<Math.max(1,Math.floor(tl/.8));k++){const z=D/2-tl/2+.4+k*.8;chair(Wf/2-tw/2-.35,z,-Math.PI/2);chair(Wf/2+tw/2+.35,z,Math.PI/2)}}
  if(u==='kafe'){for(let x=1.2;x<=Wf-1;x+=1.8)for(let z=1.2;z<=D-1;z+=1.8){cyl(.35,.03,x,.74,z);cyl(.04,.74,x,0,z);chair(x-.55,z,-Math.PI/2);chair(x+.55,z,Math.PI/2)}}
+ const MT=col=>new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:.55,side:THREE.DoubleSide,depthWrite:false});
  // detail 3D renders
  try{renderDetails()}catch(e){console.error(e)}
  function renderDetails(){const boxes=[...document.querySelectorAll('.d3[data-k]')];if(!boxes.length)return;
-  const cvs=document.createElement('canvas');const r2=new THREE.WebGLRenderer({canvas:cvs,antialias:true,preserveDrawingBuffer:true});r2.setPixelRatio(1);r2.setSize(720,540,false);
+
   const lblSpr=(t,sz)=>{const cn=document.createElement('canvas');cn.width=256;cn.height=96;const x=cn.getContext('2d');x.fillStyle='#ffffff';x.strokeStyle='#14182b';x.lineWidth=4;if(x.roundRect){x.beginPath();x.roundRect(6,10,244,76,14);x.fill();x.stroke()}else{x.fillRect(6,10,244,76)}x.fillStyle='#14182b';x.font='bold 46px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(t,128,50);const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cn),depthTest:false}));sp.scale.set(sz,sz*96/256,1);sp.renderOrder=10;return sp};
   const dimMat=new THREE.LineBasicMaterial({color:0xd93a3a});
   const dline=(sc,a,b,t,sz,off)=>{const A=new THREE.Vector3(...a),Bv=new THREE.Vector3(...b);sc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([A,Bv]),dimMat));
@@ -610,21 +611,29 @@ return g}
   boxes.forEach(el=>{const k=el.dataset.k;const sc=new THREE.Scene();sc.background=new THREE.Color(0xf4f5f8);sc.add(new THREE.HemisphereLight(0xffffff,0xc9cfdc,.7));const d1=new THREE.DirectionalLight(0xffffff,.55);d1.position.set(3,5,6);sc.add(d1);
    let obj,W,Hh,Dd,labels,ctr;
    if(PM[k]){const Mm=PM[k],h=Mm.h==='full'?Math.min(2.4,H-.3):Mm.h;const it={m:k,w:Mm.w,h,d:Mm.d,pos:1.3,alt:false};obj=panelObj(it,c);sc.add(obj);
-    const wall=new THREE.Mesh(new THREE.BoxGeometry(Mm.w+.5,h+.4,.04),M(0xe9ebf0));wall.position.set(0,h/2,-.03);sc.add(wall);
+    const wall=new THREE.Mesh(new THREE.BoxGeometry(Mm.w+.5,h+.4,.04),MT(0xe9ebf0));wall.position.set(0,h/2,-.03);sc.add(wall);
     const sz=Math.max(Mm.w,h)*.16,o=sz*.5;dline(sc,[-Mm.w/2,-o*.6,Mm.d+.02],[Mm.w/2,-o*.6,Mm.d+.02],cm(Mm.w)+' cm',sz,[0,-o*.8,0]);dline(sc,[Mm.w/2+o*.5,0,Mm.d+.02],[Mm.w/2+o*.5,h,Mm.d+.02],cm(h)+' cm',sz,[o*1.4,0,0]);dline(sc,[Mm.w/2+o*.2,h+o*.4,0],[Mm.w/2+o*.2,h+o*.4,Mm.d],L('tebal ','depth ')+cm(Mm.d)+' cm',sz,[o*1.2,o*.6,0]);
     W=Mm.w;Hh=h;Dd=Mm.d;ctr=new THREE.Vector3(0,h/2,Mm.d/2)}
    else if(TM[k]){const lg=TM[k].leg,h=H,it={m:k,corner:0,leg:k==='tube'||k==='gobo'||k==='membran'?.55:lg,h:k==='tube'?Math.min(1.5,H-.3):k==='gobo'?Math.min(1.8,H-.3):k==='membran'?Math.min(1.2,H-.6):h,arm:k==='tricorner'?1.2:0};
-    obj=trapObj(it);sc.add(obj);const wA=new THREE.Mesh(new THREE.BoxGeometry(1.4,h+.1,.03),M(0xe9ebf0));wA.position.set(.7,h/2,-.015);sc.add(wA);const wB=new THREE.Mesh(new THREE.BoxGeometry(.03,h+.1,1.4),M(0xe4e7ee));wB.position.set(-.015,h/2,.7);sc.add(wB);const fl2=new THREE.Mesh(new THREE.BoxGeometry(1.4,.02,1.4),M(0xd9dce4));fl2.position.set(.7,-.01,.7);sc.add(fl2);
+    obj=trapObj(it);sc.add(obj);const wA=new THREE.Mesh(new THREE.BoxGeometry(1.4,h+.1,.03),MT(0xe9ebf0));wA.position.set(.7,h/2,-.015);sc.add(wA);const wB=new THREE.Mesh(new THREE.BoxGeometry(.03,h+.1,1.4),MT(0xe4e7ee));wB.position.set(-.015,h/2,.7);sc.add(wB);const fl2=new THREE.Mesh(new THREE.BoxGeometry(1.4,.02,1.4),M(0xd9dce4));fl2.position.set(.7,-.01,.7);sc.add(fl2);
     const sz=h*.2,L1=it.leg;if(['chunk','tricorner','slatc','soffit','straddle','curve','curvslat'].includes(k)){dline(sc,[0,.02,L1+.08],[L1,.02,L1+.08],cm(L1)+' cm',sz,[0,0,sz*.9]);dline(sc,[L1+.08,.02,0],[L1+.08,.02,L1],cm(L1)+' cm',sz,[sz*.9,0,0])}
     else if(k==='tube')dline(sc,[.07,.02,.6],[.47,.02,.6],'Ø 40 cm',sz,[0,0,sz*.9]);
     dline(sc,[L1+.15,0,L1+.15],[L1+.15,it.h,L1+.15],cm(it.h)+' cm',sz,[sz*1.1,0,sz*1.1]);if(k==='tricorner')dline(sc,[L1,h+.08,0],[L1+it.arm,h+.08,0],L('lengan ','arm ')+cm(it.arm)+' cm',sz,[0,sz*.7,0]);W=1.4;Hh=h;Dd=1.4;ctr=new THREE.Vector3(.5,h/2,.5)}
    else{const it={m:k,w:1.2,d:k==='cloud'?1.2:.05,h:k==='cloud'?.1:.6};obj=new THREE.Group();const b=k==='cloud'?box(1.2,.1,1.2,c[0]):box(1.2,.6,.05,c[0]);b.position.y=k==='cloud'?.05:.3;obj.add(b);sc.add(obj);
     const sz=.18;if(k==='cloud'){dline(sc,[-.6,-.08,.7],[.6,-.08,.7],'120 cm',sz,[0,-.12,0]);dline(sc,[.7,-.08,-.6],[.7,-.08,.6],'120 cm',sz,[.15,-.1,0]);dline(sc,[.75,0,.6],[.75,.1,.6],'10 cm',sz,[.25,.05,0])}else{dline(sc,[-.6,-.08,.1],[.6,-.08,.1],'120 cm',sz,[0,-.12,0]);dline(sc,[.7,0,.05],[.7,.6,.05],'60 cm',sz,[.2,0,0]);dline(sc,[.65,.7,-.025],[.65,.7,.025],'5 cm',sz,[.2,.1,0])}
     W=1.4;Hh=.6;Dd=1.4;ctr=new THREE.Vector3(0,.15,0)}
-   const cam2=new THREE.PerspectiveCamera(30,720/540,.01,50);const R1=Math.hypot(W,Hh,Dd)*.5/Math.tan(15*Math.PI/180)*1.25;const dir=TM[k]?new THREE.Vector3(1.1,.75,1.1).normalize():new THREE.Vector3(.75,.45,1.15).normalize();
-   cam2.position.copy(ctr.clone().add(dir.multiplyScalar(R1)));cam2.lookAt(ctr);r2.render(sc,cam2);
-   el.innerHTML=`<img alt="" style="width:100%;display:block;border-radius:10px" src="${cvs.toDataURL('image/png')}">`});
-  r2.dispose()}
+   const R1=Math.hypot(W,Hh,Dd)*.5/Math.tan(15*Math.PI/180)*1.25;const dir=TM[k]?new THREE.Vector3(1.1,.75,1.1).normalize():new THREE.Vector3(.75,.45,1.15).normalize();
+   el.innerHTML='<canvas style="width:100%;display:block;touch-action:none"></canvas><div class="v3hint">'+L('↻ geser untuk memutar','↻ drag to rotate')+'</div>';el.style.position='relative';
+   const cv2=el.querySelector('canvas');const r2=new THREE.WebGLRenderer({canvas:cv2,antialias:true,preserveDrawingBuffer:true});r2.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+   const cam2=new THREE.PerspectiveCamera(30,4/3,.01,50);let rad=R1,th2=Math.atan2(dir.x,dir.z),ph2=Math.acos(dir.y);
+   const sz2=()=>{const w=el.clientWidth||600,h=Math.round(w*.75);r2.setSize(w,h,false);cv2.style.height=h+'px';cam2.aspect=w/h;cam2.updateProjectionMatrix()};
+   const dr2=()=>{const hz=rad*Math.sin(ph2);cam2.position.set(ctr.x+hz*Math.sin(th2),ctr.y+rad*Math.cos(ph2),ctr.z+hz*Math.cos(th2));cam2.lookAt(ctr);r2.render(sc,cam2)};
+   sz2();dr2();const pts=new Map();let pin=0;
+   cv2.onpointerdown=e=>{cv2.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY})};
+   cv2.onpointermove=e=>{if(!pts.has(e.pointerId))return;const q=pts.get(e.pointerId);if(pts.size===1){th2-=(e.clientX-q.x)*.01;ph2=clamp(ph2-(e.clientY-q.y)*.008,.1,Math.PI-.1);dr2()}q.x=e.clientX;q.y=e.clientY;if(pts.size===2){const [a,b]=[...pts.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(pin){rad=clamp(rad*pin/d,R1*.3,R1*2.5);dr2()}pin=d}};
+   const up2=e=>{pts.delete(e.pointerId);if(pts.size<2)pin=0};cv2.onpointerup=up2;cv2.onpointercancel=up2;
+   cv2.onwheel=e=>{e.preventDefault();rad=clamp(rad*(1+Math.sign(e.deltaY)*.08),R1*.3,R1*2.5);dr2()};
+   DET.push({sz:sz2,dr:dr2,ren:r2})});}
  // camera
  const diag=Math.hypot(Wf,D,H),R0=diag*.5/Math.tan(16*Math.PI/180)*1.15;const ctr=new THREE.Vector3(Wf/2,H*.38,D/2);let rad=R0,th=Math.PI+.62,ph=.92;
  function size(){const w=cv.parentElement.clientWidth,h=Math.round(w*.82);ren.setSize(w,h,false);cv.style.height=h+'px';cam.aspect=w/h;cam.updateProjectionMatrix()}
@@ -636,7 +645,7 @@ return g}
   p.x=e.clientX;p.y=e.clientY;if(pts.size===2){const [a,b]=[...pts.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch){rad=clamp(rad*pinch/d,R0*.35,R0*2.2);draw()}pinch=d}};
  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=0};cv.onpointerup=up;cv.onpointercancel=up;
  cv.onwheel=e=>{e.preventDefault();rad=clamp(rad*(1+Math.sign(e.deltaY)*.08),R0*.35,R0*2.2);draw()};
- window.onresize=()=>{size();draw()};
+ window.onresize=()=>{size();draw();DET.forEach(d=>{d.sz();d.dr()})};
  V3={draw,set:(t,p)=>{th=t;ph=p;draw()},ren,home:()=>{rad=R0;th=Math.PI+.62;ph=.92;draw()}};
 }
 let DLP=null;function getDL(){if(!DLP)DLP=(window.claude&&window.claude.use)?window.claude.use('downloads').catch(()=>null):Promise.resolve(null);return DLP}
@@ -647,7 +656,7 @@ async function snapDL(){if(!V3)return;V3.draw();const blob=await new Promise(r=>
 function loadJS(src){return new Promise((ok,no)=>{if(document.querySelector(`script[src="${src}"]`)){ok();return}const sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)})}
 async function pdfDL(btn){const old=btn.textContent;btn.textContent=L('Menyiapkan PDF…','Preparing PDF…');btn.disabled=true;
  try{await loadJS('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');await loadJS('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-  if(V3)V3.draw();const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});const PW=210,PH=297,M=10,CW=PW-2*M;let y=M;
+  if(V3)V3.draw();DET.forEach(d=>d.dr());const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});const PW=210,PH=297,M=10,CW=PW-2*M;let y=M;
   const hdr=await html2canvas(document.querySelector('header'),{scale:2,backgroundColor:'#0d2259',useCORS:true});const hh=CW*hdr.height/hdr.width;doc.addImage(hdr.toDataURL('image/jpeg',.9),'JPEG',M,y,CW,hh);y+=hh+4;
   const dr=document.getElementById('draw'),oldDraw=dr.innerHTML;dr.innerHTML=planSVG('sol')+['F','B','L','R'].map(w=>`<p style="font-weight:700;margin:10px 0 0">${wallName(w)}</p>`+elevSVG(w)).join('');
   const cards=[...document.querySelectorAll('#out .card')];
@@ -733,7 +742,7 @@ function renderOut(){
  document.getElementById('copy').onclick=copySummary;
  document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{const v=b.dataset.v;if(!V3)return;if(v==='home')V3.home();if(v==='top')V3.set(Math.PI,.13);if(v==='lbl'){showLbl=!showLbl;V3.draw()}if(v==='snap')snapDL()});
  document.getElementById('pdfBtn').onclick=e=>pdfDL(e.currentTarget);
- V3=null;try{init3D()}catch(e){console.error(e);const w=document.getElementById('v3wrap');if(w)w.innerHTML=`<p class="note" style="padding:16px">3D: ${e.message}</p>`}
+ [...DET.map(d=>d.ren),V3&&V3.ren].forEach(r=>{try{if(r){r.dispose();r.forceContextLoss()}}catch(e){}});V3=null;DET=[];try{init3D()}catch(e){console.error(e);const w=document.getElementById('v3wrap');if(w)w.innerHTML=`<p class="note" style="padding:16px">3D: ${e.message}</p>`}
 }
 function prow(k,name,n,u){return `<tr><td>${name}</td><td class="r">${N(n,0)} ${u}</td><td class="r"><input class="price" inputmode="numeric" data-k="${k}" data-n="${n}" value="${PR[k]?(+PR[k]).toLocaleString('id-ID'):''}" placeholder="0"></td><td class="r" id="t_${k.replace(/[^\w]/g,'_')}">–</td></tr>`}
 function totals(){let g=0;document.querySelectorAll('.price').forEach(inp=>{const p=+(PR[inp.dataset.k]||0),t=p*(+inp.dataset.n);g+=t;const el=document.getElementById('t_'+inp.dataset.k.replace(/[^\w]/g,'_'));if(el)el.textContent=t?'Rp '+t.toLocaleString('id-ID'):'–';if(document.activeElement!==inp&&p)inp.value=p.toLocaleString('id-ID')});document.getElementById('gt').textContent=g?'Rp '+g.toLocaleString('id-ID'):'–'}
