@@ -136,7 +136,7 @@ const PM={
 };
 const TM={
  chunk:{id:'Superchunk segitiga',en:'Superchunk',a:[.95,1,1,1,1,.95],leg:.6},
- tri:{id:'Tri-corner',en:'Tri-corner',a:[.95,1,1,1,1,.95],leg:.45},
+ tricorner:{id:'Tri-corner',en:'Tri-corner',a:[.95,1,1,1,1,.95],leg:.45},
  straddle:{id:'Panel miring',en:'Corner straddle',a:[.85,1,1,1,1,.95],leg:.45},
  curve:{id:'Lengkung seperempat',en:'Quarter-round',a:[.8,1,1,1,.95,.9],leg:.6},
  tube:{id:'Tabung bulat',en:'Tube trap',a:[.6,.9,1,1,.95,.9],leg:.5},
@@ -169,6 +169,7 @@ const def={name:'',D:5,W:4,H:3,use:'kamar',floor:'spc',wall:'tembok',ceil:'gypsu
  ops:[{t:'win',wall:'L',pos:1.4,w:1.0,h:1.2,sill:.9},{t:'win',wall:'L',pos:3.4,w:1.0,h:1.2,sill:.9},{t:'door',wall:'F',pos:.75,w:.9,h:2.1,sill:0}],
  cx:{echo:true,bass:false,flutter:false},mT:'chunk',mP:'auto',mC:'cloud',pal:'pasir',pkg:'std'};
 let S=JSON.parse(JSON.stringify(def));try{const s=JSON.parse(localStorage.getItem('pbcak3')||'null');if(s)S={...S,...s}}catch(e){}
+if(!TM[S.mT])S.mT='chunk';if(S.mP!=='auto'&&!PM[S.mP])S.mP='auto';if(!PAL[S.pal])S.pal='pasir';if(!CM[S.mC])S.mC='cloud';
 let PR={};try{PR=JSON.parse(localStorage.getItem('pbcak_pr')||'{}')}catch(e){}
 let RES=null,ALL=null,tab='plan',showLbl=true;
 const pcol=()=>PAL[S.pal].c;
@@ -202,7 +203,7 @@ function paint(shape,x,y,w,h,c,sw=1){const [c0,c1,c2]=c;const st=`stroke="#00000
 function iconPanel(k){return `<svg viewBox="0 0 100 72">${paint(k,PM[k].w>=1?18:PM[k].h==='full'||PM[k].h>=1.5?34:26,4,PM[k].w>=1?64:PM[k].h==='full'||PM[k].h>=1.5?32:48,64,pcol(),1)}</svg>`}
 const ITRAP={
  chunk:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 66V26l34 40z" fill="${c[2]}"/>`,
- tri:c=>`<path d="M14 6v60h74M14 6h74" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M14 6h12v60H14z" fill="${c[2]}"/><path d="M26 6h54l-6 8H26z" fill="${c[2]}"/>`,
+ tricorner:c=>`<path d="M14 6v60h74M14 6h74" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M14 6h12v60H14z" fill="${c[2]}"/><path d="M26 6h54l-6 8H26z" fill="${c[2]}"/>`,
  straddle:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 30l26 36" stroke="${c[2]}" stroke-width="9"/>`,
  curve:c=>`<path d="M20 8v58h68" fill="none" stroke="#9aa1b5" stroke-width="3"/><path d="M20 22a44 44 0 0 1 44 44" fill="none" stroke="${c[2]}" stroke-width="9"/>`,
  tube:c=>`<ellipse cx="50" cy="12" rx="15" ry="5" fill="${c[1]}"/><path d="M35 12v50a15 5 0 0 0 30 0V12" fill="${c[2]}"/>`,
@@ -225,7 +226,7 @@ const MDESC={
  head:()=>L('selebar kasur + 40, tinggi 110','bed width + 40, 110 tall'),
  chunk:()=>L('60×60, lantai–plafon','60×60, floor–ceiling'),tri_t:()=>'',
  cloud:()=>L('120×120×10, gantung 20 cm','120×120×10, hung 20 cm'),baffle:()=>L('120×60×5, berjajar','120×60×5 in rows'),none:()=>L('tidak dipasang','none')};
-const TDESC={chunk:()=>L('60×60 lantai–plafon. Bass paling banyak.','60×60 floor–ceiling. Most bass.'),tri:()=>L('45×45 + lengan di plafon','45×45 + ceiling arms'),straddle:()=>L('10 cm + rongga, hemat','10 cm + cavity, economical'),curve:()=>L('R 60, rapi untuk hunian','R 60, tidy for homes'),tube:()=>L('Ø40 × 150, bisa dipindah','Ø40 × 150, movable'),slatc:()=>L('segitiga 60, muka bilah kayu','60 triangle, timber slat face'),soffit:()=>L('sudut 45 + soffit penuh dinding depan & belakang','45 corner + full soffits'),membran:()=>L('kotak 50×50, untuk bass sangat rendah','50×50 box, very low bass'),gobo:()=>L('60×180×15 berkaki, fleksibel','60×180×15 on feet'),curvslat:()=>L('R 60, bilah kayu melengkung','R 60, curved slats')};
+const TDESC={chunk:()=>L('60×60 lantai–plafon. Bass paling banyak.','60×60 floor–ceiling. Most bass.'),tricorner:()=>L('45×45 + lengan di plafon','45×45 + ceiling arms'),straddle:()=>L('10 cm + rongga, hemat','10 cm + cavity, economical'),curve:()=>L('R 60, rapi untuk hunian','R 60, tidy for homes'),tube:()=>L('Ø40 × 150, bisa dipindah','Ø40 × 150, movable'),slatc:()=>L('segitiga 60, muka bilah kayu','60 triangle, timber slat face'),soffit:()=>L('sudut 45 + soffit penuh dinding depan & belakang','45 corner + full soffits'),membran:()=>L('kotak 50×50, untuk bass sangat rendah','50×50 box, very low bass'),gobo:()=>L('60×180×15 berkaki, fleksibel','60×180×15 on feet'),curvslat:()=>L('R 60, bilah kayu melengkung','R 60, curved slats')};
 
 // ================= INPUT =================
 function opt(obj,sel){return Object.entries(obj).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v[lang]}</option>`).join('')}
@@ -333,7 +334,7 @@ function analyse(pkg){
  if(pkg==='hemat'&&wantTraps.length>2&&!S.cx.bass&&kind!=='listen'&&kind!=='live')wantTraps=wantTraps.slice(0,2);
  const armLen=Math.min(1.2,Wf/2-.5);
  wantTraps.forEach(c=>{if(cornerBlocked(c)){notes.push(L(`Sudut ${cornerName(c)} terpakai pintu, jadi bass trap di sudut itu ditiadakan.`,`The ${cornerName(c)} corner is taken by a door, so no trap there.`));return}
-  add({t:'trap',m:S.mT,corner:c,leg:tleg,h:S.mT==='tube'?Math.min(1.5,H-.3):S.mT==='gobo'?Math.min(1.8,H-.3):S.mT==='membran'?Math.min(1.2,H-.6):H,arm:S.mT==='tri'?armLen:0})});
+  add({t:'trap',m:S.mT,corner:c,leg:tleg,h:S.mT==='tube'?Math.min(1.5,H-.3):S.mT==='gobo'?Math.min(1.8,H-.3):S.mT==='membran'?Math.min(1.2,H-.6):H,arm:S.mT==='tricorner'?armLen:0})});
  // ---- furniture & people ----
  let spk=[],lis=null,ppl=[];const earS=1.15,earT=1.2;
  const freeSeg=(wall,w)=>{const ls=len[wall],m=edge()+.05;for(let p=ls/2;p>=w/2+m;p-=.1)for(const q of [p,ls-p]){if(q-w/2<m||q+w/2>ls-m)continue;if(!ops.some(o=>o.wall===wall&&Math.abs(o.pos-q)<(o.w+w)/2+.05))return q}return null};
@@ -369,7 +370,7 @@ function analyse(pkg){
   items.forEach(it=>{let a,face,cov=0;
    if(it.t==='panel'||it.t==='diff'){const M=PM[it.m];a=M.a;face=it.w*it.h*M.af;cov=it.w*it.h*Math.min(1,M.af)}
    else if(it.t==='trap'){a=TM[it.m].a;const h=it.h,m=it.m;
-    if(m==='chunk'||m==='slatc'){face=it.leg*Math.SQRT2*h;cov=2*it.leg*h}else if(m==='tri'){face=it.leg*Math.SQRT2*(h+2*it.arm);cov=2*it.leg*h}
+    if(m==='chunk'||m==='slatc'){face=it.leg*Math.SQRT2*h;cov=2*it.leg*h}else if(m==='tricorner'){face=it.leg*Math.SQRT2*(h+2*it.arm);cov=2*it.leg*h}
     else if(m==='soffit'){const sl=Wf-2*it.leg;face=it.leg*Math.SQRT2*(h+(it.corner<2?sl/2:sl/2));cov=2*it.leg*h}
     else if(m==='straddle'){face=.6*h;cov=.84*h}else if(m==='curve'||m==='curvslat'){face=Math.PI/2*.6*h;cov=1.2*h}
     else if(m==='tube'){face=Math.PI*.2*h*1.6;cov=0}else if(m==='gobo'){face=.6*h*1.6;cov=0}else{face=.5*h*2;cov=.5*h*2}}
@@ -430,7 +431,7 @@ function planSVG(mode){
  if(mode==='sol'){
   items.forEach(it=>{const col=itemCol(it);
    if(it.t==='trap'){const lg=it.leg*s,cc=it.corner,sx=cc%2?-1:1,sy=cc<2?1:-1,x0=cc%2?W:0,y0=cc<2?0:Hh;
-    if(['chunk','tri','slatc','soffit'].includes(it.m))g+=`<polygon points="${x0},${y0} ${x0+sx*lg},${y0} ${x0},${y0+sy*lg}" fill="${col}"/>`;
+    if(['chunk','tricorner','slatc','soffit'].includes(it.m))g+=`<polygon points="${x0},${y0} ${x0+sx*lg},${y0} ${x0},${y0+sy*lg}" fill="${col}"/>`;
     else if(it.m==='straddle')g+=`<line x1="${x0+sx*lg}" y1="${y0}" x2="${x0}" y2="${y0+sy*lg}" stroke="${col}" stroke-width="${.1*s}"/>`;
     else if(it.m==='tube')g+=`<circle cx="${x0+sx*.27*s}" cy="${y0+sy*.27*s}" r="${.2*s}" fill="${col}"/>`;
     else if(it.m==='gobo'||it.m==='membran')g+=`<line x1="${x0+sx*lg}" y1="${y0+sy*.05*s}" x2="${x0+sx*.05*s}" y2="${y0+sy*lg}" stroke="${col}" stroke-width="${(it.m==='gobo'?.15:.25)*s}"/>`;
@@ -457,7 +458,7 @@ function elevSVG(wall){
  items.filter(i=>i.t==='trap').forEach(it=>{const on={L:[0,2],R:[1,3],F:[0,1],B:[2,3]}[wall];if(!on.includes(it.corner))return;
   const atLeft=(wall==='L'&&it.corner===0)||(wall==='R'&&it.corner===1)||(wall==='F'&&it.corner===0)||(wall==='B'&&it.corner===2);
   const lw=it.leg*s,x=atLeft?0:W-lw,y=Hh-it.h*s-(it.m==='membran'?.3*s:0);g+=`<rect x="${x}" y="${y}" width="${lw}" height="${it.h*s}" fill="${c[2]}" fill-opacity=".9"/>`+txt(x+lw/2,y+it.h*s/2,it.code,fs*.7,'#fff','middle',700);
-  if((it.m==='tri'&&it.arm>0)||it.m==='soffit'){const aw=it.m==='soffit'?(W-2*lw)/2:it.arm*s,ax=atLeft?lw:W-lw-aw;g+=`<rect x="${ax}" y="0" width="${aw}" height="${it.leg*s}" fill="${c[2]}" fill-opacity=".75"/>`}});
+  if((it.m==='tricorner'&&it.arm>0)||it.m==='soffit'){const aw=it.m==='soffit'?(W-2*lw)/2:it.arm*s,ax=atLeft?lw:W-lw-aw;g+=`<rect x="${ax}" y="0" width="${aw}" height="${it.leg*s}" fill="${c[2]}" fill-opacity=".75"/>`}});
  items.filter(i=>i.wall===wall&&i.t!=='trap'&&i.t!=='ceil').forEach((it,i)=>{const x=(it.pos-it.w/2)*s,y=Hh-(it.y0+it.h)*s;g+=paint(it.m,x,y,it.w*s,it.h*s,it.alt?[c[1],c[0],c[2]]:c,th*.15)+txt(x+it.w*s/2,y-fs*.3,it.code,fs*.7,C2.blue,'middle',700)});
  g+=`<line x1="0" y1="${Hh-120}" x2="${W}" y2="${Hh-120}" stroke="${C2.amber}" stroke-width="${th*.35}" stroke-dasharray="${th*1.5} ${th}"/>`+txt(W-fs*.3,Hh-120-fs*.35,L('tinggi telinga 120 cm','ear height 120 cm'),fs*.6,'#8a6500','end',600);
  return g+'</svg>';
@@ -480,10 +481,10 @@ function detailSVG(k){CALL=[];CLY=-99;const c=pcol();
   return `<svg viewBox="0 0 660 380"><g transform="translate(40,30)">${txt(100,0,L('TAMPAK DEPAN','FRONT VIEW'),15,C2.mut,'middle',700)}${paint(k,100-w/2,20,w,hh,c,1.5)}${dimH(100-w/2,100+w/2,hh+50,cm(M.w)+' cm')}${dimV(100-w/2-16,20,20+hh,cm(h)+' cm')}</g><g transform="translate(300,30)">${sectSVG(M.sect,'h'+k)}</g></svg>`}
  return trapDetail(k)}
 function trapDetail(k){const H=RES.H,c=pcol(),tc=c[2];const lg=(TM[k]||{}).leg||.6,sc=330;let g='<svg viewBox="0 0 660 360"><g transform="translate(40,40)">'+txt(120,-14,L('POTONGAN DARI ATAS','PLAN SECTION'),15,C2.mut,'middle',700)+`<rect x="0" y="0" width="22" height="260" fill="${WALLC}"/><rect x="0" y="0" width="260" height="22" fill="${WALLC}"/>`;const L0=22,P=lg*sc;
- if(['chunk','tri','slatc','soffit'].includes(k)){g+=`<polygon points="${L0},${L0} ${L0+P},${L0} ${L0},${L0+P}" fill="${RW}"/>`+[1,2,3,4,5,6].map(i=>`<line x1="${L0}" y1="${L0+i*P/7}" x2="${L0+P-i*P/7}" y2="${L0}" stroke="${RWL}" stroke-width="1.2"/>`).join('')+`<line x1="${L0+P}" y1="${L0}" x2="${L0}" y2="${L0+P}" stroke="${tc}" stroke-width="6"/>`;
+ if(['chunk','tricorner','slatc','soffit'].includes(k)){g+=`<polygon points="${L0},${L0} ${L0+P},${L0} ${L0},${L0+P}" fill="${RW}"/>`+[1,2,3,4,5,6].map(i=>`<line x1="${L0}" y1="${L0+i*P/7}" x2="${L0+P-i*P/7}" y2="${L0}" stroke="${RWL}" stroke-width="1.2"/>`).join('')+`<line x1="${L0+P}" y1="${L0}" x2="${L0}" y2="${L0+P}" stroke="${tc}" stroke-width="6"/>`;
   if(k==='slatc')for(let i=1;i<8;i++){const t=i/8;g+=`<rect x="${L0+P*t-6}" y="${L0+P*(1-t)-6}" width="12" height="12" fill="${c[1]}" transform="rotate(45 ${L0+P*t} ${L0+P*(1-t)})"/>`}
   g+=dimH(L0,L0+P,250,cm(lg)+' cm')+callout(L0+P*.25,L0+P*.25,300,40,L(`Rockwool 40–60 kg/m³ dipotong segitiga ${cm(lg)}×${cm(lg)} cm, ditumpuk penuh`,`40–60 kg/m³ rockwool triangles, stacked solid`))+callout(L0+P*.55,L0+P*.45,300,80,k==='slatc'?L('Muka bilah kayu 4×2 cm, celah 2 cm, kain hitam di belakang','40×20 slats, 20 mm gaps, black fabric behind'):L('Kain akustik di sisi miring + lis kayu tiap ±60 cm','Acoustic fabric on the face + battens every ~60 cm'));
-  if(k==='tri'||k==='soffit')g+=callout(L0+5,L0+5,300,120,k==='tri'?L('Lengan horizontal segitiga 45×45 sepanjang ±120 cm di pertemuan dinding–plafon','45×45 arms ~120 cm along wall–ceiling'):L('Soffit segitiga 45×45 menerus sepanjang dinding depan & belakang','Continuous 45×45 soffit along front & rear walls'))}
+  if(k==='tricorner'||k==='soffit')g+=callout(L0+5,L0+5,300,120,k==='tricorner'?L('Lengan horizontal segitiga 45×45 sepanjang ±120 cm di pertemuan dinding–plafon','45×45 arms ~120 cm along wall–ceiling'):L('Soffit segitiga 45×45 menerus sepanjang dinding depan & belakang','Continuous 45×45 soffit along front & rear walls'))}
  else if(k==='straddle'){const a=.42*sc;g+=`<polygon points="${L0+a},${L0} ${L0},${L0+a} ${L0},${L0+a+30} ${L0+a+30},${L0}" fill="${RW}" stroke="${WD}" stroke-width="3"/><line x1="${L0+a+30}" y1="${L0}" x2="${L0}" y2="${L0+a+30}" stroke="${tc}" stroke-width="5"/>`+callout(L0+a/2+12,L0+a/2+12,300,40,L('Rockwool 10 cm 60–80 kg/m³ dalam rangka 2×10','100 mm rockwool 60–80 kg/m³'))+callout(L0+a/3,L0+a/3,300,80,L('Rongga segitiga di belakang (boleh diisi sisa rockwool)','Triangle cavity behind'))+callout(L0+a/2+22,L0+a/2+22,300,120,L('Kain akustik, lebar muka 60 cm','Fabric face, 60 cm wide'))}
  else if(k==='curve'||k==='curvslat'){const r=P;g+=`<path d="M${L0+r} ${L0}A${r} ${r} 0 0 1 ${L0} ${L0+r}" fill="none" stroke="${k==='curve'?RW:c[1]}" stroke-width="30" ${k==='curvslat'?'stroke-dasharray="12 6"':''}/><path d="M${L0+r+16} ${L0}A${r+16} ${r+16} 0 0 1 ${L0} ${L0+r+16}" fill="none" stroke="${tc}" stroke-width="4"/>`+dimH(L0,L0+r,250,'R '+cm(lg)+' cm')+callout(L0+r*.7,L0+r*.7,300,40,k==='curve'?L('Rockwool 10 cm 40–60 kg/m³ mengikuti lengkung','100 mm rockwool, curved'):L('Bilah kayu melengkung 3×2 cm, celah 1,5 cm','Curved 30×20 slats, 15 mm gaps'))+callout(L0+r*.55,L0+r*.55,300,80,L('Rusuk multiplex 18 mm seperempat lingkaran tiap 60 cm','18 mm ply quarter-ribs every 60 cm'))+callout(L0+r*.25,L0+r*.25,300,120,L('Rongga udara di belakang','Air cavity behind'))}
  else if(k==='tube'){g+=`<circle cx="${L0+.27*sc}" cy="${L0+.27*sc}" r="${.2*sc}" fill="${RW}" stroke="${tc}" stroke-width="6"/><circle cx="${L0+.27*sc}" cy="${L0+.27*sc}" r="${.1*sc}" fill="#fff" stroke="${RWL}"/>`+dimH(L0+.07*sc,L0+.47*sc,250,'Ø 40 cm')+callout(L0+.27*sc+.15*sc,L0+.27*sc,300,40,L('Tabung rockwool tebal 10 cm (lilit papan 40–60 kg/m³)','100 mm wool cylinder'))+callout(L0+.27*sc,L0+.27*sc,300,80,L('Rongga tengah Ø20 cm, tutup atas multiplex','Ø20 hollow core, ply cap'))+callout(L0+.27*sc-.2*sc,L0+.27*sc,300,120,L(`Kain akustik, tinggi ${cm(Math.min(1.5,H-.3))} cm, bisa dipindah`,`Fabric wrap, ${cm(Math.min(1.5,H-.3))} cm tall, movable`))}
@@ -494,7 +495,7 @@ function specFor(k){const H=RES.H;const M=PM[k];
  if(M){const h=M.h==='full'?Math.min(2.4,H-.3):M.h;const core={fab10:L('Rockwool papan 10 cm (2×5 cm), 60 kg/m³','100 mm rockwool board, 60 kg/m³'),fab5:L('Rockwool / glasswool papan 5 cm, 60–80 kg/m³','50 mm rockwool / glasswool board, 60–80 kg/m³'),wood:L('Kain/felt hitam + rockwool 5 cm 60 kg/m³ + rongga 5 cm','Black felt + 50 mm rockwool + 50 mm gap'),perf:L('Rockwool 5 cm 60 kg/m³ + rongga 5 cm','50 mm rockwool + 50 mm gap'),wave:L('Rockwool 5 cm 60 kg/m³, rongga 6–20 cm','50 mm rockwool, 6–20 cm cavity'),diff:L('Balok kayu solid (tidak ada isi)','Solid timber blocks')}[M.sect];
   const cover={fab10:L('Kain akustik tembus udara warna ','Breathable fabric, colour ')+PAL[S.pal][lang],fab5:L('Kain akustik / felt PET warna ','Acoustic fabric / PET felt, colour ')+PAL[S.pal][lang],wood:L('Bilah kayu / MDF veneer, finishing natural / cat warna ','Timber / veneered MDF slats, natural or ')+PAL[S.pal][lang],perf:L('Multiplex/MDF berlubang, veneer kayu atau HPL','Perforated ply/MDF, veneer or HPL'),wave:L('Kain akustik + lis tepi, opsi LED strip','Fabric + edge trim, optional LED'),diff:L('Kayu jati belanda / meranti, cat atau natural','Pine / meranti, natural or painted')}[M.sect];
   return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>${cm(M.w)} × ${cm(h)} cm</dd><dt>${L('Tebal','Depth')}</dt><dd>${cm(M.d)} cm</dd><dt>${L('Isi','Core')}</dt><dd>${core}</dd><dt>${L('Muka / penutup','Face')}</dt><dd>${cover}</dd><dt>${L('Pasang','Mount')}</dt><dd>${M.y==='full'?L('Lantai sampai ±15 cm di bawah plafon, disekrup ke reng','Floor to ~15 cm below ceiling, screwed to battens'):M.y==='bed'?L('Di atas kasur, bawah panel 50 cm dari lantai','Above the bed, bottom at 50 cm'):L('Tengah panel setinggi telinga, pakai Z-clip','Centre at ear height on Z-clips')}</dd></dl>`}
- const T={chunk:L(`segitiga 60×60, tinggi ${cm(H)} cm`,`60×60 triangle, ${cm(H)} cm`),tri:L(`45×45 × ${cm(H)} cm + lengan 120 cm`,`45×45 × ${cm(H)} + 120 cm arms`),straddle:L(`muka 60 × ${cm(H)} cm, tebal 10`,`60 × ${cm(H)} face, 10 cm`),curve:L(`R 60 × ${cm(H)} cm`,`R 60 × ${cm(H)} cm`),tube:L(`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`,`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`),slatc:L(`segitiga 60×60 × ${cm(H)} cm, muka bilah kayu`,`60×60 × ${cm(H)}, slat face`),soffit:L('sudut 45×45 + soffit menerus','45×45 corners + continuous soffit'),membran:'50 × 50 × 25 cm',gobo:'60 × 180 × 15 cm',curvslat:L(`R 60 × ${cm(H)} cm, bilah kayu`,`R 60 × ${cm(H)}, slats`)}[k];
+ const T={chunk:L(`segitiga 60×60, tinggi ${cm(H)} cm`,`60×60 triangle, ${cm(H)} cm`),tricorner:L(`45×45 × ${cm(H)} cm + lengan 120 cm`,`45×45 × ${cm(H)} + 120 cm arms`),straddle:L(`muka 60 × ${cm(H)} cm, tebal 10`,`60 × ${cm(H)} face, 10 cm`),curve:L(`R 60 × ${cm(H)} cm`,`R 60 × ${cm(H)} cm`),tube:L(`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`,`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`),slatc:L(`segitiga 60×60 × ${cm(H)} cm, muka bilah kayu`,`60×60 × ${cm(H)}, slat face`),soffit:L('sudut 45×45 + soffit menerus','45×45 corners + continuous soffit'),membran:'50 × 50 × 25 cm',gobo:'60 × 180 × 15 cm',curvslat:L(`R 60 × ${cm(H)} cm, bilah kayu`,`R 60 × ${cm(H)}, slats`)}[k];
  if(T)return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>${T}</dd><dt>${L('Catatan','Note')}</dt><dd>${L('Bass trap tebal pakai rockwool densitas rendah 40–60 kg/m³; yang terlalu padat justru kurang menyerap bass.','Thick traps use low-density 40–60 kg/m³ wool; very dense wool absorbs less bass.')}</dd></dl>`;
  if(k==='cloud')return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>120 × 120 × 10 cm</dd><dt>${L('Isi','Core')}</dt><dd>${L('Rockwool 10 cm 60 kg/m³, rangka kayu 2×10','100 mm rockwool, 20×100 frame')}</dd><dt>${L('Gantung','Hang')}</dt><dd>${L('4 sling baja 1,5 mm, 20 cm di bawah plafon','4 × 1.5 mm wires, 20 cm drop')}</dd></dl>`;
  if(k==='baffle')return `<dl class="spec"><dt>${L('Ukuran','Size')}</dt><dd>120 × 60 × 5 cm</dd><dt>${L('Isi','Core')}</dt><dd>${L('Rockwool 5 cm 80 kg/m³, kain semua sisi','50 mm rockwool, fabric all round')}</dd><dt>${L('Gantung','Hang')}</dt><dd>${L('2 sling per baffle, jarak 60–90 cm','2 wires each, 60–90 cm apart')}</dd></dl>`;return ''}
@@ -556,12 +557,10 @@ function init3D(){
   case 'batu':{[[-.18,.08,.3,.36,c0],[.22,.15,.18,.22,c1],[.2,-.2,.22,.17,c2]].forEach(([a,b,rx,ry,cc])=>{const s=new THREE.Shape();s.absellipse(0,0,rx*w,ry*h,0,Math.PI*2,false,0);const m=ext(s,.05,cc);m.position.set(a*w,h/2+b*h,0);g.add(m)});break}
   case 'skyline':{const sh=[3,1,4,2,5,2,4,1,3,5,2,4,1,3,2,5,4,1,2,3,5,1,4,2,3];at(box(w,h,.012,0xb08a5a),0,h/2,.006);for(let i=0;i<5;i++)for(let j=0;j<5;j++){const v=sh[i*5+j],dd=.025*v;const m=new THREE.Mesh(new THREE.BoxGeometry(w/5-.004,h/5-.004,dd),M(new THREE.Color(`hsl(33,${35+v*5}%,${82-v*7}%)`).getHex()));at(m,-w/2+w/10+i*w/5,h/10+j*h/5,.012+dd/2)}break}
   }return g}
- const cornerRot=[0,-Math.PI/2,Math.PI/2,Math.PI];
- items.forEach((it,idx)=>{
-  if(it.t==='trap'){const g=new THREE.Group(),cc=it.corner,h=it.h,lg=it.leg,tc=c[2];
-   if(['chunk','tri','slatc','soffit'].includes(it.m)){g.add(triPrism([0,0,0],[lg,0,0],[0,0,lg],[0,h,0],tc));
+function trapObj(it){const g=new THREE.Group(),cc=it.corner,h=it.h,lg=it.leg,tc=c[2];
+   if(['chunk','tricorner','slatc','soffit'].includes(it.m)){g.add(triPrism([0,0,0],[lg,0,0],[0,0,lg],[0,h,0],tc));
     if(it.m==='slatc')for(let k=1;k<8;k++){const t=k/8,s=new THREE.Mesh(new THREE.BoxGeometry(.035,h,.02),M(c[1]));s.position.set(lg*t+.012,h/2,lg*(1-t)+.012);s.rotation.y=Math.PI/4;g.add(s)}
-    if(it.m==='tri'&&it.arm>0){g.add(triPrism([lg,h,0],[lg,h-lg,0],[lg,h,lg],[it.arm,0,0],tc));g.add(triPrism([0,h,lg],[0,h-lg,lg],[lg,h,lg],[0,0,it.arm],tc))}
+    if(it.m==='tricorner'&&it.arm>0){g.add(triPrism([lg,h,0],[lg,h-lg,0],[lg,h,lg],[it.arm,0,0],tc));g.add(triPrism([0,h,lg],[0,h-lg,lg],[lg,h,lg],[0,0,it.arm],tc))}
     if(it.m==='soffit'){const sl=(cc<2||cc>1)?(Wf-2*lg)/2:0;g.add(triPrism([lg,h,0],[lg,h-lg,0],[lg,h,lg],[sl,0,0],tc))}}
    else if(it.m==='straddle'){const a=lg,p=box(a*1.414,h,.1,tc);p.position.set(a/2+.035,h/2,a/2+.035);p.rotation.y=Math.PI/4;g.add(p)}
    else if(it.m==='curve'||it.m==='curvslat'){const cy=new THREE.Mesh(new THREE.CylinderGeometry(lg,lg,h,24,1,true,0,Math.PI/2),M(it.m==='curve'?tc:0x1e1f22));cy.position.y=h/2;g.add(E(cy,40));
@@ -570,7 +569,11 @@ function init3D(){
    else if(it.m==='tube'){const m=E(new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,h,32),M(tc)),40);m.position.set(.27,h/2,.27);g.add(m)}
    else if(it.m==='gobo'){const p=box(.6,h,.15,tc);p.position.set(.3,h/2+.08,.3);p.rotation.y=Math.PI/4;g.add(p);[-1,1].forEach(s=>{const f=box(.04,.08,.4,0x555555);f.position.set(.3+s*.2,.04,.3-s*.2);f.rotation.y=Math.PI/4;g.add(f)})}
    else{[[0,1],[1,0]].forEach(([a,b])=>{const bx=box(.5,h,.25,c[1]);bx.position.set(a?.125:.25+.01,h/2+.3,b?.125:.25+.01);bx.rotation.y=a?Math.PI/2:0;g.add(bx)})}
-   g.position.set(cc%2?Wf:0,0,cc<2?0:D);g.rotation.y=cornerRot[cc];root.add(g);label(it.code,cc%2?Wf-.25:.25,Math.min(h,H)*.55,cc<2?.25:D-.25)}
+return g}
+  const cornerRot=[0,-Math.PI/2,Math.PI/2,Math.PI];
+ items.forEach((it,idx)=>{
+  if(it.t==='trap'){const cc=it.corner,g=trapObj(it);
+   g.position.set(cc%2?Wf:0,0,cc<2?0:D);g.rotation.y=cornerRot[cc];root.add(g);label(it.code,cc%2?Wf-.25:.25,Math.min(it.h,H)*.55,cc<2?.25:D-.25)}
   else if(it.t==='panel'||it.t==='diff'){const cols=it.alt?[c[1],c[0],c[2]]:c;const g=panelObj(it,cols);root.add(onWall(it.wall,it.pos,it.y0,.03,g));g.updateMatrixWorld();const lp=g.localToWorld(new THREE.Vector3(0,it.h+.12,.2));label(it.code,lp.x,Math.min(H-.08,it.y0+it.h+.14),lp.z)}
   else if(it.t==='ceil'){const g=new THREE.Group();
    if(it.m==='cloud'){const cl=box(it.w,.1,it.d,c[it.alt?1:0]);cl.position.y=H-it.drop-.05;g.add(cl);[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a*it.w*.4,H,b*it.d*.4),new THREE.Vector3(a*it.w*.4,H-it.drop,b*it.d*.4)]),edgeMat)))}
@@ -595,6 +598,33 @@ function init3D(){
   if(u==='band'){fur(.6,.5,.35,.75,0,1.1,0xeeeeee);fur(.6,.5,.35,Wf-.75,0,1.1,0xeeeeee)}else chair(dx,dz-.9)}
  if(u==='rapat'){const tw=Math.min(1.2,Wf-1.6),tl=Math.min(3,D-2);fur(tw,.05,tl,Wf/2,.74,D/2);fur(.1,.74,tl*.6,Wf/2,0,D/2);for(let k=0;k<Math.max(1,Math.floor(tl/.8));k++){const z=D/2-tl/2+.4+k*.8;chair(Wf/2-tw/2-.35,z,-Math.PI/2);chair(Wf/2+tw/2+.35,z,Math.PI/2)}}
  if(u==='kafe'){for(let x=1.2;x<=Wf-1;x+=1.8)for(let z=1.2;z<=D-1;z+=1.8){cyl(.35,.03,x,.74,z);cyl(.04,.74,x,0,z);chair(x-.55,z,-Math.PI/2);chair(x+.55,z,Math.PI/2)}}
+ // detail 3D renders
+ try{renderDetails()}catch(e){console.error(e)}
+ function renderDetails(){const boxes=[...document.querySelectorAll('.d3[data-k]')];if(!boxes.length)return;
+  const cvs=document.createElement('canvas');const r2=new THREE.WebGLRenderer({canvas:cvs,antialias:true,preserveDrawingBuffer:true});r2.setPixelRatio(1);r2.setSize(720,540,false);
+  const lblSpr=(t,sz)=>{const cn=document.createElement('canvas');cn.width=256;cn.height=96;const x=cn.getContext('2d');x.fillStyle='#ffffff';x.strokeStyle='#14182b';x.lineWidth=4;if(x.roundRect){x.beginPath();x.roundRect(6,10,244,76,14);x.fill();x.stroke()}else{x.fillRect(6,10,244,76)}x.fillStyle='#14182b';x.font='bold 46px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(t,128,50);const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cn),depthTest:false}));sp.scale.set(sz,sz*96/256,1);sp.renderOrder=10;return sp};
+  const dimMat=new THREE.LineBasicMaterial({color:0xd93a3a});
+  const dline=(sc,a,b,t,sz,off)=>{const A=new THREE.Vector3(...a),Bv=new THREE.Vector3(...b);sc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([A,Bv]),dimMat));
+   const dir=Bv.clone().sub(A).normalize(),tick=new THREE.Vector3(...off).normalize().multiplyScalar(sz*.12);[A,Bv].forEach(P=>sc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([P.clone().sub(tick),P.clone().add(tick)]),dimMat)));
+   const sp=lblSpr(t,sz);sp.position.copy(A.clone().add(Bv).multiplyScalar(.5).add(new THREE.Vector3(...off)));sc.add(sp)};
+  boxes.forEach(el=>{const k=el.dataset.k;const sc=new THREE.Scene();sc.background=new THREE.Color(0xf4f5f8);sc.add(new THREE.HemisphereLight(0xffffff,0xc9cfdc,.7));const d1=new THREE.DirectionalLight(0xffffff,.55);d1.position.set(3,5,6);sc.add(d1);
+   let obj,W,Hh,Dd,labels,ctr;
+   if(PM[k]){const Mm=PM[k],h=Mm.h==='full'?Math.min(2.4,H-.3):Mm.h;const it={m:k,w:Mm.w,h,d:Mm.d,pos:1.3,alt:false};obj=panelObj(it,c);sc.add(obj);
+    const wall=new THREE.Mesh(new THREE.BoxGeometry(Mm.w+.5,h+.4,.04),M(0xe9ebf0));wall.position.set(0,h/2,-.03);sc.add(wall);
+    const sz=Math.max(Mm.w,h)*.16,o=sz*.5;dline(sc,[-Mm.w/2,-o*.6,Mm.d+.02],[Mm.w/2,-o*.6,Mm.d+.02],cm(Mm.w)+' cm',sz,[0,-o*.8,0]);dline(sc,[Mm.w/2+o*.5,0,Mm.d+.02],[Mm.w/2+o*.5,h,Mm.d+.02],cm(h)+' cm',sz,[o*1.4,0,0]);dline(sc,[Mm.w/2+o*.2,h+o*.4,0],[Mm.w/2+o*.2,h+o*.4,Mm.d],L('tebal ','depth ')+cm(Mm.d)+' cm',sz,[o*1.2,o*.6,0]);
+    W=Mm.w;Hh=h;Dd=Mm.d;ctr=new THREE.Vector3(0,h/2,Mm.d/2)}
+   else if(TM[k]){const lg=TM[k].leg,h=H,it={m:k,corner:0,leg:k==='tube'||k==='gobo'||k==='membran'?.55:lg,h:k==='tube'?Math.min(1.5,H-.3):k==='gobo'?Math.min(1.8,H-.3):k==='membran'?Math.min(1.2,H-.6):h,arm:k==='tricorner'?1.2:0};
+    obj=trapObj(it);sc.add(obj);const wA=new THREE.Mesh(new THREE.BoxGeometry(1.4,h+.1,.03),M(0xe9ebf0));wA.position.set(.7,h/2,-.015);sc.add(wA);const wB=new THREE.Mesh(new THREE.BoxGeometry(.03,h+.1,1.4),M(0xe4e7ee));wB.position.set(-.015,h/2,.7);sc.add(wB);const fl2=new THREE.Mesh(new THREE.BoxGeometry(1.4,.02,1.4),M(0xd9dce4));fl2.position.set(.7,-.01,.7);sc.add(fl2);
+    const sz=h*.2,L1=it.leg;if(['chunk','tricorner','slatc','soffit','straddle','curve','curvslat'].includes(k)){dline(sc,[0,.02,L1+.08],[L1,.02,L1+.08],cm(L1)+' cm',sz,[0,0,sz*.9]);dline(sc,[L1+.08,.02,0],[L1+.08,.02,L1],cm(L1)+' cm',sz,[sz*.9,0,0])}
+    else if(k==='tube')dline(sc,[.07,.02,.6],[.47,.02,.6],'Ø 40 cm',sz,[0,0,sz*.9]);
+    dline(sc,[L1+.15,0,L1+.15],[L1+.15,it.h,L1+.15],cm(it.h)+' cm',sz,[sz*1.1,0,sz*1.1]);if(k==='tricorner')dline(sc,[L1,h+.08,0],[L1+it.arm,h+.08,0],L('lengan ','arm ')+cm(it.arm)+' cm',sz,[0,sz*.7,0]);W=1.4;Hh=h;Dd=1.4;ctr=new THREE.Vector3(.5,h/2,.5)}
+   else{const it={m:k,w:1.2,d:k==='cloud'?1.2:.05,h:k==='cloud'?.1:.6};obj=new THREE.Group();const b=k==='cloud'?box(1.2,.1,1.2,c[0]):box(1.2,.6,.05,c[0]);b.position.y=k==='cloud'?.05:.3;obj.add(b);sc.add(obj);
+    const sz=.18;if(k==='cloud'){dline(sc,[-.6,-.08,.7],[.6,-.08,.7],'120 cm',sz,[0,-.12,0]);dline(sc,[.7,-.08,-.6],[.7,-.08,.6],'120 cm',sz,[.15,-.1,0]);dline(sc,[.75,0,.6],[.75,.1,.6],'10 cm',sz,[.25,.05,0])}else{dline(sc,[-.6,-.08,.1],[.6,-.08,.1],'120 cm',sz,[0,-.12,0]);dline(sc,[.7,0,.05],[.7,.6,.05],'60 cm',sz,[.2,0,0]);dline(sc,[.65,.7,-.025],[.65,.7,.025],'5 cm',sz,[.2,.1,0])}
+    W=1.4;Hh=.6;Dd=1.4;ctr=new THREE.Vector3(0,.15,0)}
+   const cam2=new THREE.PerspectiveCamera(30,720/540,.01,50);const R1=Math.hypot(W,Hh,Dd)*.5/Math.tan(15*Math.PI/180)*1.25;const dir=TM[k]?new THREE.Vector3(1.1,.75,1.1).normalize():new THREE.Vector3(.75,.45,1.15).normalize();
+   cam2.position.copy(ctr.clone().add(dir.multiplyScalar(R1)));cam2.lookAt(ctr);r2.render(sc,cam2);
+   el.innerHTML=`<img alt="" style="width:100%;display:block;border-radius:10px" src="${cvs.toDataURL('image/png')}">`});
+  r2.dispose()}
  // camera
  const diag=Math.hypot(Wf,D,H),R0=diag*.5/Math.tan(16*Math.PI/180)*1.15;const ctr=new THREE.Vector3(Wf/2,H*.38,D/2);let rad=R0,th=Math.PI+.62,ph=.92;
  function size(){const w=cv.parentElement.clientWidth,h=Math.round(w*.82);ren.setSize(w,h,false);cv.style.height=h+'px';cam.aspect=w/h;cam.updateProjectionMatrix()}
@@ -650,10 +680,10 @@ function boq(){const it=RES.items,H=RES.H,rows=[];let rw=0,fab=0,tim=0;
  const grp={};it.filter(i=>i.t==='panel'||i.t==='diff').forEach(i=>{const k=i.m+'|'+cm(i.w)+'×'+cm(i.h);grp[k]=(grp[k]||0)+1});
  Object.entries(grp).forEach(([k,n])=>{const [m,sz]=k.split('|'),M=PM[m],a=M.w*(M.h==='full'?Math.min(2.4,H-.3):M.h);rows.push({k:'p_'+k,name:M[lang],spec:sz+' cm',n});
   if(M.sect!=='diff'){rw+=n*a*M.af*(M.sect==='fab10'?.1:.05);fab+=n*a*M.af*1.3;tim+=n*2*(M.w+a/M.w)}else tim+=n*3});
- const tr=it.filter(i=>i.t==='trap');if(tr.length){const m=tr[0].m;rows.push({k:'t_'+m,name:'Bass trap · '+TM[m][lang],spec:specT(m,H),n:tr.length});tr.forEach(t=>{const vol={chunk:.18*H,slatc:.18*H,tri:.1*(H+2*t.arm),soffit:.1*(H+(RES.Wf-2*t.leg)/2),straddle:.06*H,curve:.094*H,curvslat:.05*H,tube:.11*t.h,membran:.0125*2,gobo:.16}[m]||.1;rw+=vol;fab+=Math.max(1,vol*6);tim+=t.h*2})}
+ const tr=it.filter(i=>i.t==='trap');if(tr.length){const m=tr[0].m;rows.push({k:'t_'+m,name:'Bass trap · '+TM[m][lang],spec:specT(m,H),n:tr.length});tr.forEach(t=>{const vol={chunk:.18*H,slatc:.18*H,tricorner:.1*(H+2*t.arm),soffit:.1*(H+(RES.Wf-2*t.leg)/2),straddle:.06*H,curve:.094*H,curvslat:.05*H,tube:.11*t.h,membran:.0125*2,gobo:.16}[m]||.1;rw+=vol;fab+=Math.max(1,vol*6);tim+=t.h*2})}
  const cl=it.filter(i=>i.t==='ceil');if(cl.length){const m=cl[0].m;rows.push({k:'c_'+m,name:CM[m][lang],spec:m==='cloud'?'120×120×10 cm':'120×60×5 cm',n:cl.length});cl.forEach(()=>{rw+=m==='cloud'?.144:.036;fab+=m==='cloud'?3.2:1.6;tim+=m==='cloud'?4.8:0})}
  return {rows,mat:[{k:'rw',name:L('Rockwool papan 60×120×5 cm','Rockwool board 60×120×50'),n:Math.ceil(rw/.036*1.1),u:L('lembar','boards')},{k:'fab',name:L('Kain akustik / felt','Acoustic fabric / felt'),n:Math.ceil(fab),u:'m²'},{k:'tim',name:L('Kayu rangka / lis','Frame timber'),n:Math.ceil(tim*1.1),u:L('m lari','lin. m')}]}}
-function specT(m,H){return {chunk:`60×60 × ${cm(H)} cm`,tri:`45×45 + ${L('lengan','arms')}`,straddle:`60 × ${cm(H)} cm`,curve:`R60 × ${cm(H)} cm`,tube:`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`,slatc:`60×60 × ${cm(H)} cm`,soffit:`45×45 + soffit`,membran:'50×50×25 cm',gobo:'60×180×15 cm',curvslat:`R60 × ${cm(H)} cm`}[m]}
+function specT(m,H){return {chunk:`60×60 × ${cm(H)} cm`,tricorner:`45×45 + ${L('lengan','arms')}`,straddle:`60 × ${cm(H)} cm`,curve:`R60 × ${cm(H)} cm`,tube:`Ø40 × ${cm(Math.min(1.5,H-.3))} cm`,slatc:`60×60 × ${cm(H)} cm`,soffit:`45×45 + soffit`,membran:'50×50×25 cm',gobo:'60×180×15 cm',curvslat:`R60 × ${cm(H)} cm`}[m]}
 function rowItem(it){const tg=it.t==='trap'?'t':it.t==='ceil'?'c':it.t==='diff'?'d':'';let name,loc,pos;
  if(it.t==='trap'){name='Bass trap · '+TM[it.m][lang];loc=L('Sudut ','Corner ')+cornerName(it.corner);pos=specT(it.m,RES.H)}
  else if(it.t==='ceil'){name=CM[it.m][lang];loc=L('Plafon','Ceiling');pos=L(`${cm(it.z)} cm dari dinding depan, ${cm(it.x)} cm dari kiri, turun ${cm(it.drop)} cm`,`${cm(it.z)} cm from front, ${cm(it.x)} cm from left, ${cm(it.drop)} cm drop`)}
@@ -684,7 +714,7 @@ function renderOut(){
  <div class="prob sol"><b>${L('Prinsip penempatan','Placement logic')}</b><span>${{listen:L('Panel dipasang tepat di titik pantulan pertama dinding kiri-kanan (cek dengan cermin dari posisi dengar), di belakang speaker, dan dinding belakang. Cloud di atas antara speaker dan pendengar. Bass trap di semua sudut.','Panels at the first reflection points, behind the speakers and on the rear wall; cloud above; traps in all corners.'),talk:L('Panel di empat dinding setinggi kepala duduk supaya pantulan tidak masuk mikrofon, cloud di atas meja.','Panels on all four walls at seated head height; cloud over the table.'),cam:L('Panel di belakang kepala (latar kamera), di depan wajah, dan di samping kiri-kanan.','Panels behind the head, in front of the face, and both sides.'),live:L('Panel selang-seling di semua dinding — tidak saling berhadapan — supaya gema putus tanpa membuat ruang "mati".','Staggered panels on all walls so echo breaks without deadening the room.'),room:L('Satu panel utama di atas kepala tempat tidur, lalu panel selang-seling di dinding lain; area lemari dan jendela dikosongkan.','A main panel above the headboard, then staggered panels elsewhere; wardrobe and windows left clear.'),speech:L('Plafon dulu (paling efektif untuk ruang rapat), lalu dua dinding yang bersebelahan secara selang-seling.','Ceiling first, then two adjacent walls, staggered.'),venue:L('Plafon dulu (baffle/cloud di atas meja), lalu dinding selang-seling.','Ceiling first over the tables, then staggered walls.')}[r.kind]}</span></div>
  ${r.notes.map(n=>`<div class="prob sol"><b>${L('Catatan','Note')}</b><span>${n}</span></div>`).join('')}</section>`;
  h+=`<section class="card"><div class="num">05 · ${L('Detail konstruksi','Construction details')}</div><h2>${L('Ukuran, isi & penutup','Size, core & cover')}</h2><p class="sub">${L('Gambar kerja untuk tukang. Ukuran dalam cm.','Shop drawings. Dimensions in cm.')}</p>
- ${used.map(k=>{const sv=detailSVG(k);const nm=(PM[k]||TM[k]||CM[k])[lang];return `<h3>${nm}</h3><div class="svgbox">${sv}</div>${CALL.length?`<ol style="margin:4px 0 8px;padding-left:22px;font-size:13.5px">${CALL.map(x=>`<li>${x}</li>`).join('')}</ol>`:''}${specFor(k)}`}).join('')}
+ ${used.map(k=>{const sv=detailSVG(k);const nm=(PM[k]||TM[k]||CM[k])[lang];return `<h3>${nm}</h3><div class="svgbox d3" data-k="${k}" style="padding:0;overflow:hidden"><p class="note" style="padding:10px">${L('Gambar 3D butuh internet','3D needs internet')}</p></div><div class="svgbox">${sv}</div>${CALL.length?`<ol style="margin:4px 0 8px;padding-left:22px;font-size:13.5px">${CALL.map(x=>`<li>${x}</li>`).join('')}</ol>`:''}${specFor(k)}`}).join('')}
  <div class="prob sol" style="margin-top:14px"><b>${L('Aturan material','Material rules')}</b><span>${L('Kain penutup harus tembus udara (mudah ditiup) — kain rapat / plastik membuat panel tidak menyerap. Bass trap tebal pakai rockwool 40–60 kg/m³; panel 5–10 cm pakai 60–80 kg/m³. Rongga udara di belakang panel menambah serapan bass. Pakai sarung tangan & masker saat memotong rockwool.','Covers must be breathable. Thick traps use 40–60 kg/m³ wool; 50–100 mm panels use 60–80 kg/m³. An air gap behind adds bass absorption. Wear gloves and a mask when cutting.')}</span></div></section>`;
  h+=`<section class="card"><div class="num">06 · ${L('Daftar pemasangan','Installation schedule')}</div><h2>${L('Posisi tiap item','Where each item goes')}</h2><div class="scroll"><table><tr><th>${L('Kode','Code')}</th><th>Item</th><th>${L('Letak','Location')}</th><th>${L('Posisi (tengah item)','Position (centre)')}</th></tr>${r.items.map(rowItem).join('')}</table></div></section>`;
  h+=`<section class="card"><div class="num">07 · ${L('Bukti hitungan','The numbers')}</div><h2>${L('Waktu gema per frekuensi','Reverberation by frequency')}</h2><div class="svgbox">${rtSVG()}</div>
