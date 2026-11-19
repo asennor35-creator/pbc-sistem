@@ -75,6 +75,7 @@ th{font-size:11.5px;color:var(--mut);font-weight:600;text-transform:uppercase;le
 .wt td:first-child{font-weight:700;white-space:nowrap}.wt td.n{font-size:18px;font-weight:700;color:var(--blue);text-align:center}
 footer{text-align:center;color:var(--mut);font-size:12px;padding:10px 0 30px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:10}.toast.on{opacity:1}
+.ugsteps{margin:4px 0 10px;padding-left:20px;font-size:13.5px;line-height:1.5}.ugsteps li{margin-bottom:4px}.ugrec{display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px;border-radius:12px;background:var(--blue2);color:var(--navy);font-weight:600;font-size:14px}.ugdot{width:12px;height:12px;border-radius:50%;background:var(--red);flex:none;animation:ugp 1s infinite}@keyframes ugp{50%{opacity:.25}}.ugerr{margin-top:12px;padding:12px;border-radius:12px;background:var(--red2);color:#8a1f1f;font-size:13.5px}#ugCard .kpis{margin-top:12px}
 </style>
 </head>
 <body>
@@ -83,7 +84,7 @@ footer{text-align:center;color:var(--mut);font-size:12px;padding:10px 0 30px}
  <div class="lang"><button id="lid">ID</button><button id="len">EN</button></div></div>
  <h1 id="ttl"></h1><p id="tsub"></p>
 </header>
-<main><section class="card" id="inputCard"></section><div id="out"></div></main>
+<main><section class="card" id="ugCard"></section><section class="card" id="inputCard"></section><div id="out"></div></main>
 <footer>Pratama Build &amp; Construction · pratamabuild.id · WA 0857-4502-6574</footer>
 <div class="modal" id="modal"><div><img id="mimg" alt=""><p class="note" id="mtxt"></p><button class="btn ghost" id="mclose"></button></div></div>
 <div class="toast" id="toast"></div>
@@ -882,6 +883,127 @@ document.getElementById('mclose').onclick=()=>document.getElementById('modal').c
 function setLang(l){lang=l;try{localStorage.setItem('pbcak_lang',l)}catch(e){}document.documentElement.lang=l;renderInput();if(RES)analyseAll()}
 document.getElementById('lid').onclick=()=>setLang('id');document.getElementById('len').onclick=()=>setLang('en');
 renderInput();analyseAll();
+// ================= UKUR GEMA (mikrofon HP) =================
+const UG={on:false,st:'idle',msg:'',last:null,log:[],label:'',stage:'sebelum'};
+try{UG.log=JSON.parse(localStorage.getItem('pbcak_ukur')||'[]');const m=JSON.parse(localStorage.getItem('pbcak_ukur_m')||'{}');UG.label=m.label||'';UG.stage=m.stage||'sebelum'}catch(e){}
+function ugSave(){try{localStorage.setItem('pbcak_ukur',JSON.stringify(UG.log.slice(-60)));localStorage.setItem('pbcak_ukur_m',JSON.stringify({label:UG.label,stage:UG.stage}))}catch(e){}}
+// filter pita 1 oktaf (2x bandpass RBJ)
+function ugBP(x,sr,f0){
+ const w=2*Math.PI*f0/sr,al=Math.sin(w)/(2*1.414),a0=1+al,b0=al/a0,b2=-al/a0,a1=-2*Math.cos(w)/a0,a2=(1-al)/a0;
+ let y=x;for(let p=0;p<2;p++){const o=new Float32Array(y.length);let x1=0,x2=0,y1=0,y2=0;
+  for(let i=0;i<y.length;i++){const v=y[i],r=b0*v+b2*x2-a1*y1-a2*y2;x2=x1;x1=v;y2=y1;y1=r;o[i]=r}y=o}
+ return y}
+// kurva peluruhan (integrasi Schroeder) -> waktu gema
+function ugDecay(x,sr){
+ const bl=Math.max(1,Math.round(sr*.005)),n=Math.floor(x.length/bl),e=new Float64Array(n);
+ for(let i=0;i<n;i++){let s=0;for(let j=i*bl;j<(i+1)*bl;j++)s+=x[j]*x[j];e[i]=s/bl+1e-24}
+ let pk=0;for(let i=1;i<n;i++)if(e[i]>e[pk])pk=i;
+ const t0=Math.floor(n*.82);let nz=0;for(let i=t0;i<n;i++)nz+=e[i];nz/=Math.max(1,n-t0);
+ const dr=10*Math.log10(e[pk]/nz);
+ // potong saat energi (rata2 30 ms) turun ke 3 dB di atas derau
+ let cut=n;for(let i=pk+3;i<n-6;i++){let m=0;for(let k=0;k<6;k++)m+=e[i+k];if(m/6<nz*2){cut=i;break}}
+ const s=new Float64Array(cut-pk);let acc=0;
+ // energi sesudah titik potong diperkirakan (ekor eksponensial) agar ujung kurva tidak jatuh
+ let late=0;{const a=Math.max(pk+1,cut-40),b=cut-1;if(b>a){const ea=Math.max(e[a]-nz,1e-24),eb=Math.max(e[b]-nz,1e-24);const k=Math.log(ea/eb)/(b-a);if(k>0)late=eb/(1-Math.exp(-k))*Math.exp(-k)}}
+ acc=late;for(let i=cut-1;i>=pk;i--){acc+=Math.max(e[i]-nz,0);s[i-pk]=acc}
+ const db=Array.from(s,v=>10*Math.log10(v/s[0]+1e-30)),dt=bl/sr,minDb=Math.min(...db);
+ const fit=(lo,hi)=>{let sx=0,sy=0,sxx=0,sxy=0,c=0;db.forEach((v,i)=>{if(v<=-lo&&v>=-hi){const t=i*dt;sx+=t;sy+=v;sxx+=t*t;sxy+=t*v;c++}});
+  if(c<4)return null;const sl=(c*sxy-sx*sy)/(c*sxx-sx*sx);return sl<0?-60/sl:null};
+ const T30=dr>=45&&minDb<=-35?fit(5,35):null,T20=dr>=35&&minDb<=-25?fit(5,25):null,T10=dr>=25&&minDb<=-15?fit(5,15):null;
+ const T=T30||T20||T10,kind=T30?'T30':T20?'T20':T10?'T10':'-';
+ return {T,kind,dr,edc:db.filter((_,i)=>i%2===0).slice(0,400),dt:dt*2}
+}
+const UGB=[500,1000,2000];
+function ugAnalyse(x,sr){
+ const bands=UGB.map(f=>({f,...ugDecay(ugBP(x,sr,f),sr)}));
+ const mid=bands.slice(0,2).filter(b=>b.T);const Tm=mid.length?mid.reduce((a,b)=>a+b.T,0)/mid.length:(bands[2].T||null);
+ const dr=Math.min(bands[0].dr,bands[1].dr);
+ const q=dr>=45?'ok':dr>=35?'mid':'low';
+ return {Tm,bands,dr,q,edc:bands[1].edc,dt:bands[1].dt}
+}
+// ---- perekaman ----
+async function ugStart(){
+ if(UG.st==='rec')return;
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){UG.st='err';UG.msg=L('HP/browser ini tidak mengizinkan mikrofon. Buka lewat Chrome dan alamat https.','This browser does not allow the microphone. Open it in Chrome over https.');return ugRender()}
+ let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
+ catch(e){UG.st='err';UG.msg=L('Izin mikrofon ditolak. Ketuk ikon gembok di alamat atas → Izin → Mikrofon → Izinkan, lalu coba lagi.','Microphone permission denied. Tap the lock icon → Permissions → Microphone → Allow, then retry.');return ugRender()}
+ const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();if(ac.state==='suspended')try{await ac.resume()}catch(e){}
+ const sr=ac.sampleRate,src=ac.createMediaStreamSource(st),pr=ac.createScriptProcessor(4096,1,1),mute=ac.createGain();mute.gain.value=0;
+ src.connect(pr);pr.connect(mute);mute.connect(ac.destination);
+ const pre=Math.round(sr*.3),need=Math.round(sr*4.2),calib=Math.round(sr*.8);
+ let ring=[],ringLen=0,got=null,gotLen=0,seen=0,nzSum=0,nzN=0,t0=Date.now();
+ UG.st='rec';UG.msg=L('Siap. Tepuk tangan SEKALI dengan keras (atau pecahkan balon)…','Ready. Clap ONCE loudly (or pop a balloon)…');ugRender();
+ const stop=(why)=>{try{pr.disconnect();src.disconnect();mute.disconnect()}catch(e){}st.getTracks().forEach(t=>t.stop());ac.close&&ac.close();
+  if(why==='timeout'){UG.st='err';UG.msg=L('Tidak terdengar tepukan. Coba lebih keras atau dekatkan HP (± 1–2 m).','No clap detected. Clap louder or move the phone closer (≈1–2 m).');return ugRender()}
+  const x=new Float32Array(gotLen);let o=0;got.forEach(c=>{x.set(c.subarray(0,Math.min(c.length,gotLen-o)),o);o+=c.length});
+  ugDone(x,sr)};
+ pr.onaudioprocess=ev=>{
+  const c=new Float32Array(ev.inputBuffer.getChannelData(0));seen+=c.length;
+  if(got){got.push(c);gotLen+=c.length;if(gotLen>=need){pr.onaudioprocess=null;stop('ok')}return}
+  let ss=0,pk=0;for(let i=0;i<c.length;i++){ss+=c[i]*c[i];const a=Math.abs(c[i]);if(a>pk)pk=a}
+  if(seen<=calib){nzSum+=ss;nzN+=c.length}
+  const nrms=Math.sqrt(nzSum/Math.max(1,nzN))||1e-4;
+  if(seen>calib&&pk>Math.max(.08,nrms*25)){
+   // ambil potongan sebelum tepukan
+   let i0=0;for(let i=0;i<c.length;i++)if(Math.abs(c[i])>pk*.5){i0=i;break}
+   const all=ring.concat([c]);let tot=all.reduce((a,b)=>a+b.length,0),start=tot-c.length+i0-Math.round(sr*.02);
+   const flat=new Float32Array(tot);let o=0;all.forEach(b=>{flat.set(b,o);o+=b.length});
+   const seg=flat.subarray(Math.max(0,start));got=[new Float32Array(seg)];gotLen=seg.length;
+   UG.msg=L('Tepukan terdengar — diam sebentar…','Clap detected — keep quiet…');ugRender();return}
+  ring.push(c);ringLen+=c.length;while(ringLen-ring[0].length>pre){ringLen-=ring[0].length;ring.shift()}
+  if(Date.now()-t0>15000){pr.onaudioprocess=null;stop('timeout')}
+ };
+}
+function ugDone(x,sr){
+ const r=ugAnalyse(x,sr);UG.last=r;
+ if(!r.Tm){UG.st='err';UG.msg=L('Suara kurang keras dibanding kebisingan ruangan (selisih '+R(r.dr)+' dB, perlu ≥ 25 dB). Matikan AC/musik, tepuk lebih keras atau pakai balon, lalu ulangi.','Clap too quiet vs. background noise ('+R(r.dr)+' dB, need ≥ 25 dB). Turn off AC/music, clap louder or pop a balloon, then retry.');return ugRender()}
+ UG.log.push({d:new Date().toISOString().slice(0,16),label:UG.label||L('Tanpa nama','Untitled'),stage:UG.stage,T:+r.Tm.toFixed(2),b:r.bands.map(b=>b.T?+b.T.toFixed(2):null),dr:R(r.dr),q:r.q});
+ ugSave();UG.st='done';UG.msg='';ugRender();
+}
+function ugEdc(r){
+ if(!r)return'';const W=320,Hh=120,xs=r.edc.length*r.dt,sx=t=>30+t/xs*(W-40),sy=v=>10+(-Math.max(v,-60))/60*(Hh-30);
+ const pts=r.edc.map((v,i)=>`${sx(i*r.dt).toFixed(1)},${sy(v).toFixed(1)}`).join(' ');
+ let g='';[0,-20,-40,-60].forEach(v=>g+=`<line x1="30" x2="${W-10}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e6ee"/><text x="2" y="${sy(v)+4}" font-size="10" fill="#5b6275">${v}</text>`);
+ return `<div class="svgbox"><svg viewBox="0 0 ${W} ${Hh}">${g}<polyline points="${pts}" fill="none" stroke="#2346c0" stroke-width="2"/><text x="${W-10}" y="${Hh-4}" font-size="10" text-anchor="end" fill="#5b6275">${N(xs,1)} s · dB</text></svg></div>`}
+function ugSummary(){
+ const g={};UG.log.forEach(m=>{const k=m.label+'|'+m.stage;(g[k]=g[k]||{label:m.label,stage:m.stage,v:[]}).v.push(m.T)});
+ const rows=Object.values(g);if(!rows.length)return'';
+ const st=s=>s==='sesudah'?L('Sesudah','After'):L('Sebelum','Before');
+ return `<h3>${L('Riwayat ukur (rata-rata)','Measurement history (average)')}</h3><div class="scroll"><table><tr><th>${L('Ruangan','Room')}</th><th>${L('Tahap','Stage')}</th><th class="r">${L('Kali','Count')}</th><th class="r">${L('Gema','RT')}</th></tr>`+
+  rows.map(r=>`<tr><td>${esc(r.label)}</td><td>${st(r.stage)}</td><td class="r">${r.v.length}</td><td class="r"><b>${N(r.v.reduce((a,b)=>a+b,0)/r.v.length,2)} s</b></td></tr>`).join('')+
+  `</table></div><button class="btn ghost sm" id="ugClr" style="margin-top:8px">${L('Hapus riwayat','Clear history')}</button>`}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function ugRender(){
+ const el=document.getElementById('ugCard');if(!el)return;
+ if(!UG.on){el.innerHTML=`<div class="num">${L('Alat lapangan','Field tool')}</div><h2>${L('Ukur gema pakai HP','Measure echo with your phone')}</h2><p class="sub" style="margin-bottom:8px">${L('Tanpa alat khusus: cukup tepuk tangan atau pecahkan balon. Untuk membandingkan sebelum & sesudah pasang panel.','No special gear: just clap or pop a balloon. Compare before & after panels.')}</p><button class="btn ghost" id="ugOpen">${L('Buka Ukur Gema','Open echo meter')}</button>`;
+  document.getElementById('ugOpen').onclick=()=>{UG.on=true;ugRender()};return}
+ const r=UG.last,res=typeof RES!=='undefined'&&RES?RES:null;
+ const calc=res?(res.T0[2]+res.T0[3])/2:null,tgt=res?res.TT[0]:null;
+ let out='';
+ if(UG.st==='rec')out=`<div class="ugrec"><span class="ugdot"></span>${UG.msg}</div>`;
+ else if(UG.st==='err')out=`<p class="ugerr">${UG.msg}</p>`;
+ else if(UG.st==='done'&&r){
+  const qn={ok:L('Baik','Good'),mid:L('Cukup','Fair'),low:L('Kasar','Rough')}[r.q];
+  out=`<div class="kpis"><div class="kpi"><small>${L('Waktu gema terukur','Measured RT')}</small><b>${N(r.Tm,2)} s</b></div><div class="kpi"><small>${L('Kualitas rekaman','Recording quality')}</small><b>${qn}</b><small>${R(r.dr)} dB</small></div></div>
+  <div class="scroll"><table><tr><th>${L('Nada','Band')}</th>${r.bands.map(b=>`<th class="r">${b.f} Hz</th>`).join('')}</tr><tr><td>${L('Gema (detik)','RT (s)')}</td>${r.bands.map(b=>`<td class="r">${b.T?N(b.T,2):'–'}</td>`).join('')}</tr></table></div>${ugEdc(r)}${r.q==='low'?`<p class="note">${L('Rekaman agak lemah: angka masih perkiraan kasar. Ulangi lebih keras / pakai balon bila bisa.','Weak recording: rough estimate. Retry louder / with a balloon if possible.')}</p>`:''}`;
+  if(calc!=null)out+=`<p class="note">${L('Pembanding — hitungan aplikasi untuk ukuran & bahan yang diisi di bawah: ','Compare — app estimate for the room entered below: ')}<b>${N(calc,2)} s</b> ${L('(tanpa panel), target','(no panels), target')} <b>${N(tgt,2)} s</b>. ${Math.abs(r.Tm-calc)/calc>.25?L('Selisih besar: cek lagi ukuran ruang & bahan lantai/dinding/plafon di bawah.','Large gap: re-check room size & surface materials below.'):L('Hasil ukur dan hitungan sejalan.','Measurement and estimate agree.')}</p>`;
+ }
+ el.innerHTML=`<div class="num">${L('Alat lapangan','Field tool')}</div><h2>${L('Ukur gema pakai HP','Measure echo with your phone')}</h2>
+ <ol class="ugsteps"><li>${L('Matikan AC, kipas & musik. Minta ruangan tenang.','Turn off AC, fans & music. Keep the room quiet.')}</li><li>${L('Taruh HP di meja/tengah ruangan, layar menghadap atas.','Place the phone mid-room, screen up.')}</li><li>${L('Ketuk "Mulai ukur", tunggu tulisan "Siap", lalu tepuk tangan SEKALI sekeras mungkin 1–2 m dari HP (balon pecah lebih bagus).','Tap "Start", wait for "Ready", then clap ONCE as loud as you can 1–2 m away (a popping balloon is better).')}</li><li>${L('Diam 4 detik. Ulangi 3 kali di titik berbeda — aplikasi merata-ratakan.','Stay silent 4 s. Repeat 3× at different spots — the app averages.')}</li></ol>
+ <div class="grid2"><label>${L('Nama ruangan','Room name')}<input id="ugLbl" value="${esc(UG.label)}" placeholder="${L('mis. Kafe Canggu','e.g. Cafe Canggu')}"></label>
+ <label>${L('Tahap','Stage')}<select id="ugStg"><option value="sebelum"${UG.stage==='sebelum'?' selected':''}>${L('Sebelum pasang','Before install')}</option><option value="sesudah"${UG.stage==='sesudah'?' selected':''}>${L('Sesudah pasang','After install')}</option></select></label></div>
+ <button class="btn" id="ugGo" style="margin-top:12px"${UG.st==='rec'?' disabled':''}>${UG.st==='done'?L('Ukur lagi','Measure again'):L('Mulai ukur','Start')}</button>
+ ${out}${ugSummary()}
+ <p class="note">${L('Catatan: mikrofon HP cukup akurat untuk membandingkan sebelum & sesudah (selisih ± 10–15%). Bukan pengganti alat ukur bersertifikat. Angka diambil dari nada tengah 500–1000 Hz.','Note: a phone mic is fine for before/after comparison (± 10–15%). Not a certified measurement. Value = mid bands 500–1000 Hz.')}</p>
+ <button class="btn ghost sm" id="ugHide" style="margin-top:6px">${L('Tutup','Close')}</button>`;
+ const lb=document.getElementById('ugLbl');lb.oninput=()=>{UG.label=lb.value.trim();ugSave()};
+ const sg=document.getElementById('ugStg');sg.onchange=()=>{UG.stage=sg.value;ugSave()};
+ document.getElementById('ugGo').onclick=()=>{UG.label=lb.value.trim();ugStart()};
+ document.getElementById('ugHide').onclick=()=>{UG.on=false;ugRender()};
+ const c=document.getElementById('ugClr');if(c)c.onclick=()=>{if(UG.log.length&&(UG._c=(UG._c||0)+1)<2){c.textContent=L('Ketuk lagi untuk hapus','Tap again to clear');return}UG._c=0;UG.log=[];ugSave();ugRender()};
+}
+{const _sl=setLang;setLang=function(l){_sl(l);ugRender()};const _ro=renderOut;renderOut=function(){_ro.apply(this,arguments);if(UG.on&&UG.st==='done')ugRender()}}
+ugRender();
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('../sw.js').catch(()=>{});
 </script>
 </body>
