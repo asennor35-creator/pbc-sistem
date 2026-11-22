@@ -1484,7 +1484,9 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
 
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:none;align-items:center;justify-content:center}
 .modal-overlay.show{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--border);padding:24px;min-width:400px;max-width:600px;width:90%}
+.modal{background:var(--bg2);border:1px solid var(--border);padding:24px;min-width:400px;max-width:600px;width:90%;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.modal-overlay{overflow-y:auto}
+@media(max-width:640px){.modal{min-width:0;width:95%;padding:16px;max-height:94vh}}
 .modal-title{font-size:13px;color:var(--gold);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
 
@@ -9866,7 +9868,7 @@ function pbcUcBuka(){
     + '<div class="form-row"><div class="form-group"><label class="form-label">Tanggal update</label><input class="form-input" type="date" id="ucTgl" value="'+today()+'"></div></div>'
     + '<div class="form-group"><textarea class="form-input" id="ucTeks" rows="3" placeholder="partisi 70, keramik 55" oninput="pbcUcPratinjau()"></textarea></div>'
     + '<div id="ucPrev" style="max-height:44vh;overflow:auto"></div>'
-    + '<details style="margin-top:8px"><summary style="font-size:11px;cursor:pointer">Atau isi per item</summary><div id="ucSemua"></div></details>'
+    + '<details style="margin-top:8px"><summary style="font-size:11px;cursor:pointer">Atau isi per item</summary><div id="ucSemua" style="max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:4px"></div></details>'
     + '<div class="modal-footer"><button class="btn btn-gold" onclick="hideModal(\'modalUpdateCepat\')">Batal</button><button class="btn btn-blue" onclick="pbcUcSimpan()">Simpan & hitung</button></div></div>';
   document.getElementById('ucSemua').innerHTML = state.items.map(function(it){ return '<div style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:11px"><span style="flex:1">'+pbcEsc(it.nama)+'</span><span style="color:var(--muted2)">'+itemPct(it).toFixed(0)+'% →</span><input class="form-input uc-item" data-id="'+it.id+'" type="number" min="0" max="100" style="width:70px;padding:5px" placeholder="%"></div>'; }).join('');
   showModal('modalUpdateCepat');
@@ -13152,10 +13154,11 @@ function pbcItemOpsi(){
   var dv = {}; (state.divisi||[]).forEach(function(d){ dv[d.id] = d.nama; });
   return (state.items||[]).map(function(i){ return '<option value="'+i.id+'">'+pbcEsc((dv[i.divisiId]?dv[i.divisiId]+' · ':'')+i.nama)+'</option>'; }).join('');
 }
-function pbcNotaBrgTambah(nama, sat, harga){
+function pbcNotaBrgTambah(nama, sat, harga, qty){
   var box = document.getElementById('notaBrg'); if(!box) return;
   var d = document.createElement('div'); d.className = 'nota-brg'; d.style.cssText = 'display:flex;gap:4px;margin-bottom:4px';
-  d.innerHTML = '<input class="form-input nb-n" placeholder="Nama barang" style="flex:2" value="'+pbcEsc(nama||'')+'"><input class="form-input nb-s" placeholder="Satuan" style="flex:0.8" value="'+pbcEsc(sat||'')+'"><input class="form-input nb-h" placeholder="Harga satuan" inputmode="numeric" style="flex:1.2" value="'+(harga?(+harga).toLocaleString('id-ID'):'')+'"><button type="button" class="btn btn-sm" onclick="this.parentNode.remove()">✕</button>';
+  d.style.flexWrap = 'wrap';
+  d.innerHTML = '<input class="form-input nb-n" placeholder="Nama barang" style="flex:1 1 100%" value="'+pbcEsc(nama||'')+'"><input class="form-input nb-q" placeholder="Jml" inputmode="decimal" style="flex:0.6" value="'+(qty!=null&&qty!==''?qty:'')+'"><input class="form-input nb-s" placeholder="Satuan" style="flex:0.8" value="'+pbcEsc(sat||'')+'"><input class="form-input nb-h" placeholder="Harga satuan" inputmode="numeric" style="flex:1.3" value="'+(harga?(+harga).toLocaleString('id-ID'):'')+'"><button type="button" class="btn btn-sm" onclick="this.parentNode.remove()">✕</button>';
   box.appendChild(d);
 }
 function pbcNotaBrgUrai(teks){   /* baris "nama ... qty x harga" atau "nama ... harga" -> usulan barang (perlu dicek) */
@@ -13199,8 +13202,68 @@ function pbcNotaUrai(teks){   /* teks hasil baca -> {jumlah, tgl, toko} (perkira
   const toko = (baris.find(function(b){ return /[A-Za-z]{3,}/.test(b) && !/nota|faktur|invoice|tanggal|kepada|no\.|jl\.|telp|hp/i.test(b); }) || '').replace(/[^A-Za-z0-9 .&-]/g,'').trim().slice(0,40);
   return { jumlah:jumlah, tgl:tgl, toko:toko };
 }
+var _pbcAiCfg = null;
+async function pbcAiCfg(){
+  if(_pbcAiCfg!==null) return _pbcAiCfg;
+  try{ const r = await window.storage.get('pbc_cfg_ai', false); _pbcAiCfg = (r && r.value) ? JSON.parse(r.value) : false; }catch(e){ _pbcAiCfg = null; return false; }
+  return _pbcAiCfg;
+}
+async function pbcNotaBacaAI(url){
+  const cfg = await pbcAiCfg(); if(!cfg || !cfg.gemini) return null;
+  const mime = (String(url).match(/^data:([^;]+)/)||[])[1] || 'image/jpeg', b64 = String(url).split(',')[1]; if(!b64) return null;
+  const prompt = 'Foto ini adalah nota / kwitansi / faktur belanja untuk proyek konstruksi di Indonesia (bisa cetak atau tulisan tangan). Baca setiap baris dengan teliti.\n'
+    + 'Balas HANYA JSON dengan bentuk: {"toko":"","tanggal":"YYYY-MM-DD atau kosong","total":0,"kategori":"salah satu dari: '+PBC_KAS_KAT.join(' / ')+'","barang":[{"nama":"","qty":0,"satuan":"","harga_satuan":0,"subtotal":0}],"catatan":""}\n'
+    + 'Aturan: nama barang ditulis lengkap & jelas dalam bahasa Indonesia (mis. "smn" → "Semen", "psr" → "Pasir", sebut merek/ukuran bila tertulis). Satuan seperti sak, m3, batang, lembar, kg, buah, roll, dus, liter, truk, rit. '
+    + 'Semua angka rupiah ditulis angka biasa tanpa titik/koma ribuan. Bila harga satuan tidak tertulis, hitung subtotal ÷ qty. "total" = total yang harus dibayar (bukan uang tunai / kembalian). '
+    + 'Kategori: barang bangunan → Material; ongkir/angkut/kapal → Transportasi; upah/borongan → Upah & Subkon; sewa alat → Sewa Alat. Isi "catatan" bila ada bagian yang kurang terbaca. Jangan mengarang barang yang tidak ada di foto.';
+  const models = cfg.models || ['gemini-2.5-flash','gemini-2.5-flash-lite','gemini-3-flash'];
+  for(let i=0;i<models.length;i++){
+    try{
+      const ctl = new AbortController(), to = setTimeout(function(){ ctl.abort(); }, 45000);
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[i]+':generateContent',
+        { method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key':cfg.gemini}, signal:ctl.signal,
+          body: JSON.stringify({ contents:[{ parts:[{ text:prompt }, { inline_data:{ mime_type:mime, data:b64 } }] }], generationConfig:{ responseMimeType:'application/json', temperature:0 } }) });
+      clearTimeout(to);
+      if(!res.ok) continue;
+      const j = await res.json(), t = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts.map(function(p){ return p.text||''; }).join('');
+      if(!t) continue;
+      const o = JSON.parse(t.replace(/^```json\s*|```\s*$/g,''));
+      o.barang = (o.barang||[]).filter(function(b){ return b && b.nama; }).map(function(b){ const q = +b.qty||0, st = +b.subtotal||0; let h = +b.harga_satuan||0; if(!h && st && q) h = Math.round(st/q); return { nama:String(b.nama).trim(), qty:q||null, satuan:String(b.satuan||'').trim(), harga:h, subtotal:st||(h&&q?h*q:0) }; });
+      return o;
+    }catch(e){ /* coba model berikutnya */ }
+  }
+  return null;
+}
+function pbcNotaIsiDariAI(o){
+  const set = function(id, v){ const e = document.getElementById(id); if(e && v) e.value = v; };
+  if(+o.total) set('notaJml', (+o.total).toLocaleString('id-ID'));
+  if(o.tanggal && /^\d{4}-\d{2}-\d{2}$/.test(o.tanggal)) set('notaTgl', o.tanggal);
+  if(o.toko) set('notaToko', o.toko);
+  const k = document.getElementById('notaKat'); if(k && o.kategori && Array.prototype.some.call(k.options, function(x){ return x.value===o.kategori; })) k.value = o.kategori;
+  if(o.barang.length){
+    set('notaUraian', o.barang.map(function(b){ return b.nama+(b.qty?' '+String(b.qty).replace('.',',')+(b.satuan?' '+b.satuan:''):''); }).join(', ').slice(0,200));
+    const box = document.getElementById('notaBrg'); if(box) box.innerHTML = '';
+    o.barang.forEach(function(b){ pbcNotaBrgTambah(b.nama, b.satuan, b.harga, b.qty); });
+    const bx = document.getElementById('notaBrgBox'); if(bx) bx.open = true;
+  }
+  const jum = o.barang.reduce(function(s,b){ return s+(+b.subtotal||0); },0);
+  return { cocok: !o.total || !jum || Math.abs(jum-(+o.total)) <= Math.max(1000, 0.01*(+o.total)), jum:jum };
+}
 async function pbcNotaBaca(url){
   const el = document.getElementById('notaBaca'); if(!el) return;
+  if(!window.PBC_DEMO){
+    el.textContent = '⏳ AI sedang membaca nota (nama barang, jumlah, harga, total)…';
+    try{
+      const o = await pbcNotaBacaAI(url);
+      if(o && (o.barang.length || +o.total)){
+        const c = pbcNotaIsiDariAI(o);
+        el.innerHTML = '✅ Nota terbaca: <b>'+o.barang.length+' barang</b>'+(+o.total?', total <b>Rp'+(+o.total).toLocaleString('id-ID')+'</b>':'')+'. '
+          + (c.cocok ? 'Jumlah per barang cocok dengan total.' : '<span style="color:var(--orange)">Jumlah per barang (Rp'+c.jum.toLocaleString('id-ID')+') beda dengan total — cek lagi.</span>')
+          + (o.catatan ? '<br><span style="color:var(--orange)">Catatan: '+pbcEsc(o.catatan)+'</span>' : '') + '<br>Periksa sekilas, lalu ketuk Simpan.';
+        return;
+      }
+    }catch(e){}
+  }
   el.textContent = '⏳ Membaca nota… (pertama kali perlu internet ±10 MB, selanjutnya lebih cepat)';
   try{
     const T = await pbcMuatTesseract();
@@ -13219,7 +13282,7 @@ async function pbcNotaSimpan(){
   const kat = v('notaKat'), masuk = kat==='__masuk';
   const e = { id:uid(), tgl:v('notaTgl')||today(), jenis:masuk?'masuk':'keluar', kategori:masuk?'':kat, uraian:v('notaUraian')||(masuk?'Uang masuk':kat), toko:v('notaToko'), jumlah:jml, sumber:_pbcNotaFoto?'foto':'manual' };
   if(v('notaItem') && !masuk) e.itemId = v('notaItem');
-  const brg = Array.prototype.slice.call(document.querySelectorAll('#notaBrg .nota-brg')).map(function(d){ return { nama:d.querySelector('.nb-n').value.trim(), sat:d.querySelector('.nb-s').value.trim(), harga:parseFloat(d.querySelector('.nb-h').value.replace(/[^\d]/g,''))||0 }; }).filter(function(b){ return b.nama && b.harga>0; });
+  const brg = Array.prototype.slice.call(document.querySelectorAll('#notaBrg .nota-brg')).map(function(d){ return { nama:d.querySelector('.nb-n').value.trim(), qty:parseFloat((d.querySelector('.nb-q')||{value:''}).value.replace(',','.'))||null, sat:d.querySelector('.nb-s').value.trim(), harga:parseFloat(d.querySelector('.nb-h').value.replace(/[^\d]/g,''))||0 }; }).filter(function(b){ return b.nama && b.harga>0; });
   if(brg.length) e.barang = brg;
   if(_pbcNotaFoto){
     const docId = 'nota_'+e.id;
