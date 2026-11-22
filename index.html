@@ -15894,14 +15894,14 @@ var PAH_TAMBAHAN = [
   ['Pasang Exhaust Fan','unit','','exhaust fan|exhaust|kipas angin dinding',[['Exhaust Fan',1]],0.25,0.1],
   ['Pasang Water Heater','unit','','water heater|pemanas air',[['Water Heater',1]],0.4,0.2]
 ];
-var PAH_DEF = { mode:'mid', tukang:200000, kenek:160000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25,
+var PAH_DEF = { manual:{}, mode:'mid', tukang:200000, kenek:160000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25,
   subUpah:20, subPaket:10, termin:'30,40,20,10', sumber:'boq', propId:'', rabDok:null, pilih:{} };
 var PAH = Object.assign({}, PAH_DEF, { hasil:null, chart:null, propList:[], dok:null });
 
 function pahRp(n){ return (typeof fmtRpPenuh==='function') ? fmtRpPenuh(n) : 'Rp '+Math.round(n||0).toLocaleString('id'); }
 function pahJt(n){ if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()) return 'Rp ••••'; n = n||0; var a = Math.abs(n); return (n<0?'-':'')+'Rp '+(a>=1e9?(a/1e9).toFixed(2).replace('.',',')+' M':a>=1e6?(a/1e6).toFixed(1).replace('.',',')+' jt':Math.round(a).toLocaleString('id')); }
 function pahNum(v, d){ v = parseFloat(v); return isFinite(v) ? v : d; }
-function pahSimpan(){ try{ var o = {}; ['mode','tukang','kenek','tim','hariMinggu','ops','kont','mMin','mTarget','mMax','subUpah','subPaket','termin','sumber','propId','pilih'].forEach(function(k){ o[k] = PAH[k]; }); localStorage.setItem('pbc_pah_set', JSON.stringify(o)); }catch(e){} }
+function pahSimpan(){ try{ var o = {}; ['mode','tukang','kenek','tim','hariMinggu','ops','kont','mMin','mTarget','mMax','subUpah','subPaket','termin','sumber','propId','pilih','manual'].forEach(function(k){ o[k] = PAH[k]; }); localStorage.setItem('pbc_pah_set', JSON.stringify(o)); }catch(e){} }
 function pahMuat(){ try{ var o = JSON.parse(localStorage.getItem('pbc_pah_set')||'null'); if(o) Object.keys(o).forEach(function(k){ if(PAH_DEF.hasOwnProperty(k) && o[k]!==undefined && o[k]!==null) PAH[k] = o[k]; }); }catch(e){} }
 function pahUmurBulan(tgl){ var p = String(tgl).split('-'), n = new Date(); return (n.getFullYear()-parseInt(p[0]))*12 + (n.getMonth()+1-parseInt(p[1])); }
 function pahSat(s){ s = String(s||'').toLowerCase().replace(/[²]/g,'2').replace(/[³]/g,'3').replace(/[^a-z0-9']/g,''); if(s==="m'"||s==='mlari'||s==='mtr'||s==='meter'||s==='ml') return 'm'; if(s==='ls'||s==='lot'||s==='paket'||s==='lumpsum') return 'ls'; if(s==='buah'||s==='pcs'||s==='unit'||s==='bh'||s==='set') return 'unit'; return s; }
@@ -15913,6 +15913,82 @@ var PAH_FAKTOR = { 'Besi Beton D8':4.74,'Besi Beton D10':7.4,'Besi Beton D12':10
 var PAH_BULAT = { 'sak':1,'buah':1,'lembar':1,'batang':1,'unit':1,'set':1,'roll':1,'kaleng':1,'tube':1 };
 
 /* ---- daftar analisa gabungan: standar + tambahan + analisa proyek (yang diubah/dibuat Bapak menang) ---- */
+/* ---- Harga PBC sendiri sebagai pilihan analisa (Buku Harga Satuan PBC, 22 Nov 2026) ----
+   'Jasa PBC' = modal jasa per satuan (subkon 2025 + kenaikan 2026), material 0 (pekerjaan jasa saja).
+   'Lengkap PBC' = material (koefisien SNI × Database Harga) + jasa per satuan. Dipilih manual per item. */
+var PBC_JASA = [
+  ["T01","Galian tanah sloof / pondasi","m'",35000],
+  ["T02","Galian pondasi 1,5x1,5x1,5 m","titik",470000],
+  ["T03","Urug, perataan & pemadatan tanah","m2",35000],
+  ["S01","Footplate / pedestal","titik",220000],
+  ["S02","Sloof + besi + bekisting","m'",85000],
+  ["S03","Kolom praktis + besi","m'",70000],
+  ["S04","Ring balok + besi","m'",65000],
+  ["S05","Cor lantai + besi 10-12 cm","m2",110000],
+  ["S06","Rabatan lantai tanpa besi","m2",45000],
+  ["S07","Bekisting tangga","m2",170000],
+  ["S08","Pasang rangka baja WF","kg",6900],
+  ["S09","Pasang bondek","m2",60000],
+  ["S10","Pasang wiremesh","m2",30000],
+  ["S11","Pasang angkur / base plate","titik",220000],
+  ["D01","Pasangan bata ringan","m2",45000],
+  ["D02","Plester dinding","m2",45000],
+  ["D03","Acian dinding","m2",40000],
+  ["D04","Plester + acian","m2",70000],
+  ["D05","Benangan / sudutan","m'",25000],
+  ["D06","Tali air / shadowline","m'",30000],
+  ["D07","Pasangan rolag","m'",85000],
+  ["L01","Pasang keramik lantai","m2",80000],
+  ["L02","Pasang keramik dinding","m2",75000],
+  ["L03","Pasang keramik tangga","trap",160000],
+  ["L04","Bevel trap tangga","trap",45000],
+  ["L05","Pasang plint keramik / vinyl","m'",40000],
+  ["L06","Nat keramik","m2",25000],
+  ["L07","Pasang lantai vinyl / SPC","m2",80000],
+  ["L08","Levelling dasar paving","m2",45000],
+  ["L09","Pasang paving","m2",60000],
+  ["L10","Screed lantai + waterproofing","m2",50000],
+  ["L11","Waterproofing","m2",30000],
+  ["L13","Pasang rubber flooring","m2",85000],
+  ["K01","Pasang kusen","m'",55000],
+  ["K02","Pasang daun pintu","bh",320000],
+  ["K03","Politur kusen","m'",55000],
+  ["K04","Politur daun pintu","m2",100000],
+  ["K05","Pasang hand railing","m'",70000],
+  ["K06","Finishing hand railing","m'",55000],
+  ["K07","Pasang railing balkon","m'",200000],
+  ["C01","Cat dinding interior","m2",45000],
+  ["C02","Cat dinding eksterior","m2",65000],
+  ["C03","Cat besi","m2",25000],
+  ["C04","Cat dekoratif / paint wash","m2",160000],
+  ["C05","Cat bondek eksterior","m2",50000],
+  ["P01","Plafon gypsum (rangka + papan)","m2",80000],
+  ["P02","Partisi gypsum","m2",105000],
+  ["P03","Drop box plafon","m'",65000],
+  ["P04","Drop ceiling (beda level)","m'",30000],
+  ["P05","Partisi tangga","m'",55000],
+  ["E01","Instalasi titik lampu","titik",95000],
+  ["E02","Instalasi titik saklar / stop kontak","titik",95000],
+  ["E03","Instalasi titik kabel AC","titik",170000],
+  ["E04","Instalasi titik exhaust / ceiling fan","titik",85000],
+  ["E05","Pasang aksesoris listrik","bh",45000],
+  ["E06","Pasang box panel MDP / SDP","bh",870000],
+  ["E07","Perakitan panel MDP / SDP","ls",2870000],
+  ["E08","Bobok + pasang pipa / sparing","m'",25000],
+  ["B01","Bobok lantai","titik",110000],
+  ["B02","Bobok + perapihan opening","titik",195000]
+];
+var PBC_HSL = [
+  ["HS01","Dinding bata ringan 10 cm (pasang)","m2",116300,45000],
+  ["HS02","Plester dinding instan 10 mm","m2",48500,45000],
+  ["HS03","Acian dinding instan","m2",7600,40000],
+  ["HS04","Lantai keramik 40x40 (perekat instan)","m2",121600,80000],
+  ["HS05","Lantai granit 60x60","m2",271500,80000],
+  ["HS06","Plafon gypsum 9 mm rangka hollow","m2",79000,80000],
+  ["HS07","Partisi gypsum 12 mm 2 sisi","m2",120600,105000],
+  ["HS08","Cat dinding interior (dasar + 2 lapis)","m2",15400,45000],
+  ["HS09","Dinding kedap suara (rockwool 2 lapis + SoundStop 2 lapis)","m2",408100,105000]
+];
 function pahDaftarAnalisa(){
   var hasil = [], nama = {};
   (typeof SEED_ANALISA_PEKERJAAN!=='undefined' ? SEED_ANALISA_PEKERJAAN : []).forEach(function(a){
@@ -15928,6 +16004,8 @@ function pahDaftarAnalisa(){
       if(idx>-1) hasil[idx] = o; else hasil.push(o);
     });
   }catch(e){}
+  PBC_HSL.forEach(function(r){ hasil.push({ nama:'Lengkap PBC · '+r[1], sat:r[2], ukuran:'', kata:'', m:[], tk:0, kl:0, matRp:r[3], modal:r[4], asal:'pbc', kode:r[0] }); });
+  PBC_JASA.forEach(function(r){ hasil.push({ nama:'Jasa PBC · '+r[1], sat:r[2], ukuran:'', kata:'', m:[], tk:0, kl:0, matRp:0, modal:r[3], asal:'pbc', kode:r[0] }); });
   return hasil;
 }
 /* pencocokan nama item -> analisa (kata kunci + ukuran). Tidak menebak bila ada beberapa ukuran yang bersaing. */
@@ -16033,7 +16111,8 @@ function pahHitung(rab){
   rab.items.forEach(function(it){
     var nilai = (it.vol||0)*(it.harga||0); nilaiRab += nilai;
     var pil = PAH.pilih[it.id], ana = null, st = 'ok', cat = '';
-    if(pil){ ana = daftar.find(function(a){ return a.nama===pil; }) || null; }
+    if(pil==='__manual' && PAH.manual && PAH.manual[it.id]!=null){ ana = { nama:'Modal diisi sendiri', sat:it.sat, m:[], tk:0, kl:0, matRp:PAH.manual[it.id].mat||0, modal:PAH.manual[it.id].jasa||0, asal:'manual' }; }
+    else if(pil){ ana = daftar.find(function(a){ return a.nama===pil; }) || null; }
     if(!ana){
       var c = pahCocok(it.nama, daftar);
       if(c.ambigu){ st = 'ambigu'; cat = 'Beberapa analisa cocok (ukuran berbeda). Pilih manual.'; }
@@ -16042,7 +16121,12 @@ function pahHitung(rab){
     }
     var r = { it:it, nilai:nilai, ana:ana, st:st, cat:cat, mat:0, upah:0, ohT:0, ohK:0, baris:[], kurang:0 };
     if(ana){
-      if(pahSat(ana.sat)!==pahSat(it.sat)){ r.st = 'satuan'; r.cat = 'Satuan item ('+it.sat+') berbeda dengan analisa ('+ana.sat+'). Tidak dihitung; pilih analisa lain atau samakan satuan.'; r.ana = ana; }
+      if(ana.asal!=='manual' && pahSat(ana.sat)!==pahSat(it.sat)){ r.st = 'satuan'; r.cat = 'Satuan item ('+it.sat+') berbeda dengan analisa ('+ana.sat+'). Tidak dihitung; pilih analisa lain atau samakan satuan.'; r.ana = ana; }
+      else if(ana.modal!=null){   /* harga PBC / modal manual: jasa & material per satuan langsung */
+        r.upah = it.vol*ana.modal; r.mat = it.vol*(ana.matRp||0);
+        r.ohT = r.upah/(S.tukang+S.kenek); r.ohK = r.ohT;
+        if(ana.matRp) r.baris.push({ nama:(ana.asal==='manual'?'Material (diisi sendiri)':'Material per '+ana.sat+' (Buku Harga PBC)'), q:it.vol, koef:1, hb:{h:ana.matRp, asal:'PBC'}, f:1, biaya:r.mat });
+      }
       else {
         r.ohT = it.vol*ana.tk; r.ohK = it.vol*ana.kl; r.upah = r.ohT*S.tukang + r.ohK*S.kenek;
         ana.m.forEach(function(row){
@@ -16151,7 +16235,18 @@ async function pahPilihProposal(id){
 }
 function pahSet(k, v){ PAH[k] = v; pahSimpan(); pahGambar(); }
 function pahSetSumber(s){ PAH.sumber = s; pahSimpan(); if(s==='proposal') pahMuatProposal(); pahGambar(); }
-function pahPilihAnalisa(itemId, nama){ if(nama) PAH.pilih[itemId] = nama; else delete PAH.pilih[itemId]; pahSimpan(); pahGambar(); }
+function pahPilihAnalisa(itemId, nama){
+  if(nama==='__manual'){
+    const it = ((pahAmbilRab()||{}).items||[]).find(function(x){ return x.id===itemId; }) || {};
+    const jasa = prompt('Modal JASA per '+(it.sat||'satuan')+' untuk "'+(it.nama||'')+'" (Rp, tanpa titik). Isi 0 kalau tidak ada.', '');
+    if(jasa===null){ pahGambar(); return; }
+    const mat = prompt('Modal MATERIAL per '+(it.sat||'satuan')+' (Rp, tanpa titik). Isi 0 kalau jasa saja.', '0');
+    if(mat===null){ pahGambar(); return; }
+    PAH.manual = PAH.manual || {}; PAH.manual[itemId] = { jasa:parseFloat(String(jasa).replace(/[^\d]/g,''))||0, mat:parseFloat(String(mat).replace(/[^\d]/g,''))||0 };
+    PAH.pilih[itemId] = '__manual';
+  } else if(nama) PAH.pilih[itemId] = nama; else { delete PAH.pilih[itemId]; if(PAH.manual) delete PAH.manual[itemId]; }
+  pahSimpan(); pahGambar();
+}
 async function pahBacaDokumen(input){
   var files = Array.prototype.slice.call(input.files||[]); if(!files.length) return;
   var st = document.getElementById('pahDokStatus'); if(st) st.textContent = 'Membaca '+files.length+' file di perangkat ini...';
@@ -16202,7 +16297,7 @@ function pahGambarIsi(){
     + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Operasional / bulan (Rp)','ops',500000)+pahInp('Cadangan tak terduga (%)','kont',1,110)+pahInp('Margin minimum (%)','mMin',1,110)+pahInp('Margin target (%)','mTarget',1,110)+pahInp('Margin maksimum (%)','mMax',1,110)+'</div>'
     + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Laba subkon atas upah (%)','subUpah',1,130)+pahInp('Laba subkon atas paket (%)','subPaket',1,130)
     + '<label style="display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted2);min-width:180px;flex:2"><span>Skema termin (% dipisah koma)</span><input class="form-input" value="'+pbcEsc(PAH.termin)+'" onchange="pahSet(\'termin\',this.value)"></label></div>'
-    + '<div style="font-size:9px;color:var(--muted2);margin-top:6px">Upah tukang Rp170.000 dan kenek Rp140.000 dari Bapak. Operasional Rp10.000.000/bulan dari Bapak. Margin, cadangan, dan laba subkon adalah asumsi awal.</div></div>';
+    + '<div style="font-size:9px;color:var(--muted2);margin-top:6px">Upah tukang '+pahRp(pahNum(PAH.tukang,200000))+' dan kenek '+pahRp(pahNum(PAH.kenek,160000))+' dari Bapak. Operasional '+pahRp(pahNum(PAH.ops,0))+'/bulan dari Bapak. Margin, cadangan, dan laba subkon adalah asumsi awal.</div></div>';
   if(!rab){ el.innerHTML = h; return; }
   H = pahHitung(rab); PAH.hasil = H;
   var band = pahBand(H), sub = pahSubkon(H);
@@ -16258,7 +16353,15 @@ function pahGambarIsi(){
   h += '<div class="panel" style="margin-bottom:14px"><div class="panel-title">8. Rincian per item</div><div class="tbl-wrap"><table><thead><tr><th>Pekerjaan</th><th style="text-align:right">Vol</th><th>Analisa</th><th style="text-align:right">Material</th><th style="text-align:right">Upah</th><th style="text-align:right">HPP</th><th style="text-align:right">Harga RAB</th></tr></thead><tbody>'
     + H.items.map(function(r){
       var ok = r.st==='ok' && r.ana, hpp = r.mat+r.upah, jl = r.nilai;
-      var sel = '<select class="form-select" style="font-size:10px;max-width:180px" onchange="pahPilihAnalisa(\''+r.it.id+'\',this.value)"><option value="">'+(ok?pbcEsc(r.ana.nama):'— pilih analisa —')+'</option>'+daftar.filter(function(a){ return !ok || a.nama!==r.ana.nama; }).map(function(a){ return '<option value="'+pbcEsc(a.nama)+'">'+pbcEsc(a.nama)+' ('+a.sat+')</option>'; }).join('')+'</select>';
+      var grup = function(judul, arr){ return arr.length ? '<optgroup label="'+judul+'">'+arr.map(function(a){ return '<option value="'+pbcEsc(a.nama)+'">'+pbcEsc(a.nama)+' ('+pbcEsc(a.sat)+')'+(a.modal!=null?' — '+pahRp((a.matRp||0)+a.modal)+'/'+pbcEsc(a.sat):'')+'</option>'; }).join('')+'</optgroup>' : ''; };
+      var lain = daftar.filter(function(a){ return !ok || a.nama!==r.ana.nama; }), satIt = pahSat(r.it.sat), cocokSat = function(a){ return pahSat(a.sat)===satIt; };
+      var sel = '<select class="form-select" style="font-size:11px;width:100%;max-width:100%;margin-top:4px" onchange="pahPilihAnalisa(\''+r.it.id+'\',this.value)"><option value="">'+(ok?'✓ '+pbcEsc(r.ana.nama):'— pilih analisa / harga —')+'</option>'
+        + '<option value="__manual">✏️ Isi modal sendiri (jasa / material)…</option>'
+        + grup('Harga PBC — jasa + material', lain.filter(function(a){ return a.asal==='pbc' && a.matRp && cocokSat(a); }))
+        + grup('Harga PBC — jasa saja', lain.filter(function(a){ return a.asal==='pbc' && !a.matRp && cocokSat(a); }))
+        + grup('Analisa standar (koefisien SNI)', lain.filter(function(a){ return a.asal!=='pbc' && cocokSat(a); }))
+        + grup('Satuan lain (perlu samakan satuan)', lain.filter(function(a){ return !cocokSat(a); }))
+        + (ok?'<option value="">✕ Hapus pilihan</option>':'') + '</select>';
       var bor = ''; if(ok && PAH_BORONGAN[r.ana.nama]){ var per = r.it.vol>0 ? r.upah/r.it.vol : 0, ref = PAH_BORONGAN[r.ana.nama][0]; if(per<ref*0.6) bor = '<div style="font-size:9px;color:#A5520F">Upah analisa '+pahRp(per)+'/'+r.ana.sat+' jauh di bawah ongkos borongan referensi '+pahRp(ref)+' ('+pahChipSumber('X')+')</div>'; else bor = '<div style="font-size:9px;color:var(--muted2)">Upah '+pahRp(per)+'/'+r.ana.sat+' · borongan ref '+pahRp(ref)+'</div>'; }
       var det = ok ? '<details><summary style="cursor:pointer;font-size:9px;color:var(--muted2)">bahan ('+r.baris.length+')</summary>'+r.baris.map(function(b){ return '<div style="font-size:9px;color:var(--muted2)">'+pbcEsc(b.nama)+': '+b.q.toLocaleString('id',{maximumFractionDigits:2})+(b.hb?' × '+pahRp(b.hb.h/b.f):' <span style="color:#B3261E">tanpa harga</span>')+'</div>'; }).join('')+'</details>' : '';
       return '<tr'+(ok?'':' style="background:rgba(192,57,43,0.08)"')+'><td>'+pbcEsc(r.it.nama)+'<div style="font-size:9px;color:var(--muted2)">'+pbcEsc(r.it.divisi)+'</div>'+(r.cat?'<div style="font-size:9px;color:#A5520F">'+pbcEsc(r.cat)+'</div>':'')+'</td><td style="text-align:right;white-space:nowrap">'+(+r.it.vol.toFixed(2))+' '+pbcEsc(r.it.sat)+'</td><td>'+sel+bor+det+'</td>'
