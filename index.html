@@ -1852,6 +1852,10 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     <div class="panel-title">Ringkasan per Proyek</div>
     <div id="semuaProyekList"><div class="empty">Klik "Muat Ulang" untuk menampilkan ringkasan seluruh proyek</div></div>
   </div>
+  <div class="panel" style="margin-top:16px">
+    <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>💰 Laporan Keuangan PBC — semua proyek</span><span><button class="btn btn-blue btn-sm" onclick="pbcLapKeuGambar()">Hitung</button> <button class="btn btn-gold btn-sm" onclick="pbcLapKeuPdf()">📄 PDF</button></span></div>
+    <div id="lapKeuIsi"><div class="empty">Ketuk "Hitung" untuk menggabungkan pemasukan & pengeluaran semua proyek.</div></div>
+  </div>
 </div>
 
 <!-- BOQ -->
@@ -3345,7 +3349,7 @@ async function saveProjectNowInti() {
     materialRequests: state.materialRequests, approvalLog: state.approvalLog, purchaseOrders: state.purchaseOrders, progressLog: state.progressLog, opnameList: state.opnameList || [],
     pekerja: state.pekerja, payrollLog: state.payrollLog, payrollSettings: state.payrollSettings,
     namaEn: state.namaEn||{}, variationOrders: state.variationOrders, catatanOwner: state.catatanOwner||{}, dokumenPdfLog: state.dokumenPdfLog,
-    masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan,
+    masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan, kas: state.kas||[],
     inspections: state.inspections, punchList: state.punchList,
     fotoMaterial: materialRingkas(), catatanFotoHarian: catatanFotoRingkas(), tarifTenagaKerja: state.tarifTenagaKerja, targetMarginPct: state.targetMarginPct, fotoHarian: fotoHarianRingkas() /* hanya referensi {docId,uploadedAt,label}; gambar tetap di pbc_doc:ID */
   });
@@ -3526,7 +3530,7 @@ async function loadProjectById(id) {
     state.variationOrders = data.variationOrders || []; state.catatanOwner = data.catatanOwner || {}; state.namaEn = data.namaEn || {};
     state.dokumenPdfLog = data.dokumenPdfLog || [];
     state.masaGaransi = data.masaGaransi || null;
-    state.retensiPencairan = data.retensiPencairan || [];
+    state.retensiPencairan = data.retensiPencairan || []; state.kas = data.kas || [];
     state.inspections = data.inspections || [];
     state.punchList = data.punchList || [];
     /* T6: kunci yang GAGAL dibaca (bukan "kosong") ditandai dan tidak akan ditulis ulang dengan daftar kosong. */
@@ -3600,6 +3604,55 @@ async function ambilRingkasSatuProyek(idxEntry){
   };
 }
 
+async function pbcLapKeuData(){
+  var idx = (await daftarProyekAman()).daftar, P = [], kat = {}, bln = {}, hutangPo = 0;
+  for(var i=0;i<idx.length;i++){
+    var d = null; try{ var r = await window.storage.get('pbc_project:'+idx[i].id, false); if(r && r.value) d = JSON.parse(r.value); }catch(e){}
+    if(!d || !d.proyek) continue;
+    var items = d.items||[], nilai = items.reduce(function(s,it){ return s+(+it.vol||0)*(+it.harga||0); },0);
+    var vo = (d.variationOrders||[]).filter(function(v){ return /setuju|approved|disetujui/i.test(v.status||''); }).reduce(function(s,v){ return s+(+v.nilai||+v.total||0); },0);
+    var masuk = 0, keluar = 0, piutang = 0;
+    (d.termin||[]).forEach(function(t){ var n = (+t.nilai||0)-(+t.nilaiRetensi||0); if(t.status==='Lunas'){ masuk += n; var b = String(t.paidAt||t.tgl||'').slice(0,7)||'-'; bln[b] = bln[b]||{m:0,k:0}; bln[b].m += n; } else piutang += (+t.nilai||0); });
+    (d.kas||[]).forEach(function(e){ var j = +e.jumlah||0, b = String(e.tgl||'').slice(0,7)||'-'; bln[b] = bln[b]||{m:0,k:0}; if(e.jenis==='masuk'){ masuk += j; bln[b].m += j; } else { keluar += j; bln[b].k += j; var k = e.kategori||'Lain-lain'; kat[k] = (kat[k]||0) + j; } });
+    (d.payrollLog||[]).forEach(function(p){ var j = +p.totalDibayar||0, b = String(p.tanggal||'').slice(0,7)||'-'; keluar += j; kat['Upah & Subkon'] = (kat['Upah & Subkon']||0) + j; bln[b] = bln[b]||{m:0,k:0}; bln[b].k += j; });
+    (d.purchaseOrders||[]).forEach(function(p){ var nilaiPo = (p.items||[]).reduce(function(s,x){ return s+(+x.qty||+x.jumlah||0)*(+x.harga||0); },0); if(!/lunas|dibayar|paid/i.test(p.statusBayar||p.status||'')) hutangPo += nilaiPo; });
+    P.push({ nama:d.proyek.nama||idx[i].nama, nilai:nilai+vo, masuk:masuk, keluar:keluar, piutang:piutang, laba:masuk-keluar, nKas:(d.kas||[]).length });
+  }
+  var T = P.reduce(function(a,p){ a.nilai += p.nilai; a.masuk += p.masuk; a.keluar += p.keluar; a.piutang += p.piutang; return a; }, {nilai:0,masuk:0,keluar:0,piutang:0});
+  return { P:P, T:T, kat:kat, bln:bln, hutangPo:hutangPo };
+}
+async function pbcLapKeuGambar(){
+  var el = document.getElementById('lapKeuIsi'); if(!el) return;
+  if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ el.innerHTML = '<div class="empty">Hanya untuk Direktur</div>'; return; }
+  el.innerHTML = '<div class="empty">⏳ Menggabungkan semua proyek…</div>';
+  var D = await pbcLapKeuData(); window._pbcLapKeu = D;
+  var saldo = 0;
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px">'
+    + [['Nilai kontrak aktif',D.T.nilai,''],['Uang masuk',D.T.masuk,'var(--teal-lt)'],['Uang keluar',D.T.keluar,'#e74c3c'],['Saldo kas (masuk − keluar)',D.T.masuk-D.T.keluar,(D.T.masuk-D.T.keluar)>=0?'var(--teal-lt)':'#e74c3c'],['Piutang (termin belum dibayar klien)',D.T.piutang,'var(--gold)'],['Utang PO belum lunas',D.hutangPo,'#e67e22']].map(function(k){ return '<div class="kpi-card"><div class="kpi-label">'+k[0]+'</div><div class="kpi-val" style="font-size:14px;color:'+(k[2]||'var(--white)')+'">'+fmtRp(k[1])+'</div></div>'; }).join('')+'</div>'
+    + '<div style="overflow-x:auto"><table class="tbl" style="width:100%;font-size:11px"><tr><th>Proyek</th><th style="text-align:right">Nilai kontrak</th><th style="text-align:right">Masuk</th><th style="text-align:right">Keluar</th><th style="text-align:right">Saldo</th><th style="text-align:right">Piutang</th></tr>'
+    + D.P.map(function(p){ return '<tr><td>'+pbcEsc(p.nama)+(p.nKas?'':' <span style="font-size:9px;color:var(--muted2)">(belum ada catatan kas)</span>')+'</td><td style="text-align:right">'+fmtRp(p.nilai)+'</td><td style="text-align:right">'+fmtRp(p.masuk)+'</td><td style="text-align:right">'+fmtRp(p.keluar)+'</td><td style="text-align:right;color:'+(p.laba>=0?'var(--teal-lt)':'#e74c3c')+'">'+fmtRp(p.laba)+'</td><td style="text-align:right">'+fmtRp(p.piutang)+'</td></tr>'; }).join('') + '</table></div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px">'
+    + '<div><div style="font-size:11px;font-weight:700;margin-bottom:4px">Pengeluaran per kelompok</div><table class="tbl" style="width:100%;font-size:11px">'+(Object.keys(D.kat).length?Object.keys(D.kat).sort(function(a,b){ return D.kat[b]-D.kat[a]; }).map(function(k){ return '<tr><td>'+pbcEsc(k)+'</td><td style="text-align:right">'+fmtRp(D.kat[k])+'</td><td style="text-align:center">'+(D.T.keluar?(D.kat[k]/D.T.keluar*100).toFixed(0):0)+'%</td></tr>'; }).join(''):'<tr><td class="empty">Belum ada pengeluaran</td></tr>')+'</table></div>'
+    + '<div><div style="font-size:11px;font-weight:700;margin-bottom:4px">Arus kas per bulan</div><table class="tbl" style="width:100%;font-size:11px"><tr><th>Bulan</th><th style="text-align:right">Masuk</th><th style="text-align:right">Keluar</th><th style="text-align:right">Saldo</th></tr>'+Object.keys(D.bln).sort().map(function(b){ saldo += D.bln[b].m-D.bln[b].k; return '<tr><td style="text-align:center">'+b+'</td><td style="text-align:right">'+fmtRp(D.bln[b].m)+'</td><td style="text-align:right">'+fmtRp(D.bln[b].k)+'</td><td style="text-align:right">'+fmtRp(saldo)+'</td></tr>'; }).join('')+'</table></div></div>'
+    + '<div style="font-size:10px;color:var(--muted2);margin-top:8px">Uang masuk = termin lunas (setelah retensi) + uang masuk lain di Buku Kas. Uang keluar = Buku Kas + pembayaran gaji. Saldo ini arus kas, belum laba akhir (proyek yang belum selesai masih punya biaya & tagihan berjalan).</div>';
+}
+async function pbcLapKeuPdf(){
+  if(typeof window.jspdf==='undefined'){ notif('Library PDF belum termuat, coba lagi','var(--red)'); return; }
+  if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ notif('Hanya untuk Direktur','var(--red)'); return; }
+  var D = window._pbcLapKeu || await pbcLapKeuData();
+  try{
+    var c = pbcLapBuat({ judul:'LAPORAN KEUANGAN PBC', sub:'Gabungan semua proyek · per '+new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}), land:false, bhs:'id', footer:'Internal — rahasia' });
+    c.kpi([['Uang masuk', pbcRp(D.T.masuk), C_TEAL, true], ['Uang keluar', pbcRp(D.T.keluar), [192,57,43], true], ['Saldo kas', pbcRp(D.T.masuk-D.T.keluar), (D.T.masuk-D.T.keluar)>=0?C_TEAL:[192,57,43], true]]);
+    c.tabel([{l:'Proyek',w:2.6,wrap:true},{l:'Nilai kontrak',w:1.4,a:'r'},{l:'Masuk',w:1.3,a:'r'},{l:'Keluar',w:1.3,a:'r'},{l:'Saldo',w:1.3,a:'r'},{l:'Piutang',w:1.3,a:'r'}],
+      D.P.map(function(p){ return [p.nama, pbcRp(p.nilai), pbcRp(p.masuk), pbcRp(p.keluar), pbcRp(p.laba), pbcRp(p.piutang)]; }).concat([{ _sub:1, cells:['TOTAL', pbcRp(D.T.nilai), pbcRp(D.T.masuk), pbcRp(D.T.keluar), pbcRp(D.T.masuk-D.T.keluar), pbcRp(D.T.piutang)] }]), { title:'Per proyek' });
+    c.tabel([{l:'Kelompok pengeluaran',w:3},{l:'Jumlah',w:1.5,a:'r'},{l:'%',w:0.8,a:'c'}], Object.keys(D.kat).map(function(k){ return [k, pbcRp(D.kat[k]), D.T.keluar?(D.kat[k]/D.T.keluar*100).toFixed(1)+'%':'-']; }), { title:'Pengeluaran per kelompok' });
+    var saldo = 0;
+    c.tabel([{l:'Bulan',w:1.2,a:'c'},{l:'Masuk',w:1.5,a:'r'},{l:'Keluar',w:1.5,a:'r'},{l:'Saldo',w:1.5,a:'r'}], Object.keys(D.bln).sort().map(function(b){ saldo += D.bln[b].m-D.bln[b].k; return [b, pbcRp(D.bln[b].m), pbcRp(D.bln[b].k), pbcRp(saldo)]; }), { title:'Arus kas per bulan' });
+    c.tabel([{l:'Keterangan',w:4},{l:'Jumlah',w:1.5,a:'r'}], [['Piutang — termin yang belum dibayar klien', pbcRp(D.T.piutang)], ['Utang — PO belum lunas', pbcRp(D.hutangPo)]], { title:'Piutang & utang' });
+    c.selesai('Laporan_Keuangan_PBC');
+    notif('PDF Laporan Keuangan PBC dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
 async function renderSemuaProyek(){
   const listEl = document.getElementById('semuaProyekList');
   const kpiEl = document.getElementById('semuaProyekKpi');
@@ -3683,7 +3736,7 @@ async function deleteProject(id) {
     if(state.proyek && state.proyek.id===id) {
       state.proyek=null; state.divisi=[]; state.items=[]; state.laporan=[]; state.termin=[];
       state.kurva={mulai:null,durasi:24,weeks:[]};
-      state.dokumen=[]; state.fotoHarian={}; state.fotoMaterial={}; state.catatanFotoHarian={}; state.suppliers=[]; state.materials=[]; state.materialKategori=[]; state.materialSubkategori=[]; state.analisaPekerjaan=[]; state.mrpDraft=[]; state.materialRequests=[]; state.approvalLog=[]; state.materialReceiving=[]; state.materialUsageLog=[]; state.progressLog=[]; state.opnameList=[]; state.purchaseOrders=[]; state.pekerja=[]; state.absensi=[]; state.payrollLog=[]; state.payrollSettings={siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders=[]; state.catatanOwner={}; state.dokumenPdfLog=[]; state.masaGaransi=null; state.retensiPencairan=[]; state.inspections=[]; state.punchList=[];
+      state.dokumen=[]; state.fotoHarian={}; state.fotoMaterial={}; state.catatanFotoHarian={}; state.suppliers=[]; state.materials=[]; state.materialKategori=[]; state.materialSubkategori=[]; state.analisaPekerjaan=[]; state.mrpDraft=[]; state.materialRequests=[]; state.approvalLog=[]; state.materialReceiving=[]; state.materialUsageLog=[]; state.progressLog=[]; state.opnameList=[]; state.purchaseOrders=[]; state.pekerja=[]; state.absensi=[]; state.payrollLog=[]; state.payrollSettings={siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders=[]; state.catatanOwner={}; state.dokumenPdfLog=[]; state.masaGaransi=null; state.retensiPencairan=[]; state.kas=[]; state.inspections=[]; state.punchList=[];
       document.getElementById('topProject').textContent='— Pilih Proyek —';
       renderBoq(); renderKurva(); renderProgress(); renderTermin(); refreshDashboard();
     }
@@ -6182,7 +6235,7 @@ async function convertProposalToProject(){
   state.laporan = []; state.termin = []; state.kurva = { mulai:null, durasi:24, weeks:[] }; state.estimasiFaktor = 1;
   state.dokumen = []; state.fotoHarian = {}; state.fotoMaterial = {}; state.catatanFotoHarian = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = [];
   state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = [];
-  state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.catatanOwner = {}; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
+  state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.catatanOwner = {}; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.kas = []; state.inspections = []; state.punchList = [];
 
   await saveProjectNow();
   proposalState.proyekId = newId; /* tandai proposal ini sudah dikonversi, supaya panel Aktivasi tidak tampil lagi & tidak bisa konversi dobel */
@@ -6287,7 +6340,7 @@ async function exportBackupJSON(){
       mrpDraft: state.mrpDraft, materialReceiving: state.materialReceiving, materialUsageLog: state.materialUsageLog,
       pekerja: state.pekerja, absensi: state.absensi, payrollLog: state.payrollLog, payrollSettings: state.payrollSettings,
       namaEn: state.namaEn||{}, variationOrders: state.variationOrders, catatanOwner: state.catatanOwner||{}, dokumenPdfLog: state.dokumenPdfLog,
-    masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan,
+    masaGaransi: state.masaGaransi, retensiPencairan: state.retensiPencairan, kas: state.kas||[],
       inspections: state.inspections, punchList: state.punchList
     };
     const json = JSON.stringify(payload);
@@ -6369,7 +6422,7 @@ async function importBackupJSON(file){
     state.variationOrders = data.variationOrders || []; state.catatanOwner = data.catatanOwner || {}; state.namaEn = data.namaEn || {};
     state.dokumenPdfLog = data.dokumenPdfLog || [];
     state.masaGaransi = data.masaGaransi || null;
-    state.retensiPencairan = data.retensiPencairan || [];
+    state.retensiPencairan = data.retensiPencairan || []; state.kas = data.kas || [];
     state.inspections = data.inspections || [];
     state.punchList = data.punchList || [];
     ubahSemuaIdDivisiItem(); /* T2: ID divisi & item adalah kunci global di tabel; restore = proyek baru, jadi nomornya HARUS baru juga */
@@ -7272,7 +7325,7 @@ async function simpanProyek() {
     state.proyek = null;
     state.divisi = []; state.items = []; state.laporan = []; state.termin = [];
     state.kurva = { mulai:null, durasi:24, weeks:[] };
-    state.dokumen = []; state.fotoHarian = {}; state.fotoMaterial = {}; state.catatanFotoHarian = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.catatanOwner = {}; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.inspections = []; state.punchList = [];
+    state.dokumen = []; state.fotoHarian = {}; state.fotoMaterial = {}; state.catatanFotoHarian = {}; state.suppliers = []; state.materials = []; state.materialKategori = []; state.materialSubkategori = []; state.analisaPekerjaan = []; state.mrpDraft = []; state.materialRequests = []; state.approvalLog = []; state.materialReceiving = []; state.materialUsageLog = []; state.progressLog = []; state.opnameList = []; state.purchaseOrders = []; state.pekerja = []; state.absensi = []; state.payrollLog = []; state.payrollSettings = {siklus:'mingguan',tanggalAwalSiklus:null}; state.variationOrders = []; state.catatanOwner = {}; state.namaEn = {}; state.dokumenPdfLog = []; state.masaGaransi = null; state.retensiPencairan = []; state.kas = []; state.inspections = []; state.punchList = [];
   }
   state.proyek = {
     id: state.proyek && state.proyek.id ? state.proyek.id : uid(),
@@ -13002,7 +13055,7 @@ function renderKeuangan(){
       + '<div class="kv"><span>Buku Kas — nota & pengeluaran lain (lihat di bawah)</span><strong>'+fmtRp(kasKeluar)+'</strong></div>'
       + (kasMasuk ? '<div class="kv"><span>Buku Kas — uang masuk di luar termin</span><strong style="color:var(--teal-lt)">'+fmtRp(kasMasuk)+'</strong></div>' : '');
   }
-  pbcKasGambar();
+  pbcKasGambar(); try{ pbcAnggaranGambar(); }catch(e){ console.error(e); }
   document.getElementById('keuanganCashflow').innerHTML =
     '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--teal-lt);margin-bottom:4px"><span>Termin Cair</span><span>'+fmtRp(paid)+'</span></div><div class="prog-bar"><div class="prog-fill green" style="width:'+(nilaiFinal?Math.min(100,paid/nilaiFinal*100):0)+'%"></div></div></div>'
     + '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--orange);margin-bottom:4px"><span>Total Pengeluaran</span><span>'+fmtRp(totalPengeluaran)+'</span></div><div class="prog-bar"><div class="prog-fill" style="width:'+(nilaiFinal?Math.min(100,totalPengeluaran/nilaiFinal*100):0)+'%;background:var(--orange)"></div></div></div>'
@@ -13021,6 +13074,40 @@ function pbcKasRingkas(){
   const k = { keluar:0, masuk:0, kat:{} }; PBC_KAS_KAT.forEach(function(x){ k.kat[x] = 0; });
   (state && state.kas || []).forEach(function(e){ const j = +e.jumlah||0; if(e.jenis==='masuk') k.masuk += j; else { k.keluar += j; k.kat[e.kategori||'Lain-lain'] = (k.kat[e.kategori||'Lain-lain']||0) + j; } });
   return k;
+}
+function pbcAnggaranData(){
+  if(!state.proyek || typeof pahHitung!=='function') return null;
+  try{ pahMuat(); }catch(e){}
+  var rab = pahItemBoq(); if(!rab) return null;
+  var H = pahHitung(rab), real = {}, umum = 0, totalReal = 0;
+  pbcKas().forEach(function(e){ if(e.jenis==='masuk') return; var j = +e.jumlah||0; totalReal += j; if(e.itemId) real[e.itemId] = (real[e.itemId]||0) + j; else umum += j; });
+  var baris = H.items.map(function(r){
+    var it = (state.items||[]).find(function(i){ return i.id===r.it.id; }) || {};
+    var angg = (r.mat||0) + (r.upah||0), re = real[r.it.id]||0, prog = (+it.vol) ? Math.min(100, (+it.terpasang||0)/(+it.vol)*100) : 0;
+    var pakai = angg ? re/angg*100 : (re?999:0);
+    var st = !re ? '' : pakai > prog + 15 ? 'boros' : pakai > 100 ? 'lewat' : 'aman';
+    return { id:r.it.id, nama:r.it.nama, divisi:r.it.divisi, angg:angg, real:re, pakai:pakai, prog:prog, st:st, perk:r.ana && r.ana.asal==='rab' };
+  });
+  var totalAngg = baris.reduce(function(s,b){ return s+b.angg; },0);
+  return { baris:baris, totalAngg:totalAngg, totalReal:totalReal, umum:umum, hpp:H.hpp, ops:H.opsP||0 };
+}
+function pbcAnggaranGambar(){
+  var el = document.getElementById('anggaranBox'); if(!el) return;
+  if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ el.innerHTML = '<div class="empty">Hanya untuk Direktur</div>'; return; }
+  var D = pbcAnggaranData(); if(!D){ el.innerHTML = '<div class="empty">Belum ada BOQ.</div>'; return; }
+  var warna = { boros:'#C0392B', lewat:'#A5520F', aman:'#1D7A4F' }, lbl = { boros:'⚠️ Lebih cepat dari progres', lewat:'Melewati anggaran', aman:'✓ Aman' };
+  var adaReal = D.baris.filter(function(b){ return b.real>0; }).sort(function(a,b){ return (b.pakai-b.prog)-(a.pakai-a.prog); });
+  var progTot = (function(){ var nk = 0, np = 0; (state.items||[]).forEach(function(i){ var n = (+i.vol||0)*(+i.harga||0); nk += n; np += (+i.vol?Math.min(1,(+i.terpasang||0)/(+i.vol)):0)*n; }); return nk?np/nk*100:0; })();
+  var pakaiTot = D.hpp ? D.totalReal/D.hpp*100 : 0;
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px">'
+    + '<div class="kpi-card"><div class="kpi-label">Anggaran biaya (HPP)</div><div class="kpi-val" style="font-size:14px">'+fmtRp(D.hpp)+'</div></div>'
+    + '<div class="kpi-card"><div class="kpi-label">Sudah keluar (Buku Kas)</div><div class="kpi-val" style="font-size:14px;color:#e74c3c">'+fmtRp(D.totalReal)+'</div></div>'
+    + '<div class="kpi-card"><div class="kpi-label">Terpakai vs progres</div><div class="kpi-val" style="font-size:14px;color:'+(pakaiTot>progTot+15?'#e74c3c':'var(--teal-lt)')+'">'+pakaiTot.toFixed(0)+'% / '+progTot.toFixed(0)+'%</div></div>'
+    + '<div class="kpi-card"><div class="kpi-label">Sisa anggaran</div><div class="kpi-val" style="font-size:14px">'+fmtRp(D.hpp-D.totalReal)+'</div></div></div>'
+    + '<div style="font-size:10px;color:var(--muted2);margin-bottom:6px">Aturan: kalau uang yang terpakai di suatu pekerjaan lebih dari 15% di atas progresnya, ditandai merah. Pengeluaran yang belum ditandai ke pekerjaan: <b>'+fmtRp(D.umum)+'</b> (tandai lewat pilihan "Untuk pekerjaan" saat mencatat nota).</div>'
+    + (adaReal.length ? '<div style="overflow-x:auto"><table class="tbl" style="width:100%;font-size:11px"><tr><th>Pekerjaan</th><th style="text-align:right">Anggaran</th><th style="text-align:right">Terpakai</th><th style="text-align:center">% pakai</th><th style="text-align:center">Progres</th><th>Status</th></tr>'
+      + adaReal.map(function(b){ return '<tr><td>'+pbcEsc(b.nama)+(b.perk?' <span style="font-size:9px;color:var(--muted2)">(anggaran perkiraan)</span>':'')+'</td><td style="text-align:right">'+fmtRp(b.angg)+'</td><td style="text-align:right">'+fmtRp(b.real)+'</td><td style="text-align:center">'+(b.pakai>=999?'—':b.pakai.toFixed(0)+'%')+'</td><td style="text-align:center">'+b.prog.toFixed(0)+'%</td><td style="color:'+(warna[b.st]||'inherit')+';white-space:nowrap">'+(lbl[b.st]||'')+'</td></tr>'; }).join('')
+      + '</table></div>' : '<div class="empty">Belum ada pengeluaran yang ditandai ke pekerjaan tertentu.</div>');
 }
 function pbcKasGambar(){
   const r = document.getElementById('kasRingkas'), d = document.getElementById('kasDaftar'); if(!r || !d) return;
@@ -13053,10 +13140,36 @@ function pbcNotaBuka(tanpaFoto){
     + '<div class="form-row"><div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="notaTgl" value="'+today()+'"></div>'
     + '<div class="form-group"><label class="form-label">Kelompok</label><select class="form-select" id="notaKat">'+opsi+'</select></div></div>'
     + '<div class="form-group"><label class="form-label">Uraian (misal: semen 10 sak, ongkir pasir)</label><input class="form-input" id="notaUraian"></div>'
+    + '<div class="form-group"><label class="form-label">Untuk pekerjaan (opsional — untuk Anggaran vs Realisasi)</label><select class="form-select" id="notaItem"><option value="">— umum / tidak spesifik —</option>'+pbcItemOpsi()+'</select></div>'
     + '<div class="form-row"><div class="form-group"><label class="form-label">Toko / penerima</label><input class="form-input" id="notaToko"></div>'
     + '<div class="form-group"><label class="form-label">Jumlah (Rp)</label><input class="form-input" id="notaJml" inputmode="numeric" placeholder="0"></div></div>'
+    + '<details id="notaBrgBox" style="margin:4px 0 10px"><summary style="cursor:pointer;font-size:12px;color:var(--gold)">🧾 Rincian harga per barang (opsional) — otomatis memperbarui Daftar Harga PBC</summary>'
+    + '<div id="notaBrg" style="margin-top:6px"></div><button type="button" class="btn btn-sm" style="margin-top:4px" onclick="pbcNotaBrgTambah()">+ barang</button></details>'
     + '<div class="modal-footer"><button class="btn btn-gold" onclick="hideModal(\'modalNota\')">Batal</button><button class="btn btn-blue" onclick="pbcNotaSimpan()">Simpan ke Buku Kas</button></div></div>';
   showModal('modalNota');
+}
+function pbcItemOpsi(){
+  var dv = {}; (state.divisi||[]).forEach(function(d){ dv[d.id] = d.nama; });
+  return (state.items||[]).map(function(i){ return '<option value="'+i.id+'">'+pbcEsc((dv[i.divisiId]?dv[i.divisiId]+' · ':'')+i.nama)+'</option>'; }).join('');
+}
+function pbcNotaBrgTambah(nama, sat, harga){
+  var box = document.getElementById('notaBrg'); if(!box) return;
+  var d = document.createElement('div'); d.className = 'nota-brg'; d.style.cssText = 'display:flex;gap:4px;margin-bottom:4px';
+  d.innerHTML = '<input class="form-input nb-n" placeholder="Nama barang" style="flex:2" value="'+pbcEsc(nama||'')+'"><input class="form-input nb-s" placeholder="Satuan" style="flex:0.8" value="'+pbcEsc(sat||'')+'"><input class="form-input nb-h" placeholder="Harga satuan" inputmode="numeric" style="flex:1.2" value="'+(harga?(+harga).toLocaleString('id-ID'):'')+'"><button type="button" class="btn btn-sm" onclick="this.parentNode.remove()">✕</button>';
+  box.appendChild(d);
+}
+function pbcNotaBrgUrai(teks){   /* baris "nama ... qty x harga" atau "nama ... harga" -> usulan barang (perlu dicek) */
+  var hasil = [];
+  String(teks||'').split(/\n+/).forEach(function(b){
+    b = b.trim(); if(!b || /total|jumlah|tunai|kembali|cash|bayar|diskon|ppn|tanggal|kasir|terima kasih/i.test(b)) return;
+    var nm = (b.match(/^[A-Za-z][A-Za-z0-9 .\/\-]{2,}/)||[''])[0].replace(/\s+\d+\s*$/,'').trim(); if(nm.length<3) return;
+    var ang = (b.match(/\d{1,3}(?:[.,]\d{3})+|\d{4,}/g)||[]).map(function(x){ return parseInt(x.replace(/[.,]/g,''),10); }).filter(function(n){ return n>=100; });
+    if(!ang.length) return;
+    var qm = b.match(/(\d+(?:[.,]\d+)?)\s*(?:x|@|×)/i), harga = ang[0];
+    if(qm && ang.length>=1){ harga = ang[0]; } else if(ang.length>=2){ harga = Math.min.apply(null, ang); }
+    hasil.push({ nama:nm.slice(0,50), harga:harga });
+  });
+  return hasil.slice(0,12);
 }
 function pbcNotaDipilih(inp){
   const f = inp && inp.files && inp.files[0]; if(!f) return;
@@ -13096,6 +13209,7 @@ async function pbcNotaBaca(url){
     if(h.jumlah) document.getElementById('notaJml').value = h.jumlah.toLocaleString('id-ID');
     if(h.tgl) document.getElementById('notaTgl').value = h.tgl;
     if(h.toko && !document.getElementById('notaToko').value) document.getElementById('notaToko').value = h.toko;
+    try{ var brg = pbcNotaBrgUrai(r && r.data && r.data.text); if(brg.length && !document.querySelectorAll('#notaBrg .nota-brg').length){ brg.forEach(function(b){ pbcNotaBrgTambah(b.nama, '', b.harga); }); var bx = document.getElementById('notaBrgBox'); if(bx) bx.open = true; } }catch(e){}
     el.innerHTML = h.jumlah ? '✅ Terbaca otomatis — <b>cek dulu</b> angka & tanggalnya sebelum simpan.' : '⚠️ Total tidak terbaca jelas — isi jumlahnya sendiri.';
   }catch(e){ el.textContent = '⚠️ Nota tidak bisa dibaca otomatis (internet / foto kurang jelas) — isi manual, fotonya tetap tersimpan.'; }
 }
@@ -13104,12 +13218,17 @@ async function pbcNotaSimpan(){
   const jml = parseFloat(v('notaJml').replace(/[^\d]/g,'')); if(!(jml>0)){ notif('Isi jumlah (Rp)','var(--red)'); return; }
   const kat = v('notaKat'), masuk = kat==='__masuk';
   const e = { id:uid(), tgl:v('notaTgl')||today(), jenis:masuk?'masuk':'keluar', kategori:masuk?'':kat, uraian:v('notaUraian')||(masuk?'Uang masuk':kat), toko:v('notaToko'), jumlah:jml, sumber:_pbcNotaFoto?'foto':'manual' };
+  if(v('notaItem') && !masuk) e.itemId = v('notaItem');
+  const brg = Array.prototype.slice.call(document.querySelectorAll('#notaBrg .nota-brg')).map(function(d){ return { nama:d.querySelector('.nb-n').value.trim(), sat:d.querySelector('.nb-s').value.trim(), harga:parseFloat(d.querySelector('.nb-h').value.replace(/[^\d]/g,''))||0 }; }).filter(function(b){ return b.nama && b.harga>0; });
+  if(brg.length) e.barang = brg;
   if(_pbcNotaFoto){
     const docId = 'nota_'+e.id;
     try{ await window.storage.set('pbc_doc:'+docId, _pbcNotaFoto, false); e.notaDocId = docId; }catch(x){ notif('Foto nota gagal disimpan, data angka tetap dicatat','var(--orange)'); }
   }
   pbcKas().push(e); _pbcNotaFoto = null;
-  debounceSave(); hideModal('modalNota'); renderKeuangan(); notif('Tercatat di Buku Kas');
+  debounceSave(); hideModal('modalNota'); renderKeuangan();
+  if(brg.length && !window.PBC_DEMO){ try{ const nb = await pbcHdbDariNota(brg, e.toko, e.tgl); notif('Tercatat di Buku Kas · '+nb+' harga barang masuk Daftar Harga PBC'); }catch(x){ notif('Tercatat di Buku Kas (Daftar Harga gagal diperbarui)','var(--orange)'); } }
+  else notif('Tercatat di Buku Kas');
 }
 async function pbcNotaLihat(docId){
   try{ const r = await window.storage.get('pbc_doc:'+docId, false); if(!r || !r.value){ notif('Foto nota tidak ditemukan','var(--red)'); return; }
@@ -13167,7 +13286,8 @@ const C_TEAL = [26,140,122];
     + '<div class="panel" style="margin-top:16px"><div class="panel-title">📒 Buku Kas Proyek <span style="font-size:9px;color:var(--muted2);font-weight:400">— nota yang Bapak kirim ke Claude masuk ke sini otomatis</span></div>'
     + '<div id="kasRingkas"></div>'
     + '<div class="toolbar" style="flex-wrap:wrap;margin-top:8px"><button class="btn btn-green" onclick="pbcNotaBuka()">📷 Foto Nota</button><button class="btn btn-blue" onclick="pbcNotaBuka(true)">+ Catat tanpa foto</button><button class="btn btn-gold" onclick="pbcCetakArusKas()">📄 PDF Laporan Arus Kas</button></div>'
-    + '<div id="kasDaftar" style="overflow-x:auto;margin-top:8px"></div></div>';
+    + '<div id="kasDaftar" style="overflow-x:auto;margin-top:8px"></div></div>'
+    + '<div class="panel" style="margin-top:16px"><div class="panel-title">📊 Anggaran vs Realisasi per Pekerjaan <span style="font-size:9px;color:var(--muted2);font-weight:400">— anggaran = biaya dari Analisa Harga; realisasi = Buku Kas yang ditandai ke pekerjaan</span></div><div id="anggaranBox"></div></div>';
   var el = document.getElementById('page-keuangan');
   if(el){ el.innerHTML = html; }
   else {
@@ -15894,15 +16014,24 @@ var PAH_TAMBAHAN = [
   ['Pasang Exhaust Fan','unit','','exhaust fan|exhaust|kipas angin dinding',[['Exhaust Fan',1]],0.25,0.1],
   ['Pasang Water Heater','unit','','water heater|pemanas air',[['Water Heater',1]],0.4,0.2]
 ];
-var PAH_DEF = { manual:{}, mode:'mid', tukang:200000, kenek:160000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25, naikOnline:20,
+var PAH_DEF = { manual:{}, mode:'mid', tukang:200000, kenek:160000, tim:8, hariMinggu:7, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25, naikOnline:20,
   subUpah:20, subPaket:10, termin:'30,40,20,10', sumber:'boq', propId:'', rabDok:null, pilih:{} };
 var PAH = Object.assign({}, PAH_DEF, { hasil:null, chart:null, propList:[], dok:null });
 
 function pahRp(n){ return (typeof fmtRpPenuh==='function') ? fmtRpPenuh(n) : 'Rp '+Math.round(n||0).toLocaleString('id'); }
 function pahJt(n){ if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()) return 'Rp ••••'; n = n||0; var a = Math.abs(n); return (n<0?'-':'')+'Rp '+(a>=1e9?(a/1e9).toFixed(2).replace('.',',')+' M':a>=1e6?(a/1e6).toFixed(1).replace('.',',')+' jt':Math.round(a).toLocaleString('id')); }
 function pahNum(v, d){ v = parseFloat(v); return isFinite(v) ? v : d; }
-function pahSimpan(){ try{ var o = {}; ['mode','tukang','kenek','tim','hariMinggu','ops','kont','mMin','mTarget','mMax','subUpah','subPaket','termin','sumber','propId','pilih','manual','naikOnline'].forEach(function(k){ o[k] = PAH[k]; }); localStorage.setItem('pbc_pah_set', JSON.stringify(o)); }catch(e){} }
-function pahMuat(){ try{ var o = JSON.parse(localStorage.getItem('pbc_pah_set')||'null'); if(o) Object.keys(o).forEach(function(k){ if(PAH_DEF.hasOwnProperty(k) && o[k]!==undefined && o[k]!==null) PAH[k] = o[k]; }); }catch(e){} }
+function pahSimpan(){ try{ var o = {v:2, t:Date.now()}; ['mode','tukang','kenek','tim','hariMinggu','ops','kont','mMin','mTarget','mMax','subUpah','subPaket','termin','sumber','propId','pilih','manual','naikOnline'].forEach(function(k){ o[k] = PAH[k]; }); localStorage.setItem('pbc_pah_set', JSON.stringify(o)); clearTimeout(window._pahKvT); window._pahKvT = setTimeout(function(){ try{ if(!window.PBC_DEMO) window.storage.set('pbc_pah_set', JSON.stringify(o), false); }catch(e){} }, 1500); }catch(e){} }
+function pahTerap(o){ if(!o) return; if(!o.v || o.v<2) o.hariMinggu = 7; /* PBC kerja Senin–Minggu */ Object.keys(o).forEach(function(k){ if(PAH_DEF.hasOwnProperty(k) && o[k]!==undefined && o[k]!==null) PAH[k] = o[k]; }); }
+function pahMuat(){ try{ pahTerap(JSON.parse(localStorage.getItem('pbc_pah_set')||'null')); }catch(e){} }
+async function pahMuatServer(){   /* pilihan analisa & harga manual sama di semua HP */
+  if(window.PBC_DEMO) return false;
+  try{ var r = await window.storage.get('pbc_pah_set', false); if(!r || !r.value) return false;
+    var o = JSON.parse(r.value), l = null; try{ l = JSON.parse(localStorage.getItem('pbc_pah_set')||'null'); }catch(e){}
+    if(l && (l.t||0) > (o.t||0)) return false;
+    pahTerap(o); try{ localStorage.setItem('pbc_pah_set', JSON.stringify(o)); }catch(e){} return true;
+  }catch(e){ return false; }
+}
 function pahUmurBulan(tgl){ var p = String(tgl).split('-'), n = new Date(); return (n.getFullYear()-parseInt(p[0]))*12 + (n.getMonth()+1-parseInt(p[1])); }
 function pahSat(s){ s = String(s||'').toLowerCase().replace(/[²]/g,'2').replace(/[³]/g,'3').replace(/[^a-z0-9']/g,''); if(s==="m'"||s==='mlari'||s==='mtr'||s==='meter'||s==='ml') return 'm'; if(s==='ls'||s==='lot'||s==='paket'||s==='lumpsum') return 'ls'; if(s==='buah'||s==='pcs'||s==='unit'||s==='bh'||s==='set') return 'unit'; return s; }
 function pahKatalogFaktor(nama){
@@ -16171,12 +16300,120 @@ var PBC_HARGA = {
   'Beton Ready Mix K-225':[842400,'Acuan online — perlu cek supplier Bali','Nov 2026']
 };
 /* harga satu bahan: harga supplier PBC (katalog material proyek) > Buku Harga PBC > referensi bersumber > kosong */
+/* ===========================================================================
+   DAFTAR HARGA PBC — satu sumber harga untuk semua proyek (disimpan di server, kv 'pbc_harga').
+   Urutan kepercayaan: harga beli aktual (nota) > penawaran supplier > harga toko Bali > acuan online (+ kenaikan).
+   Kolom 'katalog' menghubungkan baris harga ke nama bahan di analisa; 'faktor' = isi satuan katalog per satuan beli.
+   =========================================================================== */
+var PBC_HDB = null;
+var PBC_HDB_ST = { aktual:['Harga beli aktual',4,'#1D7A4F'], supplier:['Penawaran supplier',3,'#014AA1'], toko:['Harga toko Bali',2,'#6A4FB3'], online:['Acuan online',1,'#A5520F'], cek:['Perlu cek supplier',0,'#C0392B'] };
+async function pbcHdbMuat(paksa){
+  if(PBC_HDB && !paksa) return PBC_HDB;
+  try{ var r = await window.storage.get('pbc_harga', false); if(r && r.value){ PBC_HDB = JSON.parse(r.value); } }catch(e){}
+  if(!PBC_HDB) PBC_HDB = { item:[] };
+  PBC_HDB.item = PBC_HDB.item || []; return PBC_HDB;
+}
+async function pbcHdbSimpan(){
+  if(window.PBC_DEMO){ notif('Mode demo — tidak disimpan','var(--orange)'); return; }
+  PBC_HDB.diubah = new Date().toISOString();
+  try{ await window.storage.set('pbc_harga', JSON.stringify(PBC_HDB), false); }catch(e){ notif('Gagal menyimpan Daftar Harga — cek internet','var(--red)'); }
+}
+function pbcHdbNorm(t){ return String(t||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function pbcHdbPerKatalog(x){ var f = +x.faktor || 1; var h = (+x.harga||0)/f; if(x.status==='online' && typeof pahNaikOnline==='function') h *= pahNaikOnline(); return Math.round(h); }
+function pbcHdbCari(namaKatalog){
+  if(!PBC_HDB) return null;
+  var n = pbcHdbNorm(namaKatalog);
+  var c = PBC_HDB.item.filter(function(x){ return pbcHdbNorm(x.katalog)===n && +x.harga>0 && !x.lokasi && x.status!=='cek'; });
+  if(!c.length) return null;
+  c.sort(function(a,b){ var ra = (PBC_HDB_ST[a.status]||[0,0])[1], rb = (PBC_HDB_ST[b.status]||[0,0])[1]; return rb-ra || String(b.tglIso||'').localeCompare(String(a.tglIso||'')); });
+  return c[0];
+}
+function pbcHdbBuka(){
+  if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ notif('Daftar Harga hanya untuk Direktur','var(--red)'); return; }
+  var m = document.getElementById('modalHdb');
+  if(!m){ m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'modalHdb'; document.body.appendChild(m); }
+  m.innerHTML = '<div class="modal" style="max-width:760px;width:96vw"><div class="modal-title">📒 Daftar Harga PBC <span style="font-size:10px;color:var(--muted2);font-weight:400">— satu sumber harga untuk semua proyek & Analisa Harga</span></div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><input class="form-input" id="hdbCari" placeholder="Cari bahan…" style="flex:1;min-width:150px" oninput="pbcHdbGambar()">'
+    + '<select class="form-select" id="hdbSt" style="max-width:190px" onchange="pbcHdbGambar()"><option value="">Semua status</option>'+Object.keys(PBC_HDB_ST).map(function(k){ return '<option value="'+k+'">'+PBC_HDB_ST[k][0]+'</option>'; }).join('')+'</select>'
+    + '<button class="btn btn-blue" onclick="pbcHdbEdit()">+ Tambah harga</button></div>'
+    + '<div id="hdbIsi" style="max-height:62vh;overflow:auto"><div class="empty">⏳ Memuat…</div></div>'
+    + '<div class="modal-footer"><button class="btn btn-gold" onclick="hideModal(\'modalHdb\')">Tutup</button></div></div>';
+  showModal('modalHdb');
+  pbcHdbMuat(true).then(pbcHdbGambar);
+}
+function pbcHdbGambar(){
+  var el = document.getElementById('hdbIsi'); if(!el || !PBC_HDB) return;
+  var q = pbcHdbNorm((document.getElementById('hdbCari')||{}).value), st = (document.getElementById('hdbSt')||{}).value;
+  var rows = PBC_HDB.item.filter(function(x){ return (!q || pbcHdbNorm(x.nama+' '+(x.katalog||'')+' '+(x.sumber||'')).indexOf(q)>=0) && (!st || x.status===st); });
+  rows.sort(function(a,b){ return String(a.kat||'').localeCompare(String(b.kat||'')) || String(a.nama).localeCompare(String(b.nama)); });
+  var naik = Math.round(((typeof pahNaikOnline==='function'?pahNaikOnline():1.2)-1)*100);
+  el.innerHTML = '<div style="font-size:10px;color:var(--muted2);margin-bottom:6px">'+rows.length+' dari '+PBC_HDB.item.length+' harga · harga "Acuan online" otomatis +'+naik+'% saat dipakai menghitung · ketuk baris untuk ubah</div>'
+    + (rows.length ? rows.slice(0,300).map(function(x){ var S = PBC_HDB_ST[x.status]||['?',0,'#888'];
+      return '<div onclick="pbcHdbEdit(\''+x.id+'\')" style="cursor:pointer;padding:8px 6px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:flex-start">'
+        + '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--white);font-weight:600">'+pbcEsc(x.nama)+'</div>'
+        + '<div style="font-size:10px;color:var(--muted2)">'+pbcEsc(x.kat||'')+(x.sumber?' · '+pbcEsc(x.sumber):'')+(x.tgl?' · '+pbcEsc(x.tgl):'')+(x.lokasi?' · 📍'+pbcEsc(x.lokasi):'')+(x.katalog?' · dipakai analisa: <b>'+pbcEsc(x.katalog)+'</b>':'')+'</div></div>'
+        + '<div style="text-align:right;white-space:nowrap"><div style="font-size:12px;font-weight:700;color:var(--white)">'+(+x.harga>0?fmtRp(+x.harga):'—')+'<span style="font-size:9px;color:var(--muted2);font-weight:400"> /'+pbcEsc(x.sat||'')+'</span></div>'
+        + '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+S[2]+';color:#fff">'+S[0]+'</span></div></div>'; }).join('') : '<div class="empty">Tidak ada yang cocok.</div>');
+}
+function pbcHdbKatalogOpsi(pilih){
+  var nm = {}; try{ (MATERIAL_KATALOG||[]).forEach(function(r){ if(r && r[2]) nm[r[2]] = 1; }); }catch(e){}
+  try{ Object.keys(PAH_REF).forEach(function(k){ nm[k] = 1; }); Object.keys(PBC_HARGA).forEach(function(k){ nm[k] = 1; }); }catch(e){}
+  return '<option value="">— tidak dipakai di analisa —</option>' + Object.keys(nm).sort().map(function(k){ return '<option'+(k===pilih?' selected':'')+'>'+pbcEsc(k)+'</option>'; }).join('');
+}
+function pbcHdbEdit(id){
+  var x = id ? PBC_HDB.item.find(function(i){ return i.id===id; }) : { status:'aktual', tgl:'', faktor:1 };
+  if(!x) return;
+  var m = document.getElementById('modalHdbE');
+  if(!m){ m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'modalHdbE'; document.body.appendChild(m); }
+  var f = function(lbl, id2, val, extra){ return '<div class="form-group"><label class="form-label">'+lbl+'</label><input class="form-input" id="'+id2+'" value="'+pbcEsc(val==null?'':val)+'" '+(extra||'')+'></div>'; };
+  m.innerHTML = '<div class="modal" style="max-width:520px"><div class="modal-title">'+(id?'Ubah harga':'Tambah harga')+'</div>'
+    + f('Nama bahan & spesifikasi','hdbN',x.nama) + '<div class="form-row">'+f('Satuan beli','hdbSat',x.sat)+f('Harga (Rp)','hdbH',x.harga?(+x.harga).toLocaleString('id-ID'):'','inputmode="numeric"')+'</div>'
+    + '<div class="form-row"><div class="form-group"><label class="form-label">Status</label><select class="form-select" id="hdbS">'+Object.keys(PBC_HDB_ST).map(function(k){ return '<option value="'+k+'"'+(x.status===k?' selected':'')+'>'+PBC_HDB_ST[k][0]+'</option>'; }).join('')+'</select></div>'+f('Tanggal (mis. Nov 2026)','hdbT',x.tgl)+'</div>'
+    + '<div class="form-row">'+f('Sumber / toko','hdbSb',x.sumber)+f('Lokasi khusus (kosong = umum)','hdbL',x.lokasi,'placeholder="mis. Nusa Penida"')+'</div>'
+    + '<div class="form-row"><div class="form-group"><label class="form-label">Dipakai di analisa sebagai</label><select class="form-select" id="hdbK">'+pbcHdbKatalogOpsi(x.katalog||'')+'</select></div>'+f('Isi satuan analisa per satuan beli','hdbF',x.faktor||1,'inputmode="decimal"')+'</div>'
+    + (x.riwayat && x.riwayat.length ? '<div style="font-size:10px;color:var(--muted2)">Riwayat: '+x.riwayat.slice(-5).map(function(r){ return pbcEsc(r.tgl||'')+' '+fmtRp(r.harga)+(r.sumber?' ('+pbcEsc(r.sumber)+')':''); }).join(' · ')+'</div>' : '')
+    + '<div class="modal-footer">'+(id?'<button class="btn btn-red" onclick="pbcHdbHapus(\''+id+'\')">Hapus</button>':'')+'<button class="btn btn-gold" onclick="hideModal(\'modalHdbE\')">Batal</button><button class="btn btn-blue" onclick="pbcHdbSimpanForm(\''+(id||'')+'\')">Simpan</button></div></div>';
+  showModal('modalHdbE');
+}
+async function pbcHdbSimpanForm(id){
+  var v = function(i){ var e = document.getElementById(i); return e ? e.value.trim() : ''; };
+  var nama = v('hdbN'); if(!nama){ notif('Isi nama bahan','var(--red)'); return; }
+  var h = parseFloat(v('hdbH').replace(/[^\d,]/g,'').replace(',','.'))||0;
+  var x = id ? PBC_HDB.item.find(function(i){ return i.id===id; }) : null;
+  if(!x){ x = { id:uid(), kat:'Tambahan', riwayat:[] }; PBC_HDB.item.push(x); }
+  if(x.harga && +x.harga!==h){ x.riwayat = x.riwayat||[]; x.riwayat.push({ harga:+x.harga, tgl:x.tgl||'', sumber:x.sumber||'' }); }
+  x.nama = nama; x.sat = v('hdbSat'); x.harga = h; x.status = v('hdbS'); x.tgl = v('hdbT'); x.tglIso = today(); x.sumber = v('hdbSb'); x.lokasi = v('hdbL'); x.katalog = v('hdbK'); x.faktor = parseFloat(v('hdbF').replace(',','.'))||1;
+  await pbcHdbSimpan(); hideModal('modalHdbE'); pbcHdbGambar(); notif('Harga tersimpan');
+}
+async function pbcHdbHapus(id){ if(!confirm('Hapus harga ini dari Daftar Harga PBC?')) return; PBC_HDB.item = PBC_HDB.item.filter(function(i){ return i.id!==id; }); await pbcHdbSimpan(); hideModal('modalHdbE'); pbcHdbGambar(); }
+/* nota -> Daftar Harga: harga per barang dari nota dicatat sebagai "Harga beli aktual" */
+async function pbcHdbDariNota(barang, toko, tgl){
+  await pbcHdbMuat(true);
+  var bln = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], d = new Date(tgl||today());
+  var label = isNaN(d) ? '' : bln[d.getMonth()]+' '+d.getFullYear(), n = 0;
+  var lok = (state && state.proyek && state.proyek.lokasi && /nusa penida|nusa lembongan|lombok|luar bali/i.test(state.proyek.lokasi)) ? String(state.proyek.lokasi).trim() : '';
+  barang.forEach(function(b){
+    var x = PBC_HDB.item.find(function(i){ return pbcHdbNorm(i.nama)===pbcHdbNorm(b.nama) && pbcHdbNorm(i.lokasi)===pbcHdbNorm(lok); });
+    if(!x){ x = { id:uid(), nama:b.nama, kat:'Dari nota', sat:b.sat||'', faktor:1, riwayat:[], lokasi:lok };
+      var kk = ''; try{ Object.keys(PAH_REF).concat(Object.keys(PBC_HARGA)).forEach(function(k){ if(pbcHdbNorm(k)===pbcHdbNorm(b.nama)) kk = k; }); }catch(e){}
+      x.katalog = kk; PBC_HDB.item.push(x); }
+    else if(+x.harga && +x.harga!==+b.harga){ x.riwayat = x.riwayat||[]; x.riwayat.push({ harga:+x.harga, tgl:x.tgl||'', sumber:x.sumber||'' }); }
+    x.harga = +b.harga; x.status = 'aktual'; x.sumber = toko || 'Nota'; x.tgl = label; x.tglIso = tgl || today(); if(b.sat) x.sat = b.sat;
+    n++;
+  });
+  if(n) await pbcHdbSimpan();
+  return n;
+}
+setTimeout(function(){ try{ if(!window.PBC_DEMO) pbcHdbMuat(); }catch(e){} }, 4600);
+
 function pahHargaBahan(nama){
   var mode = PAH.mode;
   try{
     var m = (state.materials||[]).find(function(x){ return (x.nama||'').toLowerCase()===nama.toLowerCase() && x.harga>0; });
-    if(m) return { h:m.harga, asal:'PBC', sumber:null, lo:m.harga, hi:m.harga };
+    if(m) return { h:m.harga, asal:'PBC', sumber:null, lo:m.harga, hi:m.harga, cat:'Katalog Material proyek ini'+(m.spesifikasi?' — '+m.spesifikasi:'') };
   }catch(e){}
+  var hd = pbcHdbCari(nama);
+  if(hd){ var hp = pbcHdbPerKatalog(hd); return { h:hp, asal:'PBC', sumber:null, lo:hp, hi:hp, cat:'Daftar Harga PBC — '+(PBC_HDB_ST[hd.status]||[''])[0]+': '+hd.nama+' '+fmtRp(+hd.harga)+'/'+(hd.sat||'')+(hd.sumber?' ('+hd.sumber+(hd.tgl?', '+hd.tgl:'')+')':'')+(hd.status==='online'?' + kenaikan':'') }; }
   var pb = PBC_HARGA[nama]; if(pb){ var hh = (pb[3]==='online') ? Math.round(pb[0]*pahNaikOnline()) : pb[0]; return { h:hh, asal:'PBC', sumber:null, lo:hh, hi:hh, cat:'Buku Harga PBC — '+pb[1]+' ('+pb[2]+')'+(pb[3]==='online'?' + kenaikan '+Math.round((pahNaikOnline()-1)*100)+'%':'') }; }
   var r = PAH_REF[nama]; if(!r) return null;
   var h = mode==='lo' ? r[0] : mode==='hi' ? r[1] : (r[0]+r[1])/2;
@@ -16316,6 +16553,7 @@ function pahEnsurePage(){
 function pahBuka(sumber){
   if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()){ notif('Analisa Harga hanya untuk Direktur (peran akun ini: '+((window.PBC_AUTH&&PBC_AUTH.profil&&PBC_AUTH.profil.role)||'?')+', tampilan: '+(typeof currentRole!=='undefined'?currentRole:'?')+')','var(--red)'); return; }
   pahEnsurePage(); pahMuat(); if(sumber) PAH.sumber = sumber;
+  Promise.all([pahMuatServer(), pbcHdbMuat()]).then(function(){ if(sumber) PAH.sumber = sumber; var pg = document.getElementById('page-analisaharga'); if(pg && pg.classList.contains('active')) pahGambar(); });
   if(sumber==='proposal' && typeof proposalState!=='undefined' && proposalState){ PAH.propId = proposalState.id; }
   switchToPage('page-analisaharga', null, function(){ pahGambar(); });
   try{ window.scrollTo(0,0); var mn = document.querySelector('.main'); if(mn) mn.scrollTop = 0; }catch(e){}
@@ -16373,6 +16611,7 @@ function pahChipSumber(kode){
   var um = pahUmurBulan(s.tgl), lama = um>12;
   return '<a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--gold)" title="'+pbcEsc(s.t+' · '+s.c)+'">'+kode+'</a><span style="color:'+(lama?'var(--red)':'var(--muted2)')+';font-size:9px"> '+s.tgl+(lama?' (lama)':'')+'</span>';
 }
+function pahTombolHdb(){ return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn btn-blue btn-sm" onclick="pbcHdbBuka()">📒 Daftar Harga PBC</button></div>'; }
 function pahGambar(){
   try{ pahGambarIsi(); }
   catch(e){ console.error('[PAH]', e); var el = document.getElementById('pahIsi'); if(el) el.innerHTML = '<div class="panel" style="color:#B3261E"><b>Analisa Harga gagal ditampilkan.</b><br>'+pbcEsc(e&&e.message?e.message:String(e))+'<br><span style="font-size:10px;color:var(--muted2)">Kirim tulisan ini ke Claude.</span></div>'; }
@@ -16400,6 +16639,7 @@ function pahGambarIsi(){
     + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Kenaikan harga online → lapangan (%)','naikOnline',1,150)+pahInp('Laba subkon atas upah (%)','subUpah',1,130)+pahInp('Laba subkon atas paket (%)','subPaket',1,130)
     + '<label style="display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted2);min-width:180px;flex:2"><span>Skema termin (% dipisah koma)</span><input class="form-input" value="'+pbcEsc(PAH.termin)+'" onchange="pahSet(\'termin\',this.value)"></label></div>'
     + '<div style="font-size:9px;color:var(--muted2);margin-top:6px">Upah tukang '+pahRp(pahNum(PAH.tukang,200000))+' dan kenek '+pahRp(pahNum(PAH.kenek,160000))+' dari Bapak. Operasional '+pahRp(pahNum(PAH.ops,0))+'/bulan dari Bapak. Margin, cadangan, dan laba subkon adalah asumsi awal.</div></div>';
+  h = pahTombolHdb() + h;
   if(!rab){ el.innerHTML = h; return; }
   H = pahHitung(rab); PAH.hasil = H;
   var band = pahBand(H), sub = pahSubkon(H);
