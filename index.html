@@ -13031,9 +13031,91 @@ function pbcKasGambar(){
     + '<div class="kpi-card"><div class="kpi-label">Total keluar</div><div class="kpi-val" style="font-size:14px;color:#e74c3c">'+rp(k.keluar)+'</div></div></div>';
   const rows = pbcKas().slice().sort(function(a,b){ return String(b.tgl).localeCompare(String(a.tgl)); });
   d.innerHTML = rows.length ? ('<table class="tbl" style="width:100%;font-size:11px"><tr><th>Tanggal</th><th>Kategori</th><th>Uraian</th><th>Toko / Penerima</th><th style="text-align:right">Jumlah</th><th></th></tr>'
-    + rows.map(function(e){ return '<tr><td style="white-space:nowrap">'+pbcEsc(e.tgl)+'</td><td>'+pbcEsc(e.jenis==='masuk'?'Uang masuk':e.kategori)+'</td><td>'+pbcEsc(e.uraian||'')+(e.sumber==='claude'?' <span style="font-size:9px;color:var(--teal-lt)">· dari nota</span>':'')+'</td><td>'+pbcEsc(e.toko||'')+'</td><td style="text-align:right;white-space:nowrap;'+(e.jenis==='masuk'?'color:var(--teal-lt)':'')+'">'+rp(e.jumlah)+'</td><td><button class="btn btn-red btn-sm" onclick="pbcKasHapus(\''+e.id+'\')">x</button></td></tr>'; }).join('') + '</table>')
+    + rows.map(function(e){ return '<tr><td style="white-space:nowrap">'+pbcEsc(e.tgl)+'</td><td>'+pbcEsc(e.jenis==='masuk'?'Uang masuk':e.kategori)+'</td><td>'+pbcEsc(e.uraian||'')+(e.sumber==='claude'?' <span style="font-size:9px;color:var(--teal-lt)">· dari Claude</span>':'')+(e.notaDocId?' <a href="#" onclick="pbcNotaLihat(\''+e.notaDocId+'\');return false" style="font-size:10px">📎 nota</a>':'')+'</td><td>'+pbcEsc(e.toko||'')+'</td><td style="text-align:right;white-space:nowrap;'+(e.jenis==='masuk'?'color:var(--teal-lt)':'')+'">'+rp(e.jumlah)+'</td><td><button class="btn btn-red btn-sm" onclick="pbcKasHapus(\''+e.id+'\')">x</button></td></tr>'; }).join('') + '</table>')
     : '<div class="empty">Belum ada catatan kas. Kirim foto nota ke Claude, atau ketuk "+ Catat manual".</div>';
 }
+
+/* ===========================================================================
+   FOTO NOTA → BUKU KAS. Foto disimpan (dikompres) seperti foto progres (kv 'pbc_doc:'),
+   lalu dibaca otomatis DI HP (tesseract.js, gratis, tanpa Claude): total, tanggal, nama toko.
+   Hasil baca = perkiraan; Bapak cek & ubah sebelum simpan.
+   =========================================================================== */
+let _pbcNotaFoto = null;
+function pbcNotaBuka(tanpaFoto){
+  if(!state.proyek){ notif('Buka proyek dulu','var(--red)'); return; }
+  _pbcNotaFoto = null;
+  let m = document.getElementById('modalNota');
+  if(!m){ m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'modalNota'; document.body.appendChild(m); }
+  const opsi = PBC_KAS_KAT.map(function(k){ return '<option>'+k+'</option>'; }).join('') + '<option value="__masuk">Uang MASUK (di luar termin)</option>';
+  m.innerHTML = '<div class="modal" style="max-width:560px"><div class="modal-title">'+(tanpaFoto?'+ Catat Pengeluaran':'📷 Foto Nota')+'</div>'
+    + (tanpaFoto ? '' : '<div class="form-group"><label class="btn btn-green" style="display:inline-block;cursor:pointer">📷 Ambil / pilih foto nota<input type="file" accept="image/*" capture="environment" style="display:none" onchange="pbcNotaDipilih(this)"></label>'
+      + '<div id="notaPrev" style="margin-top:8px"></div><div id="notaBaca" style="font-size:10px;color:var(--muted2);margin-top:4px"></div></div>')
+    + '<div class="form-row"><div class="form-group"><label class="form-label">Tanggal</label><input class="form-input" type="date" id="notaTgl" value="'+today()+'"></div>'
+    + '<div class="form-group"><label class="form-label">Kelompok</label><select class="form-select" id="notaKat">'+opsi+'</select></div></div>'
+    + '<div class="form-group"><label class="form-label">Uraian (misal: semen 10 sak, ongkir pasir)</label><input class="form-input" id="notaUraian"></div>'
+    + '<div class="form-row"><div class="form-group"><label class="form-label">Toko / penerima</label><input class="form-input" id="notaToko"></div>'
+    + '<div class="form-group"><label class="form-label">Jumlah (Rp)</label><input class="form-input" id="notaJml" inputmode="numeric" placeholder="0"></div></div>'
+    + '<div class="modal-footer"><button class="btn btn-gold" onclick="hideModal(\'modalNota\')">Batal</button><button class="btn btn-blue" onclick="pbcNotaSimpan()">Simpan ke Buku Kas</button></div></div>';
+  showModal('modalNota');
+}
+function pbcNotaDipilih(inp){
+  const f = inp && inp.files && inp.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = async function(){
+    let url = rd.result;
+    try{ url = await compressImageDataUrl(rd.result, 1400, 0.72); }catch(e){}
+    _pbcNotaFoto = url;
+    document.getElementById('notaPrev').innerHTML = '<img src="'+url+'" style="max-width:100%;max-height:220px;border-radius:6px;border:1px solid var(--border)">';
+    pbcNotaBaca(url);
+  };
+  rd.readAsDataURL(f);
+}
+function pbcMuatTesseract(){
+  if(window.Tesseract) return Promise.resolve(window.Tesseract);
+  return new Promise(function(ok, gagal){ const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; sc.onload = function(){ ok(window.Tesseract); }; sc.onerror = gagal; document.head.appendChild(sc); });
+}
+function pbcNotaUrai(teks){   /* teks hasil baca -> {jumlah, tgl, toko} (perkiraan) */
+  const baris = String(teks||'').split(/\n+/).map(function(x){ return x.trim(); }).filter(Boolean);
+  const angka = function(t){ const m = String(t).match(/\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|\d{4,}/g); if(!m) return []; return m.map(function(x){ x = x.replace(/[.,]\d{2}$/,''); return parseInt(x.replace(/[.,]/g,''),10); }).filter(function(n){ return n>=500 && n<1e10; }); };
+  let jumlah = 0;
+  for(let i=baris.length-1;i>=0;i--){ if(/grand\s*total|total|jumlah|tagihan|bayar/i.test(baris[i]) && !/sub\s*total|kembali|tunai|cash|change/i.test(baris[i])){ let a = angka(baris[i]); if(!a.length && !/tunai|kembali|cash/i.test(baris[i+1]||'')) a = angka(baris[i+1]||''); if(a.length){ jumlah = a[a.length-1]; break; } } }
+  if(!jumlah){ const semua = angka(baris.join(' ')); if(semua.length) jumlah = Math.max.apply(null, semua); }
+  let tgl = '';
+  const mt = String(teks).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if(mt){ let y = +mt[3]; if(y<100) y += 2000; const d = new Date(y, +mt[2]-1, +mt[1]); if(!isNaN(d) && y>2000 && y<2100) tgl = pbcIsoTgl(d); }
+  const toko = (baris.find(function(b){ return /[A-Za-z]{3,}/.test(b) && !/nota|faktur|invoice|tanggal|kepada|no\.|jl\.|telp|hp/i.test(b); }) || '').replace(/[^A-Za-z0-9 .&-]/g,'').trim().slice(0,40);
+  return { jumlah:jumlah, tgl:tgl, toko:toko };
+}
+async function pbcNotaBaca(url){
+  const el = document.getElementById('notaBaca'); if(!el) return;
+  el.textContent = '⏳ Membaca nota… (pertama kali perlu internet ±10 MB, selanjutnya lebih cepat)';
+  try{
+    const T = await pbcMuatTesseract();
+    const r = await T.recognize(url, 'ind+eng');
+    const h = pbcNotaUrai(r && r.data && r.data.text);
+    if(h.jumlah) document.getElementById('notaJml').value = h.jumlah.toLocaleString('id-ID');
+    if(h.tgl) document.getElementById('notaTgl').value = h.tgl;
+    if(h.toko && !document.getElementById('notaToko').value) document.getElementById('notaToko').value = h.toko;
+    el.innerHTML = h.jumlah ? '✅ Terbaca otomatis — <b>cek dulu</b> angka & tanggalnya sebelum simpan.' : '⚠️ Total tidak terbaca jelas — isi jumlahnya sendiri.';
+  }catch(e){ el.textContent = '⚠️ Nota tidak bisa dibaca otomatis (internet / foto kurang jelas) — isi manual, fotonya tetap tersimpan.'; }
+}
+async function pbcNotaSimpan(){
+  const v = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  const jml = parseFloat(v('notaJml').replace(/[^\d]/g,'')); if(!(jml>0)){ notif('Isi jumlah (Rp)','var(--red)'); return; }
+  const kat = v('notaKat'), masuk = kat==='__masuk';
+  const e = { id:uid(), tgl:v('notaTgl')||today(), jenis:masuk?'masuk':'keluar', kategori:masuk?'':kat, uraian:v('notaUraian')||(masuk?'Uang masuk':kat), toko:v('notaToko'), jumlah:jml, sumber:_pbcNotaFoto?'foto':'manual' };
+  if(_pbcNotaFoto){
+    const docId = 'nota_'+e.id;
+    try{ await window.storage.set('pbc_doc:'+docId, _pbcNotaFoto, false); e.notaDocId = docId; }catch(x){ notif('Foto nota gagal disimpan, data angka tetap dicatat','var(--orange)'); }
+  }
+  pbcKas().push(e); _pbcNotaFoto = null;
+  debounceSave(); hideModal('modalNota'); renderKeuangan(); notif('Tercatat di Buku Kas');
+}
+async function pbcNotaLihat(docId){
+  try{ const r = await window.storage.get('pbc_doc:'+docId, false); if(!r || !r.value){ notif('Foto nota tidak ditemukan','var(--red)'); return; }
+    const w = window.open(''); if(w){ w.document.write('<title>Nota</title><img src="'+r.value+'" style="max-width:100%">'); } }catch(e){ notif('Gagal membuka foto','var(--red)'); }
+}
+
 function pbcKasForm(){
   const kat = prompt('Kategori (ketik nomor):\n1 Material\n2 Transportasi\n3 Upah & Subkon\n4 Sewa Alat\n5 Operasional\n6 Lain-lain\n7 Uang MASUK', '1'); if(kat===null) return;
   const n = parseInt(kat,10); if(!(n>=1 && n<=7)){ notif('Pilihan tidak dikenal','var(--red)'); return; }
@@ -13084,7 +13166,7 @@ const C_TEAL = [26,140,122];
     + '<div class="panel" style="margin-top:16px"><div class="panel-title">Cashflow Proyek</div><div id="keuanganCashflow"></div></div>'
     + '<div class="panel" style="margin-top:16px"><div class="panel-title">📒 Buku Kas Proyek <span style="font-size:9px;color:var(--muted2);font-weight:400">— nota yang Bapak kirim ke Claude masuk ke sini otomatis</span></div>'
     + '<div id="kasRingkas"></div>'
-    + '<div class="toolbar" style="flex-wrap:wrap;margin-top:8px"><button class="btn btn-blue" onclick="pbcKasForm()">+ Catat manual</button><button class="btn btn-gold" onclick="pbcCetakArusKas()">📄 PDF Laporan Arus Kas</button></div>'
+    + '<div class="toolbar" style="flex-wrap:wrap;margin-top:8px"><button class="btn btn-green" onclick="pbcNotaBuka()">📷 Foto Nota</button><button class="btn btn-blue" onclick="pbcNotaBuka(true)">+ Catat tanpa foto</button><button class="btn btn-gold" onclick="pbcCetakArusKas()">📄 PDF Laporan Arus Kas</button></div>'
     + '<div id="kasDaftar" style="overflow-x:auto;margin-top:8px"></div></div>';
   var el = document.getElementById('page-keuangan');
   if(el){ el.innerHTML = html; }
