@@ -16048,6 +16048,24 @@ var PBC_PASAR = [
   [/meja 2 orang|meja cafe/, ['unit'], 'Meja cafe 60×60', 979000, 0, 'Ruparupa: Informa Bailey 60×60 Rp979.000'],
   [/truk/, ['unit','trip'], 'Sewa truk engkel per trip', 850000, 0, 'Deliveree: truk engkel Rp500.000–1.200.000/hari']
 ];
+/* harga dari katalog Material PROYEK INI (data lokal Bapak) — menang atas harga pasar online */
+function pahAnaLokal(it){
+  var nm = (it.nama||'').toLowerCase(), satIt = pahSat(it.sat), mats = (typeof state!=='undefined' && state.materials) || [];
+  var cari = function(re){ return mats.find(function(x){ return re.test((x.nama||'').toLowerCase()) && x.harga>0; }); };
+  if(/pompa (pendorong|booster|dorong)/.test(nm) && satIt==='unit'){
+    var p = cari(/pompa (booster|pendorong|dorong)/);
+    if(p) return { ana:{ nama:'Harga proyek · '+p.nama, sat:it.sat, m:[], tk:0, kl:0, matRp:p.harga, modal:0, asal:'lokal' }, cat:'Dari katalog Material proyek ini'+(p.spesifikasi?': '+p.spesifikasi:'')+'. Ongkos pasang belum termasuk.' };
+  }
+  if(/kaca/.test(nm) && /depan|pintu|mati|etalase|partisi/.test(nm) && satIt==='m2'){
+    var k = cari(/^kaca tempered 8/);
+    if(k){
+      var t = Math.min(0.9, Math.max(0, pahNum(PAH.mTarget,15)/100)), sisa = Math.max(0, (it.harga||0)*(1-t) - k.harga);
+      return { ana:{ nama:'Kaca tempered 8 mm (harga lokal) + kusen & pasang', sat:it.sat, m:[], tk:0, kl:0, matRp:k.harga + sisa*0.6, modal:sisa*0.4, asal:'lokal' },
+        cat:'Kaca '+pahRp(k.harga)+'/m² dari katalog Material proyek'+(k.spesifikasi?' ('+k.spesifikasi+')':'')+'. Kusen aluminium, floor hinge & pasang '+pahRp(sisa)+'/m² masih perkiraan dari harga RAB — tunggu penawaran aplikator aluminium.' };
+    }
+  }
+  return null;
+}
 function pahNaikOnline(){ return 1 + Math.max(0, pahNum(PAH.naikOnline,20))/100; }
 function pahAnaPasar(it){
   var nm = (it.nama||'').toLowerCase(), satIt = pahSat(it.sat);
@@ -16079,6 +16097,7 @@ function pahAutoAnalisa(it, daftar){
     if(a && pahSat(a.sat)===satIt) return { ana:a, cat:'' };
     break;
   }
+  var lk = pahAnaLokal(it); if(lk) return lk;
   var ps = pahAnaPasar(it); if(ps) return ps;
   var c = pahCocok(it.nama, daftar);
   if(c.ambigu && c.kandidat){ var k = c.kandidat.filter(function(x){ return pahSat(x.sat)===satIt; }); if(k.length) return { ana:k[0], cat:'Dipilih otomatis ('+k[0].nama+'). Ganti bila ukurannya berbeda.' }; }
@@ -16204,11 +16223,11 @@ function pahHitung(rab){
     if(!ana){ var oa = pahAutoAnalisa(it, daftar); ana = oa.ana; cat = oa.cat; auto = true; }
     var r = { it:it, nilai:nilai, ana:ana, st:st, cat:cat, mat:0, upah:0, ohT:0, ohK:0, baris:[], kurang:0 };
     if(ana){
-      if(ana.asal!=='manual' && ana.asal!=='rab' && ana.asal!=='pasar' && pahSat(ana.sat)!==pahSat(it.sat)){ r.st = 'satuan'; r.cat = 'Satuan item ('+it.sat+') berbeda dengan analisa ('+ana.sat+'). Tidak dihitung; pilih analisa lain atau samakan satuan.'; r.ana = ana; }
+      if(ana.asal!=='manual' && ana.asal!=='rab' && ana.asal!=='pasar' && ana.asal!=='lokal' && pahSat(ana.sat)!==pahSat(it.sat)){ r.st = 'satuan'; r.cat = 'Satuan item ('+it.sat+') berbeda dengan analisa ('+ana.sat+'). Tidak dihitung; pilih analisa lain atau samakan satuan.'; r.ana = ana; }
       else if(ana.modal!=null){   /* harga PBC / modal manual: jasa & material per satuan langsung */
         r.upah = it.vol*ana.modal; r.mat = it.vol*(ana.matRp||0); r.rab = ana.asal==='rab'; r.auto = auto;
         r.ohT = r.upah/(S.tukang+S.kenek); r.ohK = r.ohT;
-        if(ana.matRp) r.baris.push({ nama:(ana.asal==='manual'?'Material (diisi sendiri)':ana.asal==='rab'?'Material / biaya langsung (perkiraan dari harga RAB)':ana.asal==='pasar'?'Barang / biaya (harga pasar online + kenaikan)':'Material per '+ana.sat+' (Buku Harga PBC)'), q:it.vol, koef:1, hb:{h:ana.matRp, asal:'PBC'}, f:1, biaya:r.mat });
+        if(ana.matRp) r.baris.push({ nama:(ana.asal==='manual'?'Material (diisi sendiri)':ana.asal==='rab'?'Material / biaya langsung (perkiraan dari harga RAB)':ana.asal==='pasar'?'Barang / biaya (harga pasar online + kenaikan)':ana.asal==='lokal'?'Barang / material (harga lokal proyek)':'Material per '+ana.sat+' (Buku Harga PBC)'), q:it.vol, koef:1, hb:{h:ana.matRp, asal:'PBC'}, f:1, biaya:r.mat });
       }
       else {
         r.ohT = it.vol*ana.tk; r.ohK = it.vol*ana.kl; r.upah = r.ohT*S.tukang + r.ohK*S.kenek;
