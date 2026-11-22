@@ -15894,14 +15894,14 @@ var PAH_TAMBAHAN = [
   ['Pasang Exhaust Fan','unit','','exhaust fan|exhaust|kipas angin dinding',[['Exhaust Fan',1]],0.25,0.1],
   ['Pasang Water Heater','unit','','water heater|pemanas air',[['Water Heater',1]],0.4,0.2]
 ];
-var PAH_DEF = { manual:{}, mode:'mid', tukang:200000, kenek:160000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25,
+var PAH_DEF = { manual:{}, mode:'mid', tukang:200000, kenek:160000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25, naikOnline:20,
   subUpah:20, subPaket:10, termin:'30,40,20,10', sumber:'boq', propId:'', rabDok:null, pilih:{} };
 var PAH = Object.assign({}, PAH_DEF, { hasil:null, chart:null, propList:[], dok:null });
 
 function pahRp(n){ return (typeof fmtRpPenuh==='function') ? fmtRpPenuh(n) : 'Rp '+Math.round(n||0).toLocaleString('id'); }
 function pahJt(n){ if(typeof PBC_UANG_TERBUKA==='function' && !PBC_UANG_TERBUKA()) return 'Rp ••••'; n = n||0; var a = Math.abs(n); return (n<0?'-':'')+'Rp '+(a>=1e9?(a/1e9).toFixed(2).replace('.',',')+' M':a>=1e6?(a/1e6).toFixed(1).replace('.',',')+' jt':Math.round(a).toLocaleString('id')); }
 function pahNum(v, d){ v = parseFloat(v); return isFinite(v) ? v : d; }
-function pahSimpan(){ try{ var o = {}; ['mode','tukang','kenek','tim','hariMinggu','ops','kont','mMin','mTarget','mMax','subUpah','subPaket','termin','sumber','propId','pilih','manual'].forEach(function(k){ o[k] = PAH[k]; }); localStorage.setItem('pbc_pah_set', JSON.stringify(o)); }catch(e){} }
+function pahSimpan(){ try{ var o = {}; ['mode','tukang','kenek','tim','hariMinggu','ops','kont','mMin','mTarget','mMax','subUpah','subPaket','termin','sumber','propId','pilih','manual','naikOnline'].forEach(function(k){ o[k] = PAH[k]; }); localStorage.setItem('pbc_pah_set', JSON.stringify(o)); }catch(e){} }
 function pahMuat(){ try{ var o = JSON.parse(localStorage.getItem('pbc_pah_set')||'null'); if(o) Object.keys(o).forEach(function(k){ if(PAH_DEF.hasOwnProperty(k) && o[k]!==undefined && o[k]!==null) PAH[k] = o[k]; }); }catch(e){} }
 function pahUmurBulan(tgl){ var p = String(tgl).split('-'), n = new Date(); return (n.getFullYear()-parseInt(p[0]))*12 + (n.getMonth()+1-parseInt(p[1])); }
 function pahSat(s){ s = String(s||'').toLowerCase().replace(/[²]/g,'2').replace(/[³]/g,'3').replace(/[^a-z0-9']/g,''); if(s==="m'"||s==='mlari'||s==='mtr'||s==='meter'||s==='ml') return 'm'; if(s==='ls'||s==='lot'||s==='paket'||s==='lumpsum') return 'ls'; if(s==='buah'||s==='pcs'||s==='unit'||s==='bh'||s==='set') return 'unit'; return s; }
@@ -16035,6 +16035,31 @@ var PBC_AUTO = [
   [/plat lantai|cor lantai|pelat lantai/, null],
   [/pembuangan puing|buang puing/, null]
 ];
+var PBC_PASAR = [
+  [/(^|\W)ac\W.*3(\.0|,0)? ?pk|ac split.*3 ?pk/, ['unit'], 'AC 3 PK + pasang', 14400000, 500000, 'Ruparupa: AC Gree 3 PK Rp14.399.000; jasa pasang AC 2–3 PK Rp500.000'],
+  [/rangka atap baja ringan/, ['m2'], 'Rangka atap baja ringan terpasang', 125000, 50000, 'harga.web.id: baja ringan terpasang Rp130.000–200.000/m² (material ±Rp125.000/m²)'],
+  [/atap teras|kanopi/, ['m2'], 'Kanopi baja ringan + spandek', 300000, 125000, 'Brighton: kanopi baja ringan + spandek Rp350.000–500.000/m²'],
+  [/anti rayap/, ['m2'], 'Anti rayap pra-konstruksi (jasa spesialis)', 55000, 0, 'Fumida: pra-konstruksi Rp50.000–60.000/m²'],
+  [/pompa (pendorong|booster|dorong)/, ['unit'], 'Pompa booster (belum termasuk ongkos pasang)', 3450000, 0, 'Monotaro/Tokopedia: Grundfos booster Rp2.399.900–4.495.000'],
+  [/(^|\W)apar(\W|$)/, ['unit'], 'APAR ABC powder 3 kg', 750000, 0, 'Tokopedia: Tonata 3 kg Rp697.000–759.000'],
+  [/tandon/, ['unit','ls'], 'Tandon 2.000 L (dudukan belum termasuk)', 4770000, 0, 'Tokopedia: Penguin 2.000 L Rp4.367.500–5.174.820'],
+  [/kursi bar|bar stool|barstool/, ['unit'], 'Kursi bar jati-besi', 875000, 0, 'Tokopedia: barstool jati-besi Rp845.000–875.000'],
+  [/^kursi\b/, ['unit'], 'Kursi cafe besi-kayu', 290000, 0, 'Tokopedia: kursi cafe besi-kayu Rp289.900'],
+  [/meja 2 orang|meja cafe/, ['unit'], 'Meja cafe 60×60', 979000, 0, 'Ruparupa: Informa Bailey 60×60 Rp979.000'],
+  [/truk/, ['unit','trip'], 'Sewa truk engkel per trip', 850000, 0, 'Deliveree: truk engkel Rp500.000–1.200.000/hari']
+];
+function pahNaikOnline(){ return 1 + Math.max(0, pahNum(PAH.naikOnline,20))/100; }
+function pahAnaPasar(it){
+  var nm = (it.nama||'').toLowerCase(), satIt = pahSat(it.sat);
+  for(var i=0;i<PBC_PASAR.length;i++){
+    var p = PBC_PASAR[i]; if(!p[0].test(nm)) continue;
+    if(p[1].indexOf(satIt)<0) return null;
+    var f = pahNaikOnline();
+    return { ana:{ nama:'Harga pasar · '+p[2], sat:it.sat, m:[], tk:0, kl:0, matRp:Math.round(p[3]*f), modal:Math.round(p[4]*f), asal:'pasar' },
+      cat:'Harga pasar online + '+Math.round((f-1)*100)+'% ('+p[5]+'). Ganti dengan penawaran supplier bila sudah ada.' };
+  }
+  return null;
+}
 function pahAnaRab(it){
   var nm = (it.nama||'').toLowerCase(), t = Math.min(0.9, Math.max(0, pahNum(PAH.mTarget,15)/100));
   var modal = (it.harga||0)*(1-t), mat, jasa, jenis;
@@ -16054,6 +16079,7 @@ function pahAutoAnalisa(it, daftar){
     if(a && pahSat(a.sat)===satIt) return { ana:a, cat:'' };
     break;
   }
+  var ps = pahAnaPasar(it); if(ps) return ps;
   var c = pahCocok(it.nama, daftar);
   if(c.ambigu && c.kandidat){ var k = c.kandidat.filter(function(x){ return pahSat(x.sat)===satIt; }); if(k.length) return { ana:k[0], cat:'Dipilih otomatis ('+k[0].nama+'). Ganti bila ukurannya berbeda.' }; }
   if(c.a && pahSat(c.a.sat)===satIt) return { ana:c.a, cat:'' };
@@ -16090,15 +16116,15 @@ function pahCocok(namaItem, daftar){
    Urutan kepercayaan: harga beli aktual Bapak > penawaran supplier > toko Bali > acuan online (sudah +8,7% Tabanan).
    Sumber lengkap: Sheet "Database Harga Material PBC" & "Buku Harga Satuan PBC". ---- */
 var PBC_HARGA = {
-  'Kawat Bendrat':[15200,'Acuan online — roll 20 kg Rp279.000–330.000 (Indotrading)','Nov 2026'],
-  'Atap Spandek':[93000,'Acuan online — spandek warna 0,30 mm lebar efektif 1 m per meter (Indotrading)','Nov 2026'],
-  'Waterproofing Coating':[50000,'Acuan online — Aquaproof 20 kg Rp795.000–1.240.000 per kg','Nov 2026'],
-  'Pipa Conduit':[12000,'Acuan online — conduit PVC 20 mm per batang (EGA/Legrand Rp10.900–12.400)','Nov 2026'],
-  'Saklar Tunggal':[18000,'Acuan online — Broco inbow','Nov 2026'],
-  'Saklar Ganda':[20000,'Acuan online — Broco inbow seri','Nov 2026'],
-  'Stop Kontak':[25000,'Acuan online — Broco inbow arde','Nov 2026'],
-  'Lampu LED Downlight':[100000,'Acuan online — downlight LED 9 W (Philips/Krisbow Rp75.000–137.000)','Nov 2026'],
-  'Kran Air':[75000,'Acuan online — kran tembok 1/2" Onda Rp46.000–102.000','Nov 2026'],
+  'Kawat Bendrat':[15200,'Acuan online — roll 20 kg Rp279.000–330.000 (Indotrading)','Nov 2026','online'],
+  'Atap Spandek':[93000,'Acuan online — spandek warna 0,30 mm lebar efektif 1 m per meter (Indotrading)','Nov 2026','online'],
+  'Waterproofing Coating':[50000,'Acuan online — Aquaproof 20 kg Rp795.000–1.240.000 per kg','Nov 2026','online'],
+  'Pipa Conduit':[12000,'Acuan online — conduit PVC 20 mm per batang (EGA/Legrand Rp10.900–12.400)','Nov 2026','online'],
+  'Saklar Tunggal':[18000,'Acuan online — Broco inbow','Nov 2026','online'],
+  'Saklar Ganda':[20000,'Acuan online — Broco inbow seri','Nov 2026','online'],
+  'Stop Kontak':[25000,'Acuan online — Broco inbow arde','Nov 2026','online'],
+  'Lampu LED Downlight':[100000,'Acuan online — downlight LED 9 W (Philips/Krisbow Rp75.000–137.000)','Nov 2026','online'],
+  'Kran Air':[75000,'Acuan online — kran tembok 1/2" Onda Rp46.000–102.000','Nov 2026','online'],
   'Semen PCC 40kg':[60500,'Harga beli aktual PBC','Nov 2026'],
   'Bata Ringan (Hebel) 10cm':[10440,'Acuan online Rp869.600/m³ ÷ 83 buah (toko Bali Rp19.000/buah)','Nov 2026'],
   'Bata Ringan (Hebel) 7.5cm':[7830,'Acuan online Rp869.600/m³ (0,009 m³/buah)','Nov 2026'],
@@ -16132,7 +16158,7 @@ function pahHargaBahan(nama){
     var m = (state.materials||[]).find(function(x){ return (x.nama||'').toLowerCase()===nama.toLowerCase() && x.harga>0; });
     if(m) return { h:m.harga, asal:'PBC', sumber:null, lo:m.harga, hi:m.harga };
   }catch(e){}
-  var pb = PBC_HARGA[nama]; if(pb) return { h:pb[0], asal:'PBC', sumber:null, lo:pb[0], hi:pb[0], cat:'Buku Harga PBC — '+pb[1]+' ('+pb[2]+')' };
+  var pb = PBC_HARGA[nama]; if(pb){ var hh = (pb[3]==='online') ? Math.round(pb[0]*pahNaikOnline()) : pb[0]; return { h:hh, asal:'PBC', sumber:null, lo:hh, hi:hh, cat:'Buku Harga PBC — '+pb[1]+' ('+pb[2]+')'+(pb[3]==='online'?' + kenaikan '+Math.round((pahNaikOnline()-1)*100)+'%':'') }; }
   var r = PAH_REF[nama]; if(!r) return null;
   var h = mode==='lo' ? r[0] : mode==='hi' ? r[1] : (r[0]+r[1])/2;
   return { h:h, asal:'ref', sumber:r[2], lo:r[0], hi:r[1], cat:r[3] };
@@ -16167,21 +16193,22 @@ function pahAmbilRab(){
 function pahHitung(rab){
   var S = { tukang:pahNum(PAH.tukang,170000), kenek:pahNum(PAH.kenek,140000), tim:Math.max(1,pahNum(PAH.tim,8)), hm:Math.max(1,pahNum(PAH.hariMinggu,6)),
     ops:pahNum(PAH.ops,0), kont:pahNum(PAH.kont,0)/100 };
-  var daftar = pahDaftarAnalisa(), items = [], bahan = {}, nilaiRab = 0, nilaiTerhitung = 0, ohT = 0, ohK = 0, mat = 0, upah = 0, tanpaHarga = {}, matModal = 0, nRab = 0;
+  var daftar = pahDaftarAnalisa(), items = [], bahan = {}, nilaiRab = 0, nilaiTerhitung = 0, ohT = 0, ohK = 0, mat = 0, upah = 0, tanpaHarga = {}, matModal = 0, nRab = 0, nPasar = 0;
   rab.items.forEach(function(it){
     var nilai = (it.vol||0)*(it.harga||0); nilaiRab += nilai;
     var pil = PAH.pilih[it.id], ana = null, st = 'ok', cat = '', auto = false;
     if(pil==='__rab'){ var pr = pahAnaRab(it); ana = pr.ana; cat = pr.cat; }
+    else if(pil==='__pasar'){ var pp = pahAnaPasar(it); if(pp){ ana = pp.ana; cat = pp.cat; } }
     else if(pil==='__manual' && PAH.manual && PAH.manual[it.id]!=null){ ana = { nama:'Modal diisi sendiri', sat:it.sat, m:[], tk:0, kl:0, matRp:PAH.manual[it.id].mat||0, modal:PAH.manual[it.id].jasa||0, asal:'manual' }; }
     else if(pil){ ana = daftar.find(function(a){ return a.nama===pil; }) || null; }
     if(!ana){ var oa = pahAutoAnalisa(it, daftar); ana = oa.ana; cat = oa.cat; auto = true; }
     var r = { it:it, nilai:nilai, ana:ana, st:st, cat:cat, mat:0, upah:0, ohT:0, ohK:0, baris:[], kurang:0 };
     if(ana){
-      if(ana.asal!=='manual' && ana.asal!=='rab' && pahSat(ana.sat)!==pahSat(it.sat)){ r.st = 'satuan'; r.cat = 'Satuan item ('+it.sat+') berbeda dengan analisa ('+ana.sat+'). Tidak dihitung; pilih analisa lain atau samakan satuan.'; r.ana = ana; }
+      if(ana.asal!=='manual' && ana.asal!=='rab' && ana.asal!=='pasar' && pahSat(ana.sat)!==pahSat(it.sat)){ r.st = 'satuan'; r.cat = 'Satuan item ('+it.sat+') berbeda dengan analisa ('+ana.sat+'). Tidak dihitung; pilih analisa lain atau samakan satuan.'; r.ana = ana; }
       else if(ana.modal!=null){   /* harga PBC / modal manual: jasa & material per satuan langsung */
         r.upah = it.vol*ana.modal; r.mat = it.vol*(ana.matRp||0); r.rab = ana.asal==='rab'; r.auto = auto;
         r.ohT = r.upah/(S.tukang+S.kenek); r.ohK = r.ohT;
-        if(ana.matRp) r.baris.push({ nama:(ana.asal==='manual'?'Material (diisi sendiri)':ana.asal==='rab'?'Material / biaya langsung (perkiraan dari harga RAB)':'Material per '+ana.sat+' (Buku Harga PBC)'), q:it.vol, koef:1, hb:{h:ana.matRp, asal:'PBC'}, f:1, biaya:r.mat });
+        if(ana.matRp) r.baris.push({ nama:(ana.asal==='manual'?'Material (diisi sendiri)':ana.asal==='rab'?'Material / biaya langsung (perkiraan dari harga RAB)':ana.asal==='pasar'?'Barang / biaya (harga pasar online + kenaikan)':'Material per '+ana.sat+' (Buku Harga PBC)'), q:it.vol, koef:1, hb:{h:ana.matRp, asal:'PBC'}, f:1, biaya:r.mat });
       }
       else {
         r.ohT = it.vol*ana.tk; r.ohK = it.vol*ana.kl; r.upah = r.ohT*S.tukang + r.ohK*S.kenek;
@@ -16195,7 +16222,7 @@ function pahHitung(rab){
         });
       }
     }
-    if(r.st==='ok' && ana){ nilaiTerhitung += nilai; ohT += r.ohT; ohK += r.ohK; upah += r.upah; mat += r.mat; if(ana.modal!=null) matModal += r.mat; if(ana.asal==='rab') nRab++; }
+    if(r.st==='ok' && ana){ nilaiTerhitung += nilai; ohT += r.ohT; ohK += r.ohK; upah += r.upah; mat += r.mat; if(ana.modal!=null) matModal += r.mat; if(ana.asal==='rab') nRab++; if(ana.asal==='pasar') nPasar++; }
     items.push(r);
   });
   /* rekap bahan dengan pembulatan beli (sak/buah/lembar/batang/unit dibulatkan ke atas) */
@@ -16210,7 +16237,7 @@ function pahHitung(rab){
   var matP = matBulat*scale, upahP = upah*scale, ohP = oh*scale, mingguP = ohP>0 ? Math.max(1,Math.ceil(ohP/(S.tim*S.hm))) : 0;
   var opsP = S.ops*(mingguP/4.345), kontP = (matP+upahP)*S.kont, hpp = matP+upahP+opsP+kontP;
   return { S:S, items:items, rekap:rekap, nilaiRab:nilaiRab, nilaiTerhitung:nilaiTerhitung, cov:cov, mat:matBulat, matItem:mat, upah:upah, oh:oh, ohT:ohT, ohK:ohK,
-    matP:matP, upahP:upahP, ohP:ohP, mingguP:mingguP, opsP:opsP, kontP:kontP, hpp:hpp, tanpaHarga:Object.keys(tanpaHarga), matModal:matModal, nRab:nRab,
+    matP:matP, upahP:upahP, ohP:ohP, mingguP:mingguP, opsP:opsP, kontP:kontP, hpp:hpp, tanpaHarga:Object.keys(tanpaHarga), matModal:matModal, nRab:nRab, nPasar:nPasar,
     nOk:items.filter(function(x){ return x.st==='ok'&&x.ana; }).length, nTanpa:items.filter(function(x){ return x.st!=='ok'||!x.ana; }).length };
 }
 function pahSatBeli(nama){
@@ -16351,7 +16378,7 @@ function pahGambarIsi(){
     + '<div class="toolbar" style="flex-wrap:wrap;gap:6px;margin-bottom:8px"><span style="font-size:10px;color:var(--muted2);align-self:center">Harga referensi:</span>'+modeBtn('lo','Terendah')+modeBtn('mid','Tengah')+modeBtn('hi','Tertinggi')+'</div>'
     + '<div style="display:flex;flex-wrap:wrap;gap:8px">'+pahInp('Upah tukang / hari (Rp)','tukang',5000)+pahInp('Upah kenek / hari (Rp)','kenek',5000)+pahInp('Jumlah pekerja (orang)','tim',1,110)+pahInp('Hari kerja / minggu','hariMinggu',1,110)+'</div>'
     + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Operasional / bulan (Rp)','ops',500000)+pahInp('Cadangan tak terduga (%)','kont',1,110)+pahInp('Margin minimum (%)','mMin',1,110)+pahInp('Margin target (%)','mTarget',1,110)+pahInp('Margin maksimum (%)','mMax',1,110)+'</div>'
-    + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Laba subkon atas upah (%)','subUpah',1,130)+pahInp('Laba subkon atas paket (%)','subPaket',1,130)
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+pahInp('Kenaikan harga online → lapangan (%)','naikOnline',1,150)+pahInp('Laba subkon atas upah (%)','subUpah',1,130)+pahInp('Laba subkon atas paket (%)','subPaket',1,130)
     + '<label style="display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted2);min-width:180px;flex:2"><span>Skema termin (% dipisah koma)</span><input class="form-input" value="'+pbcEsc(PAH.termin)+'" onchange="pahSet(\'termin\',this.value)"></label></div>'
     + '<div style="font-size:9px;color:var(--muted2);margin-top:6px">Upah tukang '+pahRp(pahNum(PAH.tukang,200000))+' dan kenek '+pahRp(pahNum(PAH.kenek,160000))+' dari Bapak. Operasional '+pahRp(pahNum(PAH.ops,0))+'/bulan dari Bapak. Margin, cadangan, dan laba subkon adalah asumsi awal.</div></div>';
   if(!rab){ el.innerHTML = h; return; }
@@ -16363,7 +16390,7 @@ function pahGambarIsi(){
   if(H.cov<1) banner.push('<b>'+H.nTanpa+' dari '+rab.items.length+' item</b> belum terhitung (tanpa analisa, satuan berbeda, atau ambigu), setara '+Math.round((1-H.cov)*100)+'% nilai RAB. Angka di bawah diproyeksikan ke seluruh RAB dengan rasio yang sama, jadi hanya perkiraan. Selesaikan item bertanda merah di tabel rincian.');
   if(H.tanpaHarga.length) banner.push('<b>'+H.tanpaHarga.length+' bahan belum punya harga referensi</b> ('+H.tanpaHarga.slice(0,8).map(pbcEsc).join(', ')+(H.tanpaHarga.length>8?', …':'')+'). Biayanya belum masuk; isi harga di Material (harga supplier PBC otomatis dipakai).');
   if(H.nilaiRab<=0) banner.push('RAB belum punya harga satuan, jadi posisi harga penawaran dibandingkan dengan margin target.');
-  h += (banner.length ? '<div style="background:#FBE9D4;color:#A5520F;border-radius:6px;padding:10px 12px;font-size:11px;margin-bottom:14px">'+banner.join('<br>')+'</div>' : '<div style="background:#E2F2E9;color:#1D7A4F;border-radius:6px;padding:10px 12px;font-size:11px;margin-bottom:14px">✓ Semua '+rab.items.length+' item sudah terhitung otomatis.'+(H.nRab?' <span style="color:var(--muted2)">'+(rab.items.length-H.nRab)+' item memakai analisa/harga PBC; '+H.nRab+' item (biaya umum, alat, furnitur, dll.) memakai perkiraan dari harga RAB-nya sendiri dikurangi laba target. Semua bisa diganti di tabel nomor 8.</span>':'')+'</div>');
+  h += (banner.length ? '<div style="background:#FBE9D4;color:#A5520F;border-radius:6px;padding:10px 12px;font-size:11px;margin-bottom:14px">'+banner.join('<br>')+'</div>' : '<div style="background:#E2F2E9;color:#1D7A4F;border-radius:6px;padding:10px 12px;font-size:11px;margin-bottom:14px">✓ Semua '+rab.items.length+' item sudah terhitung otomatis.'+(H.nRab||H.nPasar?' <span style="color:var(--muted2)">'+(rab.items.length-H.nRab-H.nPasar)+' item memakai analisa/harga PBC; '+H.nPasar+' item memakai harga pasar online + '+Math.round((pahNaikOnline()-1)*100)+'%; '+H.nRab+' item (biaya umum, kaca/kusen, biaya Nusa Penida, dll.) belum punya harga pasar dan memakai perkiraan dari harga RAB-nya sendiri dikurangi laba target — item ini perlu penawaran supplier. Semua bisa diganti di tabel nomor 8.</span>':'')+'</div>');
   var tile = function(l, v, n){ return '<div class="panel" style="padding:10px 12px;margin:0;min-width:140px;flex:1"><div style="font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:.05em">'+l+'</div><div style="font-size:15px;font-weight:700;color:var(--white);margin-top:3px;overflow-wrap:anywhere">'+v+'</div><div style="font-size:9px;color:var(--muted2);margin-top:2px">'+n+'</div></div>'; };
   h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
     + tile('Material', pahRp(H.matP), 'dibulatkan ke satuan beli')
@@ -16415,6 +16442,7 @@ function pahGambarIsi(){
       var sel = '<select class="form-select" style="font-size:11px;width:100%;max-width:100%;margin-top:4px" onchange="pahPilihAnalisa(\''+r.it.id+'\',this.value)"><option value="">'+(ok?'✓ '+pbcEsc(r.ana.nama):'— pilih analisa / harga —')+'</option>'
         + '<option value="__manual">✏️ Isi modal sendiri (jasa / material)…</option>'
         + (r.rab ? '' : '<option value="__rab">≈ Perkiraan dari harga RAB</option>')
+        + ((r.ana && r.ana.asal==='pasar') || !pahAnaPasar(r.it) ? '' : '<option value="__pasar">🛒 Harga pasar online</option>')
         + grup('Harga PBC — jasa + material', lain.filter(function(a){ return a.asal==='pbc' && a.matRp && cocokSat(a); }))
         + grup('Harga PBC — jasa saja', lain.filter(function(a){ return a.asal==='pbc' && !a.matRp && cocokSat(a); }))
         + grup('Analisa standar (koefisien SNI)', lain.filter(function(a){ return a.asal!=='pbc' && cocokSat(a); }))
