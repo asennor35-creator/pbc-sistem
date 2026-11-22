@@ -2083,6 +2083,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
     <button class="btn btn-blue" onclick="bukaModalTerminBaru()">+ Buat Termin Baru</button>
     <button class="btn btn-green" onclick="autoGenerateTermin()">⚡ Auto-Generate dari BOQ</button>
     <button class="btn btn-gold" onclick="cetakBAP()">🖨 Cetak BAP</button>
+    <button class="btn btn-blue" onclick="pbcCetakBast()">📄 Cetak BAST (Serah Terima)</button>
     <span id="terminOpnameRef" style="margin-left:auto;font-size:10px;color:var(--teal-lt)"></span>
   </div>
 
@@ -4496,7 +4497,7 @@ async function exportProposalPdfLama(){
    Tata letak ditiru PERSIS dari contoh "Project Addendum No. 3" (ukuran, jarak, warna, font).
    Satu mesin untuk semua dokumen: isi boleh beda, tampilan tidak pernah berubah.
    =========================================================================== */
-const PBC_DOK_DEFAULT = { alamat:'Jl. Penarukan No.7, Kab. Tabanan', email:'pratama.buildconstruction@gmail.com', telp:'+62 857-3733-2566',
+const PBC_DOK_DEFAULT = { alamat:'Jl. Penarukan No.7, Kab. Tabanan', email:'pratama.buildconstruction@gmail.com', telp:'+62 857-4502-6574',
   bank:'', /* nomor rekening TIDAK ditulis di kode (kode ini publik) — diisi Direktur sekali di Owner Portal > Pengaturan Laporan & Invoice */
   ttdNama:'Norasen', ttdJabatan:'Managing Director' };
 function pbcDokPref(){ try{ return JSON.parse(localStorage.getItem('pbc_dok_pref')||'{}')||{}; }catch(e){ return {}; } }
@@ -4535,14 +4536,15 @@ function pbcDokSinkronBank(){   /* isi rekening berubah -> baris "Rekening Trans
 function pbcDokRefOtomatis(kind, tglStr){   /* contoh: PBC/QUO/20261031-01 (nomor urut per hari; naik setelah PDF benar-benar dibuat) */
   const tgl = String(tglStr||today()).replace(/\D/g,'').slice(0,8) || String(today()).replace(/\D/g,'');
   let seq = {}; try{ seq = JSON.parse(localStorage.getItem('pbc_dok_seq')||'{}')||{}; }catch(e){}
-  const n = (seq.tgl===tgl ? (seq.n||0) : 0) + 1;
-  return 'PBC/'+(kind==='proposal'?'PRO':'QUO')+'/'+tgl+'-'+String(n).padStart(2,'0');
+  const bln = tgl.slice(4,6)+tgl.slice(2,4);   /* MMYY — format nomor PBC: PBC/QTN/1126/001 */
+  const n = (seq.bln===bln ? (seq.n||0) : 0) + 1;
+  return 'PBC/'+(kind==='proposal'?'PRO':(kind==='vo'?'ADD':'QTN'))+'/'+bln+'/'+String(n).padStart(3,'0');
 }
 function pbcDokRefCatat(ref){   /* panggil setelah PDF dibuat: simpan nomor urut terakhir hari itu */
-  const m = String(ref||'').match(/^PBC\/(?:QUO|PRO)\/(\d{8})-(\d+)$/); if(!m) return;
+  const m = String(ref||'').match(/^PBC\/(?:QTN|PRO|ADD)\/(\d{4})\/(\d+)$/); if(!m) return;
   let seq = {}; try{ seq = JSON.parse(localStorage.getItem('pbc_dok_seq')||'{}')||{}; }catch(e){}
-  const n = parseInt(m[2],10); if(seq.tgl===m[1] && (seq.n||0) >= n) return;
-  try{ localStorage.setItem('pbc_dok_seq', JSON.stringify({ tgl:m[1], n:n })); }catch(e){}
+  const n = parseInt(m[2],10); if(seq.bln===m[1] && (seq.n||0) >= n) return;
+  try{ localStorage.setItem('pbc_dok_seq', JSON.stringify({ bln:m[1], n:n })); }catch(e){}
 }
 function pbcDokProfil(){
   const p = Object.assign({}, PBC_DOK_DEFAULT, pbcDokPref().profil||{});
@@ -4581,11 +4583,117 @@ function pbcTerbilangId(n){
   return f(n);
 }
 
+
+/* ===========================================================================
+   TEMPLATE DOKUMEN PBC 2026 — "Opsi B · susunan D" (dipilih Direktur 22 Nov 2026)
+   Biru #014AA1 + kuning #F4B51F (warna logo), panel biru muda, tanda tangan + stempel,
+   kop TANPA NPWP dan TANPA alamat (PBC belum punya kantor). Dipakai SEMUA PDF.
+   Gambar TTD+stempel TIDAK ditulis di kode (kode ini publik): disimpan sekali oleh
+   Direktur di pengaturan (kv 'pbc_ttd'), sama seperti nomor rekening.
+   =========================================================================== */
+const PBC_SKIN = { blue:[1,74,161], yel:[244,181,31], pale:[244,247,251], head:[232,239,248], line:[214,223,235], ink:[17,17,17], mut:[119,119,119], tx:[34,34,34] };
+const PBC_MARK = 'data:image/png;base64,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';
+let _pbcTtd = null;
+async function pbcMuatTtd(){ try{ const r = await window.storage.get('pbc_ttd', false); if(r && r.value) _pbcTtd = r.value; }catch(e){} return _pbcTtd; }
+if(!window.PBC_DEMO) setTimeout(function(){ try{ pbcMuatTtd(); }catch(e){} }, 4200);
+function pbcTtdGambar(){ return window.PBC_DEMO ? null : _pbcTtd; }
+function pbcSimpanTtd(dataUrl){ _pbcTtd = dataUrl || null; try{ Promise.resolve(dataUrl ? window.storage.set('pbc_ttd', dataUrl, false) : window.storage.delete('pbc_ttd', false)).catch(function(){}); }catch(e){} }
+function pbcUnggahTtd(input){   /* foto/scan TTD+stempel -> latar putih jadi transparan -> disimpan sekali */
+  const f = input && input.files && input.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = function(){
+    const img = new Image();
+    img.onload = function(){
+      const sk = Math.min(1, 900/Math.max(img.width, img.height)), cv = document.createElement('canvas');
+      cv.width = Math.round(img.width*sk); cv.height = Math.round(img.height*sk);
+      const g = cv.getContext('2d'); g.drawImage(img, 0, 0, cv.width, cv.height);
+      const d = g.getImageData(0, 0, cv.width, cv.height), a = d.data;
+      for(let i=0;i<a.length;i+=4){ const gelap = 255-Math.min(a[i],a[i+1],a[i+2]); const al = Math.max(0, Math.min(255, (gelap-18)*255/122)); a[i+3] = al; }
+      g.putImageData(d, 0, 0);
+      pbcSimpanTtd(cv.toDataURL('image/png'));
+      notif('Tanda tangan + stempel tersimpan — dipakai di semua dokumen');
+      try{ pbcTtdPratinjau(); }catch(e){}
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(f);
+}
+function pbcTtdPratinjau(){ const el = document.getElementById('pbcTtdPrev'); if(!el) return; const t = pbcTtdGambar(); el.innerHTML = t ? '<img src="'+t+'" style="height:70px">' : '<span style="font-size:10px;color:var(--muted2)">Belum ada — unggah foto tanda tangan + stempel (latar putih).</span>'; }
+function pbcKontak(P){ return [P.telp ? ('WA '+P.telp) : '', 'pratamabuild.id'].filter(Boolean).join('   ·   '); }
+function pbcSkinWarna(doc, k, a){ const c = PBC_SKIN[k] || k; if(a==='f') doc.setFillColor(c[0],c[1],c[2]); else if(a==='d') doc.setDrawColor(c[0],c[1],c[2]); else doc.setTextColor(c[0],c[1],c[2]); }
+/* kop surat (satuan pt). Mengembalikan y di bawah garis biru. */
+function pbcSkinKop(doc, W, FX, judul, sub){
+  const P = pbcDokProfil();
+  try{ doc.addImage(PBC_MARK, 'PNG', FX, 28, 33, 35); }catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(13.5); pbcSkinWarna(doc,'ink'); doc.text('PRATAMA BUILD & CONSTRUCTION', FX+42, 42);
+  doc.setFont('helvetica','normal'); doc.setFontSize(6.6); pbcSkinWarna(doc,'mut'); doc.text('BUILD  ·  INTERIOR  ·  ACOUSTIC', FX+42, 52, {charSpace:0.7});
+  doc.setFontSize(7.4); doc.setTextColor(85,85,85); doc.text(pbcKontak(P), FX+42, 62.5);
+  doc.setFont('helvetica','bold'); doc.setFontSize(13.5); const ruang = W - FX - (FX + 42 + doc.getTextWidth('PRATAMA BUILD & CONSTRUCTION') + 16);
+  let fs = 20; doc.setFontSize(fs);
+  while(fs > 9 && doc.getTextWidth(String(judul)) > ruang){ fs -= 0.5; doc.setFontSize(fs); }
+  pbcSkinWarna(doc,'ink'); doc.text(String(judul), W-FX, 50, {align:'right'});
+  if(sub){ doc.setFont('helvetica','normal'); doc.setFontSize(8); pbcSkinWarna(doc,'mut'); doc.text(doc.splitTextToSize(String(sub), ruang)[0], W-FX, 63, {align:'right'}); }
+  pbcSkinWarna(doc,'blue','f'); doc.rect(0, 76, W, 2.2, 'F');
+  return 94;
+}
+/* panel "susunan D": judul biru, isi label kecil di atas nilai, 2 kolom. rows: [label, nilai, lebar?] */
+function pbcSkinPanelUkur(doc, w, rows){
+  const pad = 9, cw = (w-2*pad)/2, out = []; let cy = 23, i = 0;
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.2);
+  while(i < rows.length){
+    const r = rows[i]; if(!r){ i++; continue; }
+    if(r[2]){ const v = doc.splitTextToSize(String(r[1]==null||r[1]===''?'-':r[1]), w-2*pad); out.push({dx:pad, dy:cy, l:r[0], v:v}); cy += 8.5 + v.length*10 + 5; i++; continue; }
+    const r2 = (rows[i+1] && !rows[i+1][2]) ? rows[i+1] : null;
+    const v1 = doc.splitTextToSize(String(r[1]==null||r[1]===''?'-':r[1]), cw-6), v2 = r2 ? doc.splitTextToSize(String(r2[1]==null||r2[1]===''?'-':r2[1]), cw-6) : [];
+    out.push({dx:pad, dy:cy, l:r[0], v:v1}); if(r2) out.push({dx:pad+cw, dy:cy, l:r2[0], v:v2});
+    cy += 8.5 + Math.max(v1.length, v2.length||1)*10 + 5; i += r2 ? 2 : 1;
+  }
+  return { h: cy + 3, isi: out };
+}
+function pbcSkinPanelGambar(doc, x, y, w, h, judul, isi){
+  pbcSkinWarna(doc,'pale','f'); doc.rect(x, y, w, h, 'F');
+  pbcSkinWarna(doc,'blue','f'); doc.rect(x, y, w, 2.6, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.2); pbcSkinWarna(doc,'blue'); doc.text(String(judul).toUpperCase(), x+9, y+14, {charSpace:0.8});
+  isi.forEach(function(e){
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.2); pbcSkinWarna(doc,'mut'); doc.text(String(e.l).toUpperCase(), x+e.dx, y+e.dy, {charSpace:0.5});
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.2); pbcSkinWarna(doc,'ink'); e.v.forEach(function(t,j){ doc.text(t, x+e.dx, y+e.dy+9.5+j*10); });
+  });
+}
+/* dua panel berdampingan, tinggi sama. Mengembalikan y di bawah panel. */
+function pbcSkinPanels(doc, x, w, y, kiri, kanan){
+  const g = 14, pw = (w-g)/2, a = pbcSkinPanelUkur(doc, pw, kiri.rows), b = pbcSkinPanelUkur(doc, pw, kanan.rows), h = Math.max(a.h, b.h);
+  pbcSkinPanelGambar(doc, x, y, pw, h, kiri.judul, a.isi);
+  pbcSkinPanelGambar(doc, x+pw+g, y, pw, h, kanan.judul, b.isi);
+  return y + h + 14;
+}
+/* tanda tangan dua pihak; gambar TTD+stempel di atas nama penandatangan PBC */
+function pbcSkinTtd(doc, x, w, y, kiriJudul, kananJudul, kiriNama, kiriJab, kananNama, kananBaris2){
+  const P = pbcDokProfil(), cw = (w-30)/2, xr = x + cw + 30, ttd = pbcTtdGambar();
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); pbcSkinWarna(doc,'tx');
+  doc.text(kiriJudul, x+cw/2, y+9, {align:'center'}); doc.text(kananJudul, xr+cw/2, y+9, {align:'center'});
+  if(ttd){ try{ const p = doc.getImageProperties(ttd), hh = 66, ww = hh*p.width/p.height; doc.addImage(ttd, 'PNG', x+cw/2-ww/2, y+12, ww, hh); }catch(e){} }
+  const ly = y + 82; doc.setLineWidth(0.6); doc.setDrawColor(60,60,60); doc.line(x, ly, x+cw, ly); doc.line(xr, ly, xr+cw, ly);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text((kiriNama||P.ttdNama)+(kiriJab!==false?' — '+(kiriJab||P.ttdJabatan):''), x+cw/2, ly+11, {align:'center'});
+  doc.setFont('helvetica','normal'); doc.text(kananNama||'', xr+cw/2, ly+11, {align:'center'});
+  if(kananBaris2){ doc.setFontSize(8); pbcSkinWarna(doc,'mut'); doc.text(kananBaris2, xr+cw/2, ly+22, {align:'center'}); }
+  return ly + 30;
+}
+/* footer semua halaman */
+function pbcSkinFooter(doc, FX, kiriTeks, halLabel, dariLabel){
+  const np = doc.getNumberOfPages(), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), P = pbcDokProfil();
+  for(let i=1;i<=np;i++){
+    doc.setPage(i); pbcSkinWarna(doc,'blue','f'); doc.rect(FX, H-34, W-2*FX, 1.6, 'F');
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(136,136,136);
+    doc.text(kiriTeks || ('Pratama Build & Construction   ·   '+pbcKontak(P)), FX, H-22);
+    doc.text((halLabel||'Page')+' '+i+(np>1?(' '+(dariLabel||'/')+' '+np):''), W-FX, H-22, {align:'right'});
+  }
+}
+
 /* ---- Mesin gambar PDF ---- */
 function pbcDokBuatPdf(cfg){
   const doc = new window.jspdf.jsPDF({unit:'pt', format:'a4', orientation:'p'});
   const H = 841.89, W = 595.28, L = cfg.L, P = cfg.profil;
-  const C = { ink:[26,26,26], g5:[85,85,85], tx:[34,34,34], n4:[68,68,68], grid:[207,202,192], head:[244,242,238], alt:[251,250,248], brown:[138,109,59] };
+  const C = { ink:[26,26,26], g5:[85,85,85], tx:[34,34,34], n4:[68,68,68], grid:PBC_SKIN.line, head:PBC_SKIN.head, alt:[247,249,252], brown:PBC_SKIN.blue };
   const X0 = 53.858, TW = 487.559, FX = 42.85, FW = 509.575, RIGHT = X0+TW-6;
   const EDG = [22.677, 255.118, 294.803, 328.819, 402.520];
   const T = function(yrl){ return H-yrl; };
@@ -4596,51 +4704,30 @@ function pbcDokBuatPdf(cfg){
   doc.setLineCap('round');
   const LIMIT = 800;
 
-  /* kop surat */
-  font('bold',14); col(C.ink); doc.text(P.nama||'PRATAMA BUILD & CONSTRUCTION', 59.858, T(796.2126));
-  font('bold',8.5); col(C.g5); doc.text(cfg.tagline||'General Contractor - Interior Design - Renovation', 59.858, T(779.2126));
-  font('bold',12.5); col(C.ink); doc.text(cfg.judulKanan, RIGHT, T(797.7126), {align:'right'});
-  font('bold',8.5); col(C.g5); if(cfg.subKanan) doc.text(cfg.subKanan, RIGHT, T(782.7126), {align:'right'});
-  font('normal',8.5); col(C.g5);
-  doc.text(P.alamat+'  |  Email: '+P.email+'  |  Telp: '+P.telp, FX, T(759.0433));
-  ln(C.ink,1.2); doc.line(FX, T(750.0913), FX+FW, T(750.0913));
-
-  /* info surat */
-  function infoCol(rows, x, y0){
-    let y = y0, extra = 0;
-    rows.forEach(function(r){
-      if(!r) { y += 12; return; }
-      font('bold',9); col(C.tx); const lw = doc.getTextWidth(r[0]);
-      doc.text(r[0], x, y);
-      font('normal',9);
-      const lines = doc.splitTextToSize(' : '+r[1], (x<200?240:236) - lw);
-      lines.forEach(function(t,i){ doc.text(i===0?t:t.replace(/^\s+/,''), i===0?x+lw+(r[0]==='To'?0.7:0):x+lw+doc.getTextWidth(' : '), y + i*12); });
-      y += 12*lines.length; extra += lines.length-1;
-    });
-    return extra;
-  }
-  const dyInfo = Math.max(infoCol(cfg.infoKiri, 59.858, T(730.0047)), infoCol(cfg.infoKanan, 303.638, T(730.0047)));
-  let dy = dyInfo*12;
+  /* kop surat + panel (template PBC 2026) */
+  let yKop = pbcSkinKop(doc, W, FX, cfg.judulKanan, cfg.subKanan);
+  const kiriRows = (cfg.panelKiri && cfg.panelKiri.rows) || cfg.infoKiri.filter(Boolean).map(function(r){ return [r[0], r[1], String(r[1]).length > 34]; });
+  const kananRows = (cfg.panelKanan && cfg.panelKanan.rows) || cfg.infoKanan.filter(Boolean).map(function(r){ return [r[0], r[1], String(r[1]).length > 34]; });
+  yKop = pbcSkinPanels(doc, X0, TW, yKop, { judul:(cfg.panelKanan&&cfg.panelKanan.judul)||L.panelKanan||'Prepared for', rows:kananRows }, { judul:(cfg.panelKiri&&cfg.panelKiri.judul)||L.panelKiri||'Details', rows:kiriRows });
   font('normal',9); col(C.tx);
-  const introLines = doc.splitTextToSize(cfg.intro, 497.5);
-  introLines.forEach(function(t,i){ doc.text(t, FX, T(683.9181)+dy+i*12); });
-  dy += Math.max(0, introLines.length-2)*12;
-
+  const introLines = cfg.intro ? doc.splitTextToSize(cfg.intro, TW) : [];
+  introLines.forEach(function(t,i){ doc.text(t, X0, yKop+4+i*12); });
+  const dy = 0;
   /* tabel */
-  let y = T(661.8315)+dy;            /* bawah-atas bar judul tabel */
+  let y = yKop + (introLines.length ? introLines.length*12 + 12 : 0);            /* bawah-atas bar judul tabel */
   let page = 1;
   function barHitam(title, top){
     fill(C.ink); doc.rect(X0, top, TW, 20, 'F');
     font('bold',10); doc.setTextColor(255,255,255); doc.text(title, X0+7, top+14);
   }
-  function barKomplit(title, top){ doc.setFillColor(0,0,0); fill(C.ink); doc.rect(X0, top, TW, 20, 'F'); font('bold',10); doc.setTextColor(255,255,255); doc.text(title, X0+7, top+14); }
+  function barKomplit(title, top){ fill(PBC_SKIN.blue); doc.rect(X0, top, TW, 20, 'F'); font('bold',10); doc.setTextColor(255,255,255); doc.text(title, X0+7, top+14); }
   function halamanBaru(){ doc.addPage(); page++; return 50; }
   function drawSegmen(top, rows){
     const hs = 16, total = hs + rows.reduce(function(s,r){ return s+r.h; },0);
     fill(C.head); doc.rect(X0, top, TW, hs, 'F');
     let yy = top + hs;
     rows.forEach(function(r){ fill(r.idx%2===1 ? [255,255,255] : C.alt); doc.rect(X0, yy, TW, r.h, 'F'); yy += r.h; });
-    font('bold',7.8); doc.setTextColor(0,0,0);
+    font('bold',7.8); doc.setTextColor(1,74,161);
     const hb = top+9.8;
     doc.text(L.no, X0+EDG[0]/2, hb, {align:'center'}); doc.text(L.desc, X0+28.677, hb);
     doc.text(L.qty, X0+(EDG[1]+EDG[2])/2, hb, {align:'center'}); doc.text(L.unit, X0+(EDG[2]+EDG[3])/2, hb, {align:'center'});
@@ -4706,13 +4793,10 @@ function pbcDokBuatPdf(cfg){
   /* ringkasan total + terbilang + catatan + tanda tangan */
   const butuh = 212;
   if(y + butuh > LIMIT+30){ y = halamanBaru(); }
-  fill(C.brown); doc.rect(X0, y, TW, 20, 'F');
-  font('bold',10); doc.setTextColor(255,255,255); doc.text(cfg.totalBar, X0+7, y+14);
-  const by = y+20;
-  fill(C.head); doc.rect(X0, by, TW, 22, 'F');
-  ln(C.grid,0.5); doc.rect(X0, by, TW, 22); doc.line(X0+345.827, by, X0+345.827, by+22);
-  font('bold',11); doc.setTextColor(0,0,0);
-  doc.text(cfg.totalLabel, X0+8, by+16); doc.text(pbcRp(cfg.total), X0+TW-8, by+16, {align:'right'});
+  fill(PBC_SKIN.blue); doc.rect(X0, y, TW, 26, 'F');
+  font('bold',11); doc.setTextColor(255,255,255);
+  doc.text(String(cfg.totalLabel||cfg.totalBar).replace(/:\s*$/,'').toUpperCase(), X0+9, y+17); doc.text(pbcRp(cfg.total), X0+TW-9, y+17, {align:'right'});
+  const by = y+4;
   let wy = by+22+13.25;
   font('bolditalic',9); col(C.tx); const lw = doc.getTextWidth(L.words+' ');
   doc.text(L.words, FX, wy); const wOff = 0.8;
@@ -4728,28 +4812,167 @@ function pbcDokBuatPdf(cfg){
     const nl = doc.splitTextToSize((i+1)+'. '+n, FW);
     nl.forEach(function(t,j){ lastNote = ny; doc.text(t, FX, ny); ny += 10.5; });
   });
-  let sy = lastNote + 23;
-  font('normal',9); col(C.tx);
-  doc.text(L.submitted, 59.858, sy); doc.text(L.approved, 303.638, sy);
-  doc.text(P.nama ? 'Pratama Build & Construction' : '', 59.858, sy+12);
-  doc.text(cfg.pihak2||'', 303.638, sy+12);
-  const ny2 = sy + 58.68;
-  font('bold',9); doc.text(P.ttdNama, 59.858, ny2);
-  font('normal',9); doc.text(P.ttdJabatan, 59.858, ny2+12);
-  doc.text(L.dateLine+' '+cfg.tahun, 303.638, ny2);
-
-  const np = doc.getNumberOfPages();
-  if(np>1){ for(let i=1;i<=np;i++){ doc.setPage(i); font('normal',7); col(C.g5); doc.text('Page '+i+' / '+np, W/2, 820, {align:'center'}); } }
+  let sy = lastNote + 16;
+  if(sy + 120 > H - 40){ doc.addPage(); sy = 50; }
+  pbcSkinTtd(doc, X0, TW, sy, L.submitted, L.approved, P.ttdNama, P.ttdJabatan, cfg.pihak2||'', L.dateLine+' '+cfg.tahun);
+  pbcSkinFooter(doc, X0, null, L.page||'Page', '/');
   return doc;
+}
+
+
+/* ===========================================================================
+   INVOICE TERMIN · KWITANSI · BAST — template PBC 2026 (Opsi B · susunan D)
+   =========================================================================== */
+function pbcKlienRows(en){
+  const p = state.proyek || {};
+  return [[en?'Client':'Klien', p.owner||'-'], [en?'Company':'Perusahaan', p.perusahaan||p.owner||'-'], [en?'Address':'Alamat', p.alamatOwner||p.lokasi||'-', true],
+          [en?'Phone':'Telepon', p.telpOwner||p.hpOwner||'-'], [en?'Email':'Email', p.emailOwner||'-']];
+}
+function pbcNoDok(kode, t){ const d = new Date(t||today()); return 'PBC/'+kode+'/'+String(d.getMonth()+1).padStart(2,'0')+String(d.getFullYear()).slice(2)+'/'; }
+function pbcDokBaru(judul, sub){
+  const doc = new window.jspdf.jsPDF({unit:'pt', format:'a4', orientation:'p'});
+  const W = doc.internal.pageSize.getWidth(), FX = 42.85, TW = W-2*FX;
+  const y = pbcSkinKop(doc, W, FX, judul, sub);
+  return { doc:doc, W:W, FX:FX, TW:TW, y:y };
+}
+function pbcDokBar(d, judul){ pbcSkinWarna(d.doc,'blue','f'); d.doc.rect(d.FX, d.y, d.TW, 20, 'F'); d.doc.setFont('helvetica','bold'); d.doc.setFontSize(9.5); d.doc.setTextColor(255,255,255); d.doc.text(String(judul).toUpperCase(), d.FX+8, d.y+13.5, {charSpace:0.4}); d.y += 20; }
+function pbcDokTabel(d, kolom, baris, tebal){   /* kolom: [label, lebar, align]; baris: array of array */
+  const doc = d.doc, sum = kolom.reduce(function(s,k){ return s+k[1]; },0), cw = kolom.map(function(k){ return k[1]/sum*d.TW; });
+  const xs = []; let acc = d.FX; cw.forEach(function(w){ xs.push(acc); acc += w; });
+  function tx(k, i, t, y){ const a = k[2]||'l', x = a==='l'?xs[i]+6:(a==='c'?xs[i]+cw[i]/2:xs[i]+cw[i]-6); doc.text(String(t), x, y, {align:a==='l'?'left':(a==='c'?'center':'right')}); }
+  pbcSkinWarna(doc,'head','f'); doc.rect(d.FX, d.y, d.TW, 16, 'F'); doc.setFont('helvetica','bold'); doc.setFontSize(7.6); pbcSkinWarna(doc,'blue');
+  kolom.forEach(function(k,i){ tx(k, i, k[0].toUpperCase(), d.y+10.5); }); d.y += 16;
+  baris.forEach(function(r, ri){
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.2);
+    const ls = r.map(function(v,i){ return (kolom[i][2]||'l')==='l' ? doc.splitTextToSize(String(v), cw[i]-12) : [String(v)]; });
+    const h = Math.max(17, 7 + Math.max.apply(null, ls.map(function(l){ return l.length; }))*10);
+    if(d.y + h > 780){ doc.addPage(); d.y = 50; }
+    const tot = tebal && ri===baris.length-1;
+    if(tot){ pbcSkinWarna(doc,'blue','f'); doc.rect(d.FX, d.y, d.TW, h, 'F'); doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); }
+    else pbcSkinWarna(doc,'tx');
+    ls.forEach(function(l, i){ l.forEach(function(t, j){ tx(kolom[i], i, t, d.y + 11.5 + j*10); }); });
+    doc.setDrawColor(214,223,235); doc.setLineWidth(0.5); doc.rect(d.FX, d.y, d.TW, h); xs.forEach(function(x,i){ if(i) doc.line(x, d.y, x, d.y+h); });
+    d.y += h;
+  });
+  d.y += 12;
+}
+function pbcDokKotak3(d, isi){   /* 3 kotak ringkasan */
+  const doc = d.doc, g = 10, w = (d.TW-2*g)/3;
+  isi.forEach(function(k, i){ const x = d.FX + i*(w+g);
+    pbcSkinWarna(doc,'pale','f'); doc.rect(x, d.y, w, 38, 'F'); pbcSkinWarna(doc,'blue','f'); doc.rect(x, d.y, w, 2.6, 'F');
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.4); pbcSkinWarna(doc,'mut'); doc.text(String(k[0]).toUpperCase(), x+8, d.y+14, {charSpace:0.5});
+    doc.setFont('helvetica','bold'); doc.setFontSize(11.5); pbcSkinWarna(doc, k[2]||'ink'); doc.text(String(k[1]), x+8, d.y+30); });
+  d.y += 50;
+}
+function pbcDokPar(d, t, ukuran){ const doc = d.doc; doc.setFont('helvetica','normal'); doc.setFontSize(ukuran||8.6); pbcSkinWarna(doc,'tx'); doc.splitTextToSize(String(t), d.TW).forEach(function(l){ doc.text(l, d.FX, d.y+9); d.y += 12; }); d.y += 4; }
+function pbcDokSimpan(d, nama){
+  pbcSkinFooter(d.doc, d.FX);
+  if(typeof window.__PBC_TEST_PDF==='function'){ window.__PBC_TEST_PDF(d.doc); return; }
+  d.doc.save(fileNameFor(nama));
+}
+function pbcRekBaris(){ const r = pbcRekening(); return (r.bank||'-')+' · '+(r.no||'-')+' · a.n. '+(r.an||'-'); }
+function pbcCekDokSiap(){
+  if(!state.proyek){ notif('Buka proyek dulu','var(--red)'); return false; }
+  if(!PBC_UANG_TERBUKA()){ notif('Dokumen berisi nominal — hanya bisa dicetak oleh Direktur','var(--red)'); return false; }
+  if(!window.jspdf){ notif('Library PDF belum termuat, coba lagi','var(--red)'); return false; }
+  return true;
+}
+
+/* ---- INVOICE per termin ---- */
+async function pbcCetakInvoiceTermin(id){
+  if(!pbcCekDokSiap()) return;
+  await pbcMuatRekening(); await pbcMuatTtd();
+  const i = state.termin.findIndex(function(t){ return t.id===id; }), t = state.termin[i]; if(!t) return;
+  const en = pbcLapBhs()==='en', inv = pbcInfoInvoice(t, i), gt = grandTotal();
+  const lunasSebelum = state.termin.filter(function(x, j){ return j < i && x.status==='Lunas'; }).reduce(function(s,x){ return s+x.nilai; },0);
+  const d = pbcDokBaru('INVOICE', state.proyek.nama);
+  d.y = pbcSkinPanels(d.doc, d.FX, d.TW, d.y, { judul: en?'Bill To':'Tagihan Kepada', rows: pbcKlienRows(en) },
+    { judul: en?'Invoice Details':'Detail Invoice', rows: [[en?'Invoice No.':'No. Invoice', inv.no], [en?'Invoice date':'Tanggal', pbcLapTgl(inv.terbit,0,en?'en':'id')], [en?'Due date':'Jatuh tempo', pbcLapTgl(inv.tempo,0,en?'en':'id')], [en?'Project':'Proyek', state.proyek.nama||'-', true], [en?'Milestone':'Milestone', t.milestone||t.nama, true]] });
+  pbcDokKotak3(d, [[en?'Contract value':'Nilai kontrak', pbcRp(gt)], [en?'Paid to date':'Sudah dibayar', pbcRp(lunasSebelum)], [en?'Amount due now':'Tagihan sekarang', pbcRp(t.nilai - (t.nilaiRetensi||0)), 'blue']]);
+  pbcDokBar(d, en?'Payment Summary':'Ringkasan Pembayaran');
+  const rows = state.termin.map(function(x, j){ return [j+1, x.nama+(x.milestone?(' — '+x.milestone):''), x.pct+'%', pbcRp(x.nilai), x.status==='Lunas' ? (en?'PAID':'LUNAS') : (x.id===id ? (en?'THIS INVOICE':'TAGIHAN INI') : (en?'UPCOMING':'BERIKUTNYA'))]; });
+  rows.push(['', en?'TOTAL CONTRACT VALUE':'TOTAL NILAI KONTRAK', '100%', pbcRp(state.termin.reduce(function(s,x){ return s+x.nilai; },0)), '']);
+  pbcDokTabel(d, [['No',0.5,'c'],[en?'Milestone':'Tahap',4,'l'],['%',0.8,'c'],[en?'Amount (IDR)':'Nilai (IDR)',1.8,'r'],['Status',1.5,'c']], rows, true);
+  if(t.nilaiRetensi){ pbcDokPar(d, (en?'Retention withheld on this invoice: ':'Retensi ditahan pada invoice ini: ')+pbcRp(t.nilaiRetensi)+' ('+t.retensiPct+'%).'); }
+  pbcDokPar(d, (en?'Please transfer to: ':'Mohon transfer ke: ')+pbcRekBaris()+(en?' · Reference: ':' · Berita: ')+inv.no, 8.6);
+  if(d.y + 130 > 800){ d.doc.addPage(); d.y = 50; }
+  pbcSkinTtd(d.doc, d.FX, d.TW, d.y+6, en?'Issued by,':'Diterbitkan oleh,', en?'Received by Client,':'Diterima Klien,', null, null, state.proyek.owner||'');
+  pbcDokSimpan(d, 'Invoice_'+String(inv.no).replace(/[^A-Za-z0-9]+/g,'_'));
+  notif('PDF Invoice dibuat');
+}
+
+/* ---- KWITANSI (setelah termin lunas) ---- */
+async function pbcCetakKwitansi(id){
+  if(!pbcCekDokSiap()) return;
+  await pbcMuatRekening(); await pbcMuatTtd();
+  const i = state.termin.findIndex(function(t){ return t.id===id; }), t = state.termin[i]; if(!t) return;
+  if(t.status!=='Lunas'){ notif('Kwitansi hanya untuk termin yang sudah lunas','var(--red)'); return; }
+  const en = pbcLapBhs()==='en', gt = grandTotal(), diterima = t.nilai - (t.nilaiRetensi||0);
+  if(!t.kwitansiNo){ t.kwitansiNo = pbcNoDok('KWT', t.paidAt) + String(i+1).padStart(3,'0'); debounceSave(); }
+  const paid = state.termin.filter(function(x, j){ return j <= i && x.status==='Lunas'; }).reduce(function(s,x){ return s+x.nilai; },0);
+  const d = pbcDokBaru(en?'RECEIPT':'KWITANSI', state.proyek.nama);
+  d.y = pbcSkinPanels(d.doc, d.FX, d.TW, d.y, { judul: en?'Received From':'Diterima Dari', rows: pbcKlienRows(en) },
+    { judul: en?'Receipt Details':'Detail Kwitansi', rows: [[en?'Receipt No.':'No. Kwitansi', t.kwitansiNo], [en?'Date':'Tanggal', pbcLapTgl(t.paidAt||today(),0,en?'en':'id')], [en?'Project':'Proyek', state.proyek.nama||'-', true], [en?'Ref. invoice':'Ref. invoice', t.invoiceNo||'-'], ['Status', en?'PAID':'LUNAS']] });
+  const doc = d.doc;
+  pbcSkinWarna(doc,'pale','f'); doc.rect(d.FX, d.y, d.TW, 58, 'F'); pbcSkinWarna(doc,'blue','f'); doc.rect(d.FX, d.y, 5, 58, 'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(6.6); pbcSkinWarna(doc,'mut'); doc.text((en?'AMOUNT RECEIVED':'JUMLAH DITERIMA'), d.FX+16, d.y+15, {charSpace:0.6});
+  doc.setFont('helvetica','bold'); doc.setFontSize(19); pbcSkinWarna(doc,'blue'); doc.text('IDR '+pbcRp(diterima).replace('Rp',''), d.FX+16, d.y+36);
+  doc.setFont('helvetica','italic'); doc.setFontSize(8.4); pbcSkinWarna(doc,'tx'); doc.text(doc.splitTextToSize((en?pbcTerbilangEn(diterima)+' Rupiah':pbcTerbilangId(diterima)+' Rupiah'), d.TW-30)[0], d.FX+16, d.y+50);
+  d.y += 70;
+  pbcDokBar(d, en?'Payment Details':'Rincian Pembayaran');
+  pbcDokTabel(d, [[en?'Item':'Uraian',1.4,'l'],[en?'Details':'Keterangan',3,'l']], [
+    [en?'For payment of':'Untuk pembayaran', t.nama+(t.milestone?(' — '+t.milestone):'')+' ('+t.pct+'%)'],
+    [en?'Payment method':'Cara bayar', (en?'Bank transfer to ':'Transfer ke ')+pbcRekBaris()],
+    [en?'Date received':'Tanggal diterima', pbcLapTgl(t.paidAt||today(),0,en?'en':'id')]].concat(t.nilaiRetensi ? [[en?'Retention withheld':'Retensi ditahan', pbcRp(t.nilaiRetensi)+' ('+t.retensiPct+'%)']] : []));
+  pbcDokKotak3(d, [[en?'Contract value':'Nilai kontrak', pbcRp(gt)], [en?'Paid to date':'Total dibayar', pbcRp(paid)], [en?'Remaining balance':'Sisa', pbcRp(Math.max(0, gt-paid))]]);
+  pbcSkinTtd(doc, d.FX, d.TW, d.y+4, en?'Received by,':'Diterima oleh,', en?'Paid by,':'Dibayar oleh,', null, null, state.proyek.owner||'');
+  pbcDokSimpan(d, 'Kwitansi_'+String(t.kwitansiNo).replace(/[^A-Za-z0-9]+/g,'_'));
+  notif('PDF Kwitansi dibuat');
+}
+
+/* ---- BAST (Berita Acara Serah Terima) ---- */
+async function pbcCetakBast(){
+  if(!pbcCekDokSiap()) return;
+  await pbcMuatTtd();
+  const en = pbcLapBhs()==='en', p = state.proyek, gt = grandTotal();
+  const progresTotal = gt ? state.items.reduce(function(s,x){ return s+itemTotal(x)*itemPct(x)/100; },0)/gt*100 : 0;
+  if(progresTotal < 99.5 && !confirm('Progres baru '+progresTotal.toFixed(1)+'% — tetap cetak BAST?')) return;
+  const vo = (state.variationOrders||[]).filter(function(v){ return v.status==='disetujui' || v.status==='selesai'; });
+  const nilaiAkhir = gt + vo.reduce(function(s,v){ return s+(+v.nilaiPerubahan||0); },0);
+  const mg = state.masaGaransi || {};
+  if(!p.bastNo){ p.bastNo = pbcNoDok('BAST') + '001'; p.bastTgl = today(); debounceSave(); }
+  const tgl = p.bastTgl || today(), garansiSampai = mg.tanggalSelesai || (function(){ const x = new Date(tgl); x.setMonth(x.getMonth()+3); return pbcIsoTgl(x); })();
+  const d = pbcDokBaru(en?'HANDOVER CERTIFICATE':'BERITA ACARA SERAH TERIMA', p.nama);
+  d.y = pbcSkinPanels(d.doc, d.FX, d.TW, d.y, { judul: en?'Client':'Klien', rows: pbcKlienRows(en) },
+    { judul: en?'Handover Details':'Detail Serah Terima', rows: [[en?'BAST No.':'No. BAST', p.bastNo], [en?'Date':'Tanggal', pbcLapTgl(tgl,0,en?'en':'id')], [en?'Project':'Proyek', p.nama||'-', true], [en?'Location':'Lokasi', p.lokasi||'-'], [en?'Final contract':'Nilai akhir', pbcRp(nilaiAkhir)]] });
+  pbcDokPar(d, en ? ('On '+pbcLapTgl(tgl,0,'en')+', the Contractor hands over and the Client accepts the completed works of the project stated above, after a joint inspection on site.')
+                   : ('Pada '+pbcLapTgl(tgl,0,'id')+', Kontraktor menyerahkan dan Klien menerima hasil pekerjaan proyek di atas yang telah selesai, setelah pemeriksaan bersama di lokasi.'));
+  pbcDokBar(d, en?'Handed-over Works':'Pekerjaan yang Diserahkan');
+  const rows = (state.divisi||[]).map(function(dv, i){
+    const it = state.items.filter(function(x){ return x.divisiId===dv.id; }), nil = it.reduce(function(s,x){ return s+itemTotal(x); },0);
+    const pct = nil ? it.reduce(function(s,x){ return s+itemTotal(x)*itemPct(x)/100; },0)/nil*100 : 0;
+    return [i+1, dv.nama, it.length+' item', pct>=99.5 ? (en?'Completed & checked':'Selesai & diperiksa') : (pct.toFixed(0)+'%')];
+  });
+  vo.forEach(function(v){ rows.push([rows.length+1, (v.nomorVo||'VO')+' — '+(v.deskripsiPerubahan||''), '-', en?'Completed & checked':'Selesai & diperiksa']); });
+  pbcDokTabel(d, [['No',0.5,'c'],[en?'Work package':'Paket pekerjaan',4,'l'],[en?'Items':'Item',1,'c'],[en?'Result':'Hasil',2,'l']], rows);
+  pbcDokBar(d, en?'Defects Liability & Final Payment':'Masa Pemeliharaan & Pelunasan');
+  d.y += 4;
+  pbcDokPar(d, (en?'1. Defects liability period until ':'1. Masa pemeliharaan sampai ')+pbcLapTgl(garansiSampai,0,en?'en':'id')+(en?'. Defects caused by workmanship will be repaired at no cost.':'. Kerusakan akibat mutu pengerjaan diperbaiki tanpa biaya.'));
+  pbcDokPar(d, en?'2. Damage caused by misuse, alterations by others, or natural disasters is excluded.':'2. Kerusakan karena salah pakai, perubahan oleh pihak lain, atau bencana alam tidak termasuk.');
+  pbcDokPar(d, en?'3. Any remaining payment and retention follow the agreed payment schedule.':'3. Sisa pembayaran dan retensi mengikuti jadwal pembayaran yang disepakati.');
+  if(d.y + 130 > 800){ d.doc.addPage(); d.y = 50; }
+  pbcSkinTtd(d.doc, d.FX, d.TW, d.y+6, en?'Handed over by,':'Diserahkan oleh,', en?'Accepted by Client,':'Diterima Klien,', null, null, p.owner||'');
+  pbcDokSimpan(d, 'BAST_'+String(p.bastNo).replace(/[^A-Za-z0-9]+/g,'_'));
+  notif('PDF BAST dibuat');
 }
 
 /* ---- Teks dua bahasa ---- */
 const PBC_DOK_L = {
   en:{ no:'No', qty:'Qty', unit:'Unit', rate:'Unit Rate', amount:'Amount', grand:'GRAND TOTAL:', sub:'SUBTOTAL:', words:'Amount in Words:', notes:'NOTES & TERMS',
-       submitted:'Submitted by,', approved:'Approved by,', dateLine:'Date: ____ / ____ /', cont:'(cont.)',
+       submitted:'Prepared by,', approved:'Accepted by Client,', panelKiri:'Document Details', panelKanan:'Prepared For', page:'Page', dateLine:'Date: ____ / ____ /', cont:'(cont.)',
        date:'Date', ref:'Ref. No.', attach:'Attachment', to:'To', subject:'Subject' },
   id:{ no:'No', qty:'Vol', unit:'Sat', rate:'Harga Satuan', amount:'Jumlah', grand:'TOTAL KESELURUHAN:', sub:'SUBTOTAL:', words:'Terbilang:', notes:'CATATAN & KETENTUAN',
-       submitted:'Diajukan oleh,', approved:'Disetujui oleh,', dateLine:'Tanggal: ____ / ____ /', cont:'(lanjutan)',
+       submitted:'Dibuat oleh,', approved:'Disetujui Klien,', panelKiri:'Detail Dokumen', panelKanan:'Ditujukan Kepada', page:'Halaman', dateLine:'Tanggal: ____ / ____ /', cont:'(lanjutan)',
        date:'Tanggal', ref:'No. Ref.', attach:'Lampiran', to:'Kepada', subject:'Perihal' }
 };
 function pbcDokTglFmt(v, bhs){
@@ -5115,35 +5338,40 @@ function pbcLapBuat(o){
   const doc = new window.jspdf.jsPDF({unit:'pt', format:'a4', orientation:o.land?'l':'p'});
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const FX = 42.85, TW = W-2*FX, P = pbcDokProfil(), R = PBC_R[o.bhs||'id'];
-  const C = { ink:[26,26,26], g5:[85,85,85], tx:[34,34,34], grid:[207,202,192], head:[244,242,238], alt:[251,250,248], brown:[138,109,59], teal:[26,140,122], gold:[201,142,18], red:[192,57,43], blue:[30,80,180], soft:[232,228,220] };
-  const c = { doc:doc, W:W, H:H, FX:FX, TW:TW, C:C, R:R, y:0, batas:H-52 };
+  const C = { ink:[26,26,26], g5:[85,85,85], tx:[34,34,34], grid:PBC_SKIN.line, head:PBC_SKIN.head, alt:[247,249,252], brown:PBC_SKIN.blue, teal:[26,140,122], gold:[201,142,18], red:[192,57,43], blue:[30,80,180], soft:[232,228,220] };
+  const c = { doc:doc, W:W, H:H, FX:FX, TW:TW, C:C, R:R, y:0, batas:H-46 };
   function font(st,sz){ doc.setFont('helvetica',st); doc.setFontSize(sz); }
   function col(a){ doc.setTextColor(a[0],a[1],a[2]); }
   function fill(a){ doc.setFillColor(a[0],a[1],a[2]); }
   function ln(a,w){ doc.setDrawColor(a[0],a[1],a[2]); doc.setLineWidth(w); }
   doc.setLineCap('round');
-  /* kop */
-  font('bold',14); col(C.ink); doc.text(P.nama||'PRATAMA BUILD & CONSTRUCTION', FX+6, 45.7);
-  font('bold',8.5); col(C.g5); doc.text('General Contractor - Interior Design - Renovation', FX+6, 62.7);
-  font('bold',12.5); col(C.ink); doc.text(o.judul, W-FX-6, 44.2, {align:'right'});
-  font('bold',8.5); col(C.g5); if(o.sub) doc.text(o.sub, W-FX-6, 59.2, {align:'right'});
-  font('normal',8.5); doc.text(P.alamat+'  |  Email: '+P.email+'  |  Telp: '+P.telp, FX, 82.9);
-  ln(C.ink,1.2); doc.line(FX, 91.8, W-FX, 91.8);
-  c.y = 108;
+  /* kop (template PBC 2026) */
+  const yKop = pbcSkinKop(doc, W, FX, o.judul, o.sub);
+  c.y = yKop;
   c.baru = function(){
     doc.addPage();
-    font('normal',7); col(C.g5); doc.text((P.nama||'PRATAMA BUILD & CONSTRUCTION')+' — '+o.judul+(o.sub?(' · '+o.sub):''), FX, 30);
-    ln(C.grid,0.5); doc.line(FX, 36, W-FX, 36); c.y = 50;
+    font('bold',7.5); col(PBC_SKIN.blue); doc.text('PRATAMA BUILD & CONSTRUCTION', FX, 30); font('normal',7); col(C.g5); doc.text(o.judul+(o.sub?(' · '+o.sub):''), W-FX, 30, {align:'right'});
+    fill(PBC_SKIN.blue); doc.rect(FX, 35, TW, 1.2, 'F'); c.y = 50;
   };
   c.pastikan = function(h){ if(c.y+h > c.batas) c.baru(); };
-  c.info = function(rows, kolom){
-    const cw = TW/kolom; const n = rows.length;
-    rows.forEach(function(r,i){
-      const x = FX+6+(i%kolom)*cw, y = c.y+Math.floor(i/kolom)*14;
-      font('normal',8.5); col(C.g5); doc.text(r[0]+':', x, y);
-      font('bold',8.5); col(C.tx); doc.text(String(r[1]), x+(o.land?80:70), y, {maxWidth:cw-(o.land?86:76)});
-    });
-    c.y += Math.ceil(n/kolom)*14+8;
+  c.info = function(rows, kolom, judul){   /* panel susunan D, satu panel selebar halaman */
+    const pad = 9, cw = (TW-2*pad)/kolom, out = []; let maxL = 1;
+    font('bold',8.2);
+    rows.forEach(function(r,i){ const v = doc.splitTextToSize(String(r[1]==null?'-':r[1]), cw-8); out.push(v); });
+    const baris = Math.ceil(rows.length/kolom), tinggiBaris = [];
+    for(let b=0;b<baris;b++){ let m = 1; for(let k=0;k<kolom;k++){ const v = out[b*kolom+k]; if(v) m = Math.max(m, v.length); } tinggiBaris.push(8.5 + m*10 + 5); }
+    const h = 23 + tinggiBaris.reduce(function(a,b){ return a+b; },0) + 3;
+    c.pastikan(h+10);
+    fill(PBC_SKIN.pale); doc.rect(FX, c.y, TW, h, 'F'); fill(PBC_SKIN.blue); doc.rect(FX, c.y, TW, 2.6, 'F');
+    font('bold',7.2); col(PBC_SKIN.blue); doc.text(String(judul || (o.bhs==='en'?'PROJECT DETAILS':'DETAIL PROYEK')).toUpperCase(), FX+pad, c.y+14, {charSpace:0.8});
+    let yy = c.y + 23;
+    for(let b=0;b<baris;b++){
+      for(let k=0;k<kolom;k++){ const i = b*kolom+k, r = rows[i]; if(!r) continue; const x = FX+pad+k*cw;
+        font('normal',6.2); col(PBC_SKIN.mut); doc.text(String(r[0]).toUpperCase(), x, yy, {charSpace:0.5});
+        font('bold',8.2); col(PBC_SKIN.ink); out[i].forEach(function(t,j){ doc.text(t, x, yy+9.5+j*10); }); }
+      yy += tinggiBaris[b];
+    }
+    c.y += h + 14;
   };
   c.kpi = function(cards){
     const n = cards.length, g = 6, cw = (TW-(n-1)*g)/n, h = 36;
@@ -5161,7 +5389,7 @@ function pbcLapBuat(o){
   };
   c.bar = function(text, brown){
     c.pastikan(20+16+16);
-    fill(brown?C.brown:C.ink); doc.rect(FX,c.y,TW,20,'F');
+    fill(PBC_SKIN.blue); doc.rect(FX,c.y,TW,20,'F');
     font('bold',10); doc.setTextColor(255,255,255); doc.text(text, FX+7, c.y+14); c.y += 20;
   };
   c.teks = function(t, size, st, warna){
@@ -5180,7 +5408,7 @@ function pbcLapBuat(o){
     function header(){
       c.pastikan(16+16);
       fill(C.head); doc.rect(FX,c.y,TW,16,'F');
-      font('bold',7.8); doc.setTextColor(0,0,0);
+      font('bold',7.8); doc.setTextColor(1,74,161);
       cols.forEach(function(k,i){
         const a = k.a||'l'; const x = a==='l'?cx[i]+6:(a==='c'?cx[i]+cw[i]/2:cx[i]+cw[i]-6);
         doc.text(k.l, x, c.y+9.8, {align:a==='l'?'left':(a==='c'?'center':'right'), maxWidth:cw[i]-8});
@@ -5228,27 +5456,15 @@ function pbcLapBuat(o){
   };
   c.total = function(label, val){
     c.pastikan(48);
-    fill(C.brown); doc.rect(FX,c.y,TW,20,'F'); font('bold',10); doc.setTextColor(255,255,255); doc.text(label, FX+7, c.y+14);
-    fill(C.head); doc.rect(FX,c.y+20,TW,22,'F'); ln(C.grid,0.5); doc.rect(FX,c.y+20,TW,22);
-    font('bold',11); doc.setTextColor(0,0,0); doc.text(val, FX+TW-8, c.y+36, {align:'right'}); c.y += 52;
+    fill(PBC_SKIN.blue); doc.rect(FX,c.y,TW,24,'F'); font('bold',10.5); doc.setTextColor(255,255,255);
+    doc.text(label, FX+8, c.y+16); doc.text(val, FX+TW-8, c.y+16, {align:'right'}); c.y += 34;
   };
   c.ttd = function(kiri1, kiri2, kanan1, kanan2, nama, jab){
-    c.pastikan(96);
-    font('normal',9); col(C.tx);
-    doc.text(kiri1, FX+6, c.y+9); doc.text(kiri2, FX+6, c.y+21);
-    const xr = W/2+30; doc.text(kanan1, xr, c.y+9); doc.text(kanan2||'', xr, c.y+21);
-    font('bold',9); doc.text(P.ttdNama, FX+6, c.y+78); font('normal',9); doc.text(P.ttdJabatan, FX+6, c.y+90);
-    doc.text(o.bhs==='en'?'Date: ____ / ____ / ____':'Tanggal: ____ / ____ / ____', xr, c.y+78);
-    c.y += 100;
+    c.pastikan(128);
+    c.y = pbcSkinTtd(doc, FX, TW, c.y+4, kiri1, kanan1, nama||P.ttdNama, jab||P.ttdJabatan, kanan2||'', o.bhs==='en'?'Date: ____ / ____ / ____':'Tanggal: ____ / ____ / ____') + 4;
   };
   c.selesai = function(namaFile){
-    const np = doc.getNumberOfPages();
-    for(let i=1;i<=np;i++){
-      doc.setPage(i); ln(C.grid,0.5); doc.line(FX,H-36,W-FX,H-36);
-      font('normal',7); col(C.g5);
-      doc.text((P.nama||'PRATAMA BUILD & CONSTRUCTION')+' — '+(o.footer||R.dok), FX, H-24);
-      doc.text(R.hal+' '+i+' '+R.dari+' '+np, W-FX, H-24, {align:'right'});
-    }
+    pbcSkinFooter(doc, FX, 'Pratama Build & Construction   ·   '+pbcKontak(P)+(o.footer?('   ·   '+o.footer):''), R.hal, R.dari);
     if(typeof window.__PBC_TEST_PDF==='function'){ window.__PBC_TEST_PDF(doc); return; }
     doc.save(fileNameFor(namaFile));
   };
@@ -9697,6 +9913,8 @@ function renderTermin() {
       + '<div style="display:flex;gap:8px;align-items:center">'
       + '<span class="badge '+(t.status==='Lunas'?'badge-done':'badge-active')+'">'+t.status+'</span>'
       + (t.status!=='Lunas'?('<button class="btn btn-green btn-sm" onclick="bayarTermin(\''+t.id+'\')">Lunas</button>'):'')
+      + '<button class="btn btn-blue btn-sm" onclick="pbcCetakInvoiceTermin(\''+t.id+'\')">📄 Invoice</button>'
+      + (t.status==='Lunas'?('<button class="btn btn-gold btn-sm" onclick="pbcCetakKwitansi(\''+t.id+'\')">🧾 Kwitansi</button>'):'')
       + '<button class="btn btn-red btn-sm" onclick="hapusTermin(\''+t.id+'\')">x</button></div></div>'
       + '<div class="termin-body">'
       + '<div class="termin-stat"><div class="t-label">Persentase</div><div class="t-val gold">'+t.pct+'%</div></div>'
@@ -10396,39 +10614,29 @@ function printLamaLaporanHarian(){ exportPageToPdf('page-progress', renderProgre
 function printLamaTermin(){ exportPageToPdf('page-termin', renderTermin, fileNameFor('Termin'), 'Termin Pembayaran'); }
 function printLamaRekap(){ exportPageToPdf('page-rekap', renderRekap, fileNameFor('Rekapitulasi'), 'Rekapitulasi Proyek'); }
 
-const PDF = { navy:[12,30,61], navyLight:[19,49,92], gold:[201,162,39], goldLight:[230,196,90], gray:[122,129,149], lightGray:[230,233,240], dark:[28,35,51], teal:[26,140,122] };
+const PDF = { navy:[1,74,161], navyLight:[1,74,161], gold:[244,181,31], goldLight:[244,181,31], gray:[136,136,136], lightGray:[244,247,251], dark:[34,34,34], teal:[26,140,122] };
 
-function pdfHeader(doc, title){
+function pdfHeader(doc, title){   /* template PBC 2026 (satuan mm) */
   const w = doc.internal.pageSize.getWidth();
-  doc.setFillColor.apply(doc, PDF.navy);
-  doc.rect(0,0,w,22,'F');
-  doc.setFillColor.apply(doc, PDF.gold);
-  doc.rect(0,22,w,1.2,'F');
-  try { const logoSrc = (document.querySelector('.logo-img')||{}).src; if(logoSrc) doc.addImage(logoSrc,'PNG',12,4,14,14); } catch(e){}
-  doc.setTextColor(255,255,255);
-  doc.setFont('helvetica','bold'); doc.setFontSize(11);
-  doc.text((state.proyek?state.proyek.nama:'PRATAMA BUILD & CONSTRUCTION'), 30, 10);
-  doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-  doc.setTextColor(220,225,240);
-  doc.text('Pratama Build & Construction · '+(title||''), 30, 15.5);
-  doc.setFontSize(7.5);
-  doc.text(today(), w-12, 12, {align:'right'});
+  try{ doc.addImage(PBC_MARK,'PNG',12,5,10.5,11); }catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(17,17,17); doc.text('PRATAMA BUILD & CONSTRUCTION', 25, 10);
+  doc.setFont('helvetica','normal'); doc.setFontSize(6.2); doc.setTextColor(119,119,119); doc.text('BUILD  ·  INTERIOR  ·  ACOUSTIC', 25, 14, {charSpace:0.5});
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(17,17,17); doc.text(String(title||'').toUpperCase(), w-12, 10, {align:'right', maxWidth:w/2-14});
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(119,119,119); doc.text((state.proyek&&state.proyek.nama?state.proyek.nama+'  ·  ':'')+today(), w-12, 15, {align:'right', maxWidth:w/2-14});
+  doc.setFillColor(1,74,161); doc.rect(0,19,w,0.8,'F');
 }
 function pdfFooter(doc){
-  const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
-  doc.setDrawColor.apply(doc, PDF.lightGray); doc.setLineWidth(0.3);
-  doc.line(12,h-12,w-12,h-12);
-  doc.setFont('helvetica','normal'); doc.setFontSize(7);
-  doc.setTextColor.apply(doc, PDF.gray);
-  doc.text('PT Pratama Build & Construction — Dokumen Internal & Rahasia', 12, h-8);
+  const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight(), P = pbcDokProfil();
+  doc.setFillColor(1,74,161); doc.rect(12,h-12,w-24,0.5,'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(136,136,136);
+  doc.text('Pratama Build & Construction  ·  '+pbcKontak(P), 12, h-8);
 }
 function pdfSectionTitle(doc, y, title){
-  doc.setFillColor.apply(doc, PDF.gold);
-  doc.rect(12, y-4, 1.4, 6, 'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(12);
-  doc.setTextColor.apply(doc, PDF.navy);
-  doc.text(title, 16, y);
-  return y+8;
+  const w = doc.internal.pageSize.getWidth();
+  doc.setFillColor(1,74,161); doc.rect(12, y-5, w-24, 7, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255,255,255);
+  doc.text(String(title).toUpperCase(), 14.5, y, {charSpace:0.3});
+  return y+7;
 }
 function pdfCard(doc, x, y, w, h, label, val, isGold){
   doc.setFillColor.apply(doc, PDF.navy);
@@ -10481,9 +10689,9 @@ function pdfTable(doc, startY, columns, rows, opts){
   const fit = function(t, w){ t = String(t==null?'':t); if(doc.getTextWidth(t) <= w) return t; while(t.length>1 && doc.getTextWidth(t+'...') > w) t = t.slice(0,-1); return t+'...'; };
   let y = startY;
   function drawHeader(){
-    doc.setFillColor.apply(doc, PDF.navy);
+    doc.setFillColor(232,239,248);
     doc.rect(marginX, y, totalW, 7, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(FS); doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(FS); doc.setTextColor(1,74,161);
     let x = marginX;
     columns.forEach(function(c,i){ if(c.align==='right') doc.text(String(c.label), x+colWidths[i]-2, y+4.8, {align:'right'}); else doc.text(String(c.label), x+2, y+4.8); x += colWidths[i]; });
     y += 7;
@@ -12672,7 +12880,9 @@ function renderKeuangan(){
      estimasi lama supaya proyek yang belum migrasi ke modul baru ini tidak kehilangan angka. */
   var totalGajiRiil = (state.payrollLog||[]).reduce(function(s,p){ return s+(p.totalDibayar||0); },0);
   var pengeluaranUpah = (state.payrollLog && state.payrollLog.length>0) ? totalGajiRiil : (totalTkHari * UPAH_HARIAN_DEFAULT);
-  var totalPengeluaran = pengeluaranMaterial + pengeluaranUpah + (k.pengeluaranOperasional||0);
+  var kasK = pbcKasRingkas(), kasKeluar = kasK.keluar, kasMasuk = kasK.masuk;
+  var totalPengeluaran = pengeluaranMaterial + pengeluaranUpah + (k.pengeluaranOperasional||0) + kasKeluar;
+  paid = paid + kasMasuk;
   var cashflow = paid - totalPengeluaran;
   var labaKotor = totalProgresRp - totalPengeluaran;
 
@@ -12700,13 +12910,81 @@ function renderKeuangan(){
       + '<div class="kv"><span>Termin Cair (dari Termin)</span><strong style="color:var(--teal-lt)">'+fmtRp(paid)+'</strong></div>'
       + '<div class="kv"><span>Pengeluaran Material (dari Purchasing & PO diterima)</span><strong>'+fmtRp(pengeluaranMaterial)+'</strong></div>'
       + '<div class="kv"><span>Pengeluaran Upah ('+(state.payrollLog && state.payrollLog.length>0 ? 'aktual dari Bayar Gaji — Tenaga Kerja' : 'estimasi otomatis: '+totalTkHari+' TK-hari × Rp'+UPAH_HARIAN_DEFAULT.toLocaleString('id')+'/hari, belum pakai modul Tenaga Kerja')+')</span><strong>'+fmtRpPenuh(pengeluaranUpah)+'</strong></div>'
-      + '<div class="kv"><span>Pengeluaran Operasional <span style="cursor:pointer;color:var(--gold)" onclick="editPengeluaranOperasional()">✎ ubah</span></span><strong>'+fmtRp(k.pengeluaranOperasional||0)+'</strong></div>';
+      + '<div class="kv"><span>Pengeluaran Operasional <span style="cursor:pointer;color:var(--gold)" onclick="editPengeluaranOperasional()">✎ ubah</span></span><strong>'+fmtRp(k.pengeluaranOperasional||0)+'</strong></div>'
+      + '<div class="kv"><span>Buku Kas — nota & pengeluaran lain (lihat di bawah)</span><strong>'+fmtRp(kasKeluar)+'</strong></div>'
+      + (kasMasuk ? '<div class="kv"><span>Buku Kas — uang masuk di luar termin</span><strong style="color:var(--teal-lt)">'+fmtRp(kasMasuk)+'</strong></div>' : '');
   }
+  pbcKasGambar();
   document.getElementById('keuanganCashflow').innerHTML =
     '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--teal-lt);margin-bottom:4px"><span>Termin Cair</span><span>'+fmtRp(paid)+'</span></div><div class="prog-bar"><div class="prog-fill green" style="width:'+(nilaiFinal?Math.min(100,paid/nilaiFinal*100):0)+'%"></div></div></div>'
     + '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--orange);margin-bottom:4px"><span>Total Pengeluaran</span><span>'+fmtRp(totalPengeluaran)+'</span></div><div class="prog-bar"><div class="prog-fill" style="width:'+(nilaiFinal?Math.min(100,totalPengeluaran/nilaiFinal*100):0)+'%;background:var(--orange)"></div></div></div>'
     + '<div style="padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--muted)">Cashflow Bersih</span><strong style="color:'+(cashflow>=0?'var(--teal-lt)':'#e74c3c')+'">'+fmtRp(cashflow)+'</strong></div>';
 }
+
+
+/* ===========================================================================
+   BUKU KAS PROYEK — semua uang keluar/masuk di luar PO & gaji (nota toko, transport,
+   sewa alat, upah borongan/subkon, operasional, lain-lain). Nota yang Bapak kirim ke
+   Claude dicatat ke sini (sumber:'claude'), bisa juga dicatat manual.
+   =========================================================================== */
+const PBC_KAS_KAT = ['Material','Transportasi','Upah & Subkon','Sewa Alat','Operasional','Lain-lain'];
+function pbcKas(){ state.kas = state.kas || []; return state.kas; }
+function pbcKasRingkas(){
+  const k = { keluar:0, masuk:0, kat:{} }; PBC_KAS_KAT.forEach(function(x){ k.kat[x] = 0; });
+  (state && state.kas || []).forEach(function(e){ const j = +e.jumlah||0; if(e.jenis==='masuk') k.masuk += j; else { k.keluar += j; k.kat[e.kategori||'Lain-lain'] = (k.kat[e.kategori||'Lain-lain']||0) + j; } });
+  return k;
+}
+function pbcKasGambar(){
+  const r = document.getElementById('kasRingkas'), d = document.getElementById('kasDaftar'); if(!r || !d) return;
+  const k = pbcKasRingkas(), uang = PBC_UANG_TERBUKA();
+  const rp = function(n){ return uang ? fmtRp(n) : 'Rp ••••'; };
+  r.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">'
+    + PBC_KAS_KAT.map(function(x){ return '<div class="kpi-card"><div class="kpi-label">'+x+'</div><div class="kpi-val" style="font-size:14px">'+rp(k.kat[x]||0)+'</div></div>'; }).join('')
+    + '<div class="kpi-card"><div class="kpi-label">Total keluar</div><div class="kpi-val" style="font-size:14px;color:#e74c3c">'+rp(k.keluar)+'</div></div></div>';
+  const rows = pbcKas().slice().sort(function(a,b){ return String(b.tgl).localeCompare(String(a.tgl)); });
+  d.innerHTML = rows.length ? ('<table class="tbl" style="width:100%;font-size:11px"><tr><th>Tanggal</th><th>Kategori</th><th>Uraian</th><th>Toko / Penerima</th><th style="text-align:right">Jumlah</th><th></th></tr>'
+    + rows.map(function(e){ return '<tr><td style="white-space:nowrap">'+pbcEsc(e.tgl)+'</td><td>'+pbcEsc(e.jenis==='masuk'?'Uang masuk':e.kategori)+'</td><td>'+pbcEsc(e.uraian||'')+(e.sumber==='claude'?' <span style="font-size:9px;color:var(--teal-lt)">· dari nota</span>':'')+'</td><td>'+pbcEsc(e.toko||'')+'</td><td style="text-align:right;white-space:nowrap;'+(e.jenis==='masuk'?'color:var(--teal-lt)':'')+'">'+rp(e.jumlah)+'</td><td><button class="btn btn-red btn-sm" onclick="pbcKasHapus(\''+e.id+'\')">x</button></td></tr>'; }).join('') + '</table>')
+    : '<div class="empty">Belum ada catatan kas. Kirim foto nota ke Claude, atau ketuk "+ Catat manual".</div>';
+}
+function pbcKasForm(){
+  const kat = prompt('Kategori (ketik nomor):\n1 Material\n2 Transportasi\n3 Upah & Subkon\n4 Sewa Alat\n5 Operasional\n6 Lain-lain\n7 Uang MASUK', '1'); if(kat===null) return;
+  const n = parseInt(kat,10); if(!(n>=1 && n<=7)){ notif('Pilihan tidak dikenal','var(--red)'); return; }
+  const uraian = prompt('Uraian (misal: semen 10 sak, ongkir pasir)', ''); if(uraian===null) return;
+  const jml = parseFloat(String(prompt('Jumlah (Rp), tanpa titik', '')||'').replace(/[^\d]/g,'')); if(!(jml>0)){ notif('Jumlah belum diisi','var(--red)'); return; }
+  const toko = prompt('Toko / penerima (boleh kosong)', '') || '';
+  pbcKas().push({ id:uid(), tgl:today(), jenis:n===7?'masuk':'keluar', kategori:n===7?'':PBC_KAS_KAT[n-1], uraian:uraian, toko:toko, jumlah:jml, sumber:'manual' });
+  debounceSave(); renderKeuangan(); notif('Tercatat di Buku Kas');
+}
+function pbcKasHapus(id){ if(!confirm('Hapus catatan kas ini?')) return; state.kas = pbcKas().filter(function(e){ return e.id!==id; }); debounceSave(); renderKeuangan(); }
+/* PDF laporan arus kas proyek (per bulan, per kategori) */
+function pbcCetakArusKas(){
+  if(!pbcLapSiap()) return;
+  if(!PBC_UANG_TERBUKA()){ notif('Laporan arus kas berisi nominal — hanya Direktur','var(--red)'); return; }
+  try{
+    const bhs = pbcLapBhs(), en = bhs==='en', R = PBC_R[bhs];
+    const c = pbcLapBuat({ judul: en?'CASH FLOW REPORT':'LAPORAN ARUS KAS', sub: state.proyek.nama, land:false, bhs:bhs, footer: en?'Internal — confidential':'Internal — rahasia' });
+    pbcLapInfoProyek(c, R, bhs);
+    const masukTermin = state.termin.filter(function(t){ return t.status==='Lunas'; }).map(function(t){ return { tgl:t.paidAt||t.tgl||'', uraian:t.nama, jumlah:t.nilai-(t.nilaiRetensi||0), jenis:'masuk', kategori:'Termin' }; });
+    const po = (state.purchaseOrders||[]).map(function(p){ return { tgl:p.tanggal||'', uraian:'PO '+(p.poNumber||''), jumlah:(p.items||[]).reduce(function(s,i){ return s+(i.qtyDiterima||0)*(i.harga||0); },0), jenis:'keluar', kategori:'Material' }; }).filter(function(x){ return x.jumlah>0; });
+    const gaji = (state.payrollLog||[]).map(function(p){ return { tgl:p.tanggal||'', uraian:(en?'Payroll ':'Gaji ')+(p.periodeMulai||'')+' – '+(p.periodeSelesai||''), jumlah:p.totalDibayar||0, jenis:'keluar', kategori:'Upah & Subkon' }; });
+    const semua = masukTermin.concat(po, gaji, pbcKas().map(function(e){ return { tgl:e.tgl, uraian:e.uraian+(e.toko?(' — '+e.toko):''), jumlah:+e.jumlah||0, jenis:e.jenis, kategori:e.jenis==='masuk'?(en?'Other income':'Masuk lain'):e.kategori }; }))
+      .sort(function(a,b){ return String(a.tgl).localeCompare(String(b.tgl)); });
+    const tm = semua.filter(function(x){ return x.jenis==='masuk'; }).reduce(function(s,x){ return s+x.jumlah; },0), tk = semua.filter(function(x){ return x.jenis!=='masuk'; }).reduce(function(s,x){ return s+x.jumlah; },0);
+    c.kpi([[en?'Cash in':'Uang masuk', pbcRp(tm), C_TEAL, true], [en?'Cash out':'Uang keluar', pbcRp(tk), [192,57,43], true], [en?'Net cash':'Saldo', pbcRp(tm-tk), tm-tk>=0?C_TEAL:[192,57,43], true]]);
+    const kat = {}; semua.filter(function(x){ return x.jenis!=='masuk'; }).forEach(function(x){ kat[x.kategori] = (kat[x.kategori]||0) + x.jumlah; });
+    c.tabel([{l:en?'Expense category':'Kelompok pengeluaran',w:3},{l:en?'Amount':'Jumlah',w:1.5,a:'r'},{l:'%',w:0.8,a:'c'}],
+      Object.keys(kat).map(function(k){ return [k, pbcRp(kat[k]), tk?(kat[k]/tk*100).toFixed(1)+'%':'-']; }).concat([{ _sub:1, cells:[en?'TOTAL':'TOTAL', pbcRp(tk), '100%'] }]), { title: en?'Expenses by category':'Pengeluaran per kelompok' });
+    const bln = {}; semua.forEach(function(x){ const b = String(x.tgl||'').slice(0,7)||'-'; bln[b] = bln[b] || {m:0,k:0}; if(x.jenis==='masuk') bln[b].m += x.jumlah; else bln[b].k += x.jumlah; });
+    let saldo = 0;
+    c.tabel([{l:en?'Month':'Bulan',w:1.2,a:'c'},{l:en?'Cash in':'Masuk',w:1.5,a:'r'},{l:en?'Cash out':'Keluar',w:1.5,a:'r'},{l:en?'Balance':'Saldo',w:1.5,a:'r'}],
+      Object.keys(bln).sort().map(function(b){ saldo += bln[b].m - bln[b].k; return [b, pbcRp(bln[b].m), pbcRp(bln[b].k), pbcRp(saldo)]; }), { title: en?'Monthly cash flow':'Arus kas per bulan' });
+    c.tabel([{l:en?'Date':'Tanggal',w:1,a:'c'},{l:en?'Description':'Uraian',w:3.2,wrap:true},{l:en?'Category':'Kelompok',w:1.3},{l:en?'In':'Masuk',w:1.3,a:'r'},{l:en?'Out':'Keluar',w:1.3,a:'r'}],
+      semua.map(function(x){ return [x.tgl, x.uraian, x.kategori, x.jenis==='masuk'?pbcRp(x.jumlah):'', x.jenis!=='masuk'?pbcRp(x.jumlah):'']; }), { title: en?'Transactions':'Rincian transaksi' });
+    c.selesai('Arus_Kas_'+(state.proyek.nama||'Proyek'));
+    notif('PDF Laporan Arus Kas dibuat');
+  }catch(e){ console.error(e); notif('Gagal membuat PDF: '+e.message,'var(--red)'); }
+}
+const C_TEAL = [26,140,122];
 
 (function rebuildKeuanganPageHtml(){
   var html = '<div class="sec-head"><div class="sec-title">Dashboard <span>Keuangan Proyek</span></div>'
@@ -12715,7 +12993,11 @@ function renderKeuangan(){
     + '<div class="kpi-row" id="keuanganKpi2" style="grid-template-columns:repeat(4,1fr);margin-top:12px"></div>'
     + '<div class="kpi-row" id="keuanganKpi3" style="grid-template-columns:repeat(3,1fr);margin-top:12px"></div>'
     + '<div class="panel" style="margin-top:16px"><div class="panel-title">Rincian Sumber Data</div><div id="keuanganSumberOtomatis"></div></div>'
-    + '<div class="panel" style="margin-top:16px"><div class="panel-title">Cashflow Proyek</div><div id="keuanganCashflow"></div></div>';
+    + '<div class="panel" style="margin-top:16px"><div class="panel-title">Cashflow Proyek</div><div id="keuanganCashflow"></div></div>'
+    + '<div class="panel" style="margin-top:16px"><div class="panel-title">📒 Buku Kas Proyek <span style="font-size:9px;color:var(--muted2);font-weight:400">— nota yang Bapak kirim ke Claude masuk ke sini otomatis</span></div>'
+    + '<div id="kasRingkas"></div>'
+    + '<div class="toolbar" style="flex-wrap:wrap;margin-top:8px"><button class="btn btn-blue" onclick="pbcKasForm()">+ Catat manual</button><button class="btn btn-gold" onclick="pbcCetakArusKas()">📄 PDF Laporan Arus Kas</button></div>'
+    + '<div id="kasDaftar" style="overflow-x:auto;margin-top:8px"></div></div>';
   var el = document.getElementById('page-keuangan');
   if(el){ el.innerHTML = html; }
   else {
@@ -12825,7 +13107,7 @@ function pbcSimpanRek(k, v){
 function pbcInfoInvoice(t, i){
   let ubah = false;
   const lunas = t.status==='Lunas';
-  if(!t.invoiceNo){ const n = new Date(); t.invoiceNo = 'INV-'+n.getFullYear()+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+String(i+1).padStart(3,'0'); ubah = true; }
+  if(!t.invoiceNo){ const n = new Date(); t.invoiceNo = 'PBC/INV/'+String(n.getMonth()+1).padStart(2,'0')+String(n.getFullYear()).slice(2)+'/'+String(i+1).padStart(3,'0'); ubah = true; }
   if(!t.invoiceTgl && !lunas){ t.invoiceTgl = today(); ubah = true; }
   if(ubah) debounceSave();
   const terbit = t.invoiceTgl || (t.paidAt ? String(t.paidAt).slice(0,10) : (t.tgl || today()));
@@ -13202,9 +13484,15 @@ function renderOwnerPortal(){
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">'
     + [['bank','Bank',R.bank,'BCA'],['no','Nomor Rekening',R.no,'0000000000'],['an','Atas Nama',R.an,'Nama pemilik rekening'],['ttd','Nama Penanda Tangan',R.ttd,'Nama Direktur'],['jabatan','Jabatan',R.jabatan,'Direktur Utama'],['ppn','PPN (%) — isi 0 bila tidak ada',R.ppn||0,'0']]
       .map(function(f){ return '<label style="font:11px Arial;color:#6a7185">'+f[1]+'<input class="op-in" style="display:block;width:100%;padding:7px;margin-top:2px;font:13px Arial;border:1px solid #cfd5e2;border-radius:6px;color:#1a1d24;background:#fff" value="'+pbcEsc(f[2])+'" placeholder="'+f[3]+'" oninput="pbcSimpanRek(\''+f[0]+'\',this.value)"></label>'; }).join('')
-    + '</div></div>';
+    + '</div>'
+    + '<div style="margin-top:12px;font:11px Arial;color:#6a7185">Tanda tangan + stempel PBC (dipakai otomatis di semua PDF: penawaran, invoice, kwitansi, addendum, BAST). Foto di kertas putih — latar putih dibuat transparan otomatis.</div>'
+    + '<div style="display:flex;gap:10px;align-items:center;margin-top:6px"><div id="pbcTtdPrev" style="min-height:70px;min-width:120px;display:flex;align-items:center"></div>'
+    + '<label style="padding:7px 10px;font:12px Arial;border:1px solid #014AA1;border-radius:6px;background:#fff;color:#014AA1;cursor:pointer">📷 Unggah TTD + stempel<input type="file" accept="image/*" style="display:none" onchange="pbcUnggahTtd(this)"></label>'
+    + '<button type="button" onclick="if(confirm(\'Hapus tanda tangan tersimpan?\')){pbcSimpanTtd(null);pbcTtdPratinjau();}" style="padding:7px 10px;font:12px Arial;border:1px solid #cfd5e2;border-radius:6px;background:#fff;color:#6a7185;cursor:pointer">Hapus</button></div>'
+    + '</div>';
   body.innerHTML = h;
   pbcOpGambarFoto(D);
+  try{ pbcMuatTtd().then(pbcTtdPratinjau); }catch(e){}
 }
 function pbcOpKartu4Html(D){
   const k = kurvaKartu4(D.aktualPct, D.kd, D.gt, D.uang);
@@ -15435,7 +15723,7 @@ var PAH_TAMBAHAN = [
   ['Pasang Exhaust Fan','unit','','exhaust fan|exhaust|kipas angin dinding',[['Exhaust Fan',1]],0.25,0.1],
   ['Pasang Water Heater','unit','','water heater|pemanas air',[['Water Heater',1]],0.4,0.2]
 ];
-var PAH_DEF = { mode:'mid', tukang:170000, kenek:140000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25,
+var PAH_DEF = { mode:'mid', tukang:200000, kenek:160000, tim:8, hariMinggu:6, ops:10000000, kont:5, mMin:8, mTarget:15, mMax:25,
   subUpah:20, subPaket:10, termin:'30,40,20,10', sumber:'boq', propId:'', rabDok:null, pilih:{} };
 var PAH = Object.assign({}, PAH_DEF, { hasil:null, chart:null, propList:[], dok:null });
 
@@ -15498,13 +15786,44 @@ function pahCocok(namaItem, daftar){
   var varian = kand.some(function(k){ return k.punya && k.a.nama!==top[0].a.nama; });
   return { a:top[0].a, ambigu:false, spek:(!top[0].punya && varian && spekItem.length===0) };
 }
-/* harga satu bahan: harga supplier PBC (katalog material proyek) > referensi bersumber > kosong */
+/* ---- Buku Harga PBC (22 Nov 2026) — harga milik PBC sendiri, menang atas referensi umum.
+   Urutan kepercayaan: harga beli aktual Bapak > penawaran supplier > toko Bali > acuan online (sudah +8,7% Tabanan).
+   Sumber lengkap: Sheet "Database Harga Material PBC" & "Buku Harga Satuan PBC". ---- */
+var PBC_HARGA = {
+  'Semen PCC 40kg':[60500,'Harga beli aktual PBC','Nov 2026'],
+  'Bata Ringan (Hebel) 10cm':[10440,'Acuan online Rp869.600/m³ ÷ 83 buah (toko Bali Rp19.000/buah)','Nov 2026'],
+  'Bata Ringan (Hebel) 7.5cm':[7830,'Acuan online Rp869.600/m³ (0,009 m³/buah)','Nov 2026'],
+  'Mortar Perekat Hebel':[100000,'Toko Bali (Drymix TB100 40 kg)','Nov 2026'],
+  'Mortar Plester Instan':[97000,'Toko Bali (Drymix D200 40 kg)','Nov 2026'],
+  'Mortar Acian':[99000,'Toko Bali (Drymix S100 30 kg)','Nov 2026'],
+  'Keramik Lantai 40x40':[96800,'Acuan online Rp92.900/dus 0,96 m²','Nov 2026'],
+  'Granit Tile 60x60':[219700,'Acuan online (KW1 60×60)','Nov 2026'],
+  'Gypsum Board 9mm':[69500,'Harga beli aktual PBC','Nov 2026'],
+  'Gypsum Board 12mm':[80000,'Acuan online Knauf 12 mm','Nov 2026'],
+  'Soundshield Gypsum 12mm':[215000,'Toko Bali — Jayaboard SoundStop (supplier Bapak Rp230.000)','Nov 2026'],
+  'Rangka Hollow 2x4':[15200,'Acuan online (0,30 mm)','Nov 2026'],
+  'Compound Gypsum':[3345,'Acuan online Elephant JCC 20 kg','Nov 2026'],
+  'Rockwool Peredam':[83300,'Supplier WA 0812-4618-8150 — Tombo D60 25 mm per m²','Agu 2026'],
+  'Rockwool Peredam 50mm':[152800,'Supplier WA 0812-4618-8150 — Safe & Silent D60 50 mm per m²','Agu 2026'],
+  'Glasswool':[25000,'Supplier WA 0812-4618-8150 — GNet 50 mm per m²','Agu 2026'],
+  'Cat Tembok Interior':[40830,'Acuan online Jotaplast 25 kg per kg','Nov 2026'],
+  'OSB 9mm':[445000,'Toko Bali (OSB impor 9 mm)','Nov 2026'],
+  'Bondek':[125000,'Acuan online 0,75 mm per m²','Nov 2026'],
+  'Wiremesh M8':[744600,'Acuan online 2,1×5,4 m','Nov 2026'],
+  'Baja Ringan C75':[105000,'Harga beli aktual PBC (kanal C)','Nov 2026'],
+  'Besi Beton D8':[46700,'Acuan online 8 mm × 12 m','Nov 2026'],
+  'Besi Beton D10':[94000,'Acuan online 10 mm × 12 m','Nov 2026'],
+  'Besi Beton D12':[124100,'Acuan online 12 mm × 12 m','Nov 2026'],
+  'Beton Ready Mix K-225':[842400,'Acuan online — perlu cek supplier Bali','Nov 2026']
+};
+/* harga satu bahan: harga supplier PBC (katalog material proyek) > Buku Harga PBC > referensi bersumber > kosong */
 function pahHargaBahan(nama){
   var mode = PAH.mode;
   try{
     var m = (state.materials||[]).find(function(x){ return (x.nama||'').toLowerCase()===nama.toLowerCase() && x.harga>0; });
     if(m) return { h:m.harga, asal:'PBC', sumber:null, lo:m.harga, hi:m.harga };
   }catch(e){}
+  var pb = PBC_HARGA[nama]; if(pb) return { h:pb[0], asal:'PBC', sumber:null, lo:pb[0], hi:pb[0], cat:'Buku Harga PBC — '+pb[1]+' ('+pb[2]+')' };
   var r = PAH_REF[nama]; if(!r) return null;
   var h = mode==='lo' ? r[0] : mode==='hi' ? r[1] : (r[0]+r[1])/2;
   return { h:h, asal:'ref', sumber:r[2], lo:r[0], hi:r[1], cat:r[3] };
