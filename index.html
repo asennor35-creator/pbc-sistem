@@ -4553,7 +4553,7 @@ async function exportProposalPdfLama(){
    Tata letak ditiru PERSIS dari contoh "Project Addendum No. 3" (ukuran, jarak, warna, font).
    Satu mesin untuk semua dokumen: isi boleh beda, tampilan tidak pernah berubah.
    =========================================================================== */
-const PBC_DOK_DEFAULT = { alamat:'Jl. Penarukan No.7, Kab. Tabanan', email:'pratama.buildconstruction@gmail.com', telp:'+62 857-4502-6574',
+const PBC_DOK_DEFAULT = { alamat:'Banjar Anyar, Kediri, Tabanan, Bali', email:'pratama.buildconstruction@gmail.com', telp:'+62 857-4502-6574',
   bank:'', /* nomor rekening TIDAK ditulis di kode (kode ini publik) — diisi Direktur sekali di Owner Portal > Pengaturan Laporan & Invoice */
   ttdNama:'Norasen', ttdJabatan:'Managing Director' };
 function pbcDokPref(){ try{ return JSON.parse(localStorage.getItem('pbc_dok_pref')||'{}')||{}; }catch(e){ return {}; } }
@@ -4683,7 +4683,9 @@ function pbcSkinKop(doc, W, FX, judul, sub){
   try{ doc.addImage(PBC_MARK, 'PNG', FX, 28, 33, 35); }catch(e){}
   doc.setFont('helvetica','bold'); doc.setFontSize(13.5); pbcSkinWarna(doc,'ink'); doc.text('PRATAMA BUILD & CONSTRUCTION', FX+42, 42);
   doc.setFont('helvetica','normal'); doc.setFontSize(6.6); pbcSkinWarna(doc,'mut'); doc.text('BUILD  ·  INTERIOR  ·  ACOUSTIC', FX+42, 52, {charSpace:0.7});
-  doc.setFontSize(7.4); doc.setTextColor(85,85,85); doc.text(pbcKontak(P), FX+42, 62.5);
+  doc.setFontSize(7.4); doc.setTextColor(85,85,85); doc.text(pbcKontak(P), FX+42, 61);
+  const alm = (P.alamat && !/penarukan/i.test(P.alamat)) ? P.alamat : 'Banjar Anyar, Kediri, Tabanan, Bali';
+  doc.setFontSize(7); doc.text(String(alm), FX+42, 70);
   doc.setFont('helvetica','bold'); doc.setFontSize(13.5); const ruang = W - FX - (FX + 42 + doc.getTextWidth('PRATAMA BUILD & CONSTRUCTION') + 16);
   let fs = 20; doc.setFontSize(fs);
   while(fs > 9 && doc.getTextWidth(String(judul)) > ruang){ fs -= 0.5; doc.setFontSize(fs); }
