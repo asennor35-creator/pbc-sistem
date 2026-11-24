@@ -13134,7 +13134,7 @@ function pbcKasGambar(){
 let _pbcNotaFoto = null;
 function pbcNotaBuka(tanpaFoto){
   if(!state.proyek){ notif('Buka proyek dulu','var(--red)'); return; }
-  _pbcNotaFoto = null;
+  _pbcNotaFoto = null; if(!window.PBC_DEMO) pbcAiCfg();   /* siapkan kunci AI selagi Bapak memotret */
   let m = document.getElementById('modalNota');
   if(!m){ m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'modalNota'; document.body.appendChild(m); }
   const opsi = PBC_KAS_KAT.map(function(k){ return '<option>'+k+'</option>'; }).join('') + '<option value="__masuk">Uang MASUK (di luar termin)</option>';
@@ -13181,10 +13181,10 @@ function pbcNotaDipilih(inp){
   const rd = new FileReader();
   rd.onload = async function(){
     let url = rd.result;
+    pbcNotaBaca(rd.result);   /* langsung baca — tidak menunggu foto simpanan dikompres */
     try{ url = await compressImageDataUrl(rd.result, 1400, 0.72); }catch(e){}
     _pbcNotaFoto = url;
     document.getElementById('notaPrev').innerHTML = '<img src="'+url+'" style="max-width:100%;max-height:220px;border-radius:6px;border:1px solid var(--border)">';
-    pbcNotaBaca(url);
   };
   rd.readAsDataURL(f);
 }
@@ -13212,29 +13212,45 @@ async function pbcAiCfg(){
 }
 async function pbcNotaBacaAI(url){
   const cfg = await pbcAiCfg(); if(!cfg || !cfg.gemini) return null;
-  const mime = (String(url).match(/^data:([^;]+)/)||[])[1] || 'image/jpeg', b64 = String(url).split(',')[1]; if(!b64) return null;
+  try{ url = await compressImageDataUrl(url, cfg.foto||1024, 0.7); }catch(e){}   /* foto kecil = kirim & baca jauh lebih cepat */
+  const mime = 'image/jpeg', b64 = String(url).split(',')[1]; if(!b64) return null;
   const prompt = 'Foto ini adalah nota / kwitansi / faktur belanja untuk proyek konstruksi di Indonesia (bisa cetak atau tulisan tangan). Baca setiap baris dengan teliti.\n'
     + 'Balas HANYA JSON dengan bentuk: {"toko":"","tanggal":"YYYY-MM-DD atau kosong","total":0,"kategori":"salah satu dari: '+PBC_KAS_KAT.join(' / ')+'","barang":[{"nama":"","qty":0,"satuan":"","harga_satuan":0,"subtotal":0}],"catatan":""}\n'
     + 'Aturan: nama barang ditulis lengkap & jelas dalam bahasa Indonesia (mis. "smn" → "Semen", "psr" → "Pasir", sebut merek/ukuran bila tertulis). Satuan seperti sak, m3, batang, lembar, kg, buah, roll, dus, liter, truk, rit. '
     + 'Semua angka rupiah ditulis angka biasa tanpa titik/koma ribuan. Bila harga satuan tidak tertulis, hitung subtotal ÷ qty. "total" = total yang harus dibayar (bukan uang tunai / kembalian). '
     + 'Kategori: barang bangunan → Material; ongkir/angkut/kapal → Transportasi; upah/borongan → Upah & Subkon; sewa alat → Sewa Alat. Isi "catatan" bila ada bagian yang kurang terbaca. Jangan mengarang barang yang tidak ada di foto.';
-  const models = cfg.models || ['gemini-2.5-flash','gemini-2.5-flash-lite','gemini-3-flash'];
-  for(let i=0;i<models.length;i++){
-    try{
-      const ctl = new AbortController(), to = setTimeout(function(){ ctl.abort(); }, 45000);
-      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+models[i]+':generateContent',
+  const daftar = (cfg.cepat && cfg.cepat.length) ? cfg.cepat
+    : [{m:'gemini-3.5-flash-lite', gc:{thinkingConfig:{thinkingLevel:'minimal'}}}, {m:'gemini-3-flash-preview', gc:{thinkingConfig:{thinkingBudget:0}}}, {m:'gemini-flash-lite-latest', gc:{thinkingConfig:{thinkingLevel:'low'}}}];
+  const satu = async function(d, ctl){
+    for(let k=0;k<2;k++){   /* k=1: ulang tanpa pengaturan 'berpikir' bila model menolaknya */
+      const gc = Object.assign({ responseMimeType:'application/json', temperature:0 }, k===0 ? (d.gc||{}) : {});
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+d.m+':generateContent',
         { method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key':cfg.gemini}, signal:ctl.signal,
-          body: JSON.stringify({ contents:[{ parts:[{ text:prompt }, { inline_data:{ mime_type:mime, data:b64 } }] }], generationConfig:{ responseMimeType:'application/json', temperature:0 } }) });
-      clearTimeout(to);
-      if(!res.ok) continue;
+          body: JSON.stringify({ contents:[{ parts:[{ text:prompt }, { inline_data:{ mime_type:mime, data:b64 } }] }], generationConfig:gc }) });
+      if(res.status===400 && k===0 && d.gc && Object.keys(d.gc).length) continue;
+      if(!res.ok) throw new Error('http '+res.status);
       const j = await res.json(), t = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts.map(function(p){ return p.text||''; }).join('');
-      if(!t) continue;
+      if(!t) throw new Error('kosong');
       const o = JSON.parse(t.replace(/^```json\s*|```\s*$/g,''));
       o.barang = (o.barang||[]).filter(function(b){ return b && b.nama; }).map(function(b){ const q = +b.qty||0, st = +b.subtotal||0; let h = +b.harga_satuan||0; if(!h && st && q) h = Math.round(st/q); return { nama:String(b.nama).trim(), qty:q||null, satuan:String(b.satuan||'').trim(), harga:h, subtotal:st||(h&&q?h*q:0) }; });
+      if(!o.barang.length && !(+o.total)) throw new Error('tidak terbaca');
       return o;
-    }catch(e){ /* coba model berikutnya */ }
-  }
-  return null;
+    }
+    throw new Error('gagal');
+  };
+  /* Balapan: model tercepat jalan dulu; bila 4 dtk belum selesai / gagal, model cadangan ikut jalan. Hasil pertama yang benar dipakai. */
+  return await new Promise(function(selesai){
+    const ctls = []; let sisa = daftar.length, beres = false, idx = 0, tunda = null;
+    const akhiri = function(o){ if(beres) return; beres = true; clearTimeout(tunda); clearTimeout(batas); ctls.forEach(function(c){ try{ c.abort(); }catch(e){} }); selesai(o); };
+    const batas = setTimeout(function(){ akhiri(null); }, 25000);
+    const jalan = function(){
+      if(beres || idx>=daftar.length) return;
+      const d = daftar[idx++], ctl = new AbortController(); ctls.push(ctl);
+      clearTimeout(tunda); tunda = setTimeout(jalan, 4000);
+      satu(d, ctl).then(akhiri, function(){ sisa--; if(!beres){ if(idx<daftar.length) jalan(); else if(sisa<=0) akhiri(null); } });
+    };
+    jalan();
+  });
 }
 function pbcNotaIsiDariAI(o){
   const set = function(id, v){ const e = document.getElementById(id); if(e && v) e.value = v; };
@@ -13254,17 +13270,18 @@ function pbcNotaIsiDariAI(o){
 async function pbcNotaBaca(url){
   const el = document.getElementById('notaBaca'); if(!el) return;
   if(!window.PBC_DEMO){
-    el.textContent = '⏳ AI sedang membaca nota (nama barang, jumlah, harga, total)…';
+    const t0 = Date.now(); el.textContent = '⏳ Membaca nota…';
+    const jam = setInterval(function(){ el.textContent = '⏳ Membaca nota… '+Math.round((Date.now()-t0)/1000)+' dtk'; }, 1000);
     try{
-      const o = await pbcNotaBacaAI(url);
+      const o = await pbcNotaBacaAI(url); clearInterval(jam);
       if(o && (o.barang.length || +o.total)){
         const c = pbcNotaIsiDariAI(o);
-        el.innerHTML = '✅ Nota terbaca: <b>'+o.barang.length+' barang</b>'+(+o.total?', total <b>Rp'+(+o.total).toLocaleString('id-ID')+'</b>':'')+'. '
+        el.innerHTML = '✅ Terbaca dalam '+Math.max(1,Math.round((Date.now()-t0)/1000))+' dtk: <b>'+o.barang.length+' barang</b>'+(+o.total?', total <b>Rp'+(+o.total).toLocaleString('id-ID')+'</b>':'')+'. '
           + (c.cocok ? 'Jumlah per barang cocok dengan total.' : '<span style="color:var(--orange)">Jumlah per barang (Rp'+c.jum.toLocaleString('id-ID')+') beda dengan total — cek lagi.</span>')
           + (o.catatan ? '<br><span style="color:var(--orange)">Catatan: '+pbcEsc(o.catatan)+'</span>' : '') + '<br>Periksa sekilas, lalu ketuk Simpan.';
         return;
       }
-    }catch(e){}
+    }catch(e){} clearInterval(jam);
   }
   el.textContent = '⏳ Membaca nota… (pertama kali perlu internet ±10 MB, selanjutnya lebih cepat)';
   try{
