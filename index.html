@@ -10765,7 +10765,8 @@ function pdfHeader(doc, title){   /* template PBC 2026 (satuan mm) */
   const w = doc.internal.pageSize.getWidth();
   try{ doc.addImage(PBC_MARK,'PNG',12,5,10.5,11); }catch(e){}
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(17,17,17); doc.text('PRATAMA BUILD & CONSTRUCTION', 25, 10);
-  doc.setFont('helvetica','normal'); doc.setFontSize(6.2); doc.setTextColor(119,119,119); doc.text('BUILD  ·  INTERIOR  ·  ACOUSTIC', 25, 14, {charSpace:0.5});
+  doc.setFont('helvetica','normal'); doc.setFontSize(6.2); doc.setTextColor(119,119,119); doc.text('BUILD  ·  INTERIOR  ·  ACOUSTIC', 25, 13.6, {charSpace:0.5});
+  doc.setFontSize(6.2); doc.setTextColor(110,110,110); doc.text('Banjar Anyar, Kediri, Tabanan, Bali  ·  +62 857-4502-6574', 25, 17.2);
   doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(17,17,17); doc.text(String(title||'').toUpperCase(), w-12, 10, {align:'right', maxWidth:w/2-14});
   doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(119,119,119); doc.text((state.proyek&&state.proyek.nama?state.proyek.nama+'  ·  ':'')+today(), w-12, 15, {align:'right', maxWidth:w/2-14});
   doc.setFillColor(1,74,161); doc.rect(0,19,w,0.8,'F');
@@ -13991,7 +13992,8 @@ async function exportOwnerPortalPdf(){
   await new Promise(function(r){ setTimeout(r,60); });
   try{
     await pbcMuatRekening(); try{ await pbcMuatTtd(); }catch(e){}
-    const D = pbcOwnerData(), p = D.p, kd = D.kd, R = D.rek, U = D.uang;
+    const D = pbcOwnerData(); D.uang = false;   /* laporan owner: tanpa angka rupiah (kecuali lampiran invoice) */
+    const p = D.p, kd = D.kd, R = D.rek, U = false;
     const fotoList = D.foto;
     await pbcTungguFoto(fotoList);
     const kx = pbcOwnerKurvaImg(D);
