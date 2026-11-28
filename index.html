@@ -14103,7 +14103,7 @@ async function exportOwnerPortalPdf(){
     if(D.sec.invoice && D.invoiceAktif){ set(7.5,false,PDF.gray); doc.text('Rincian tagihan '+D.invoiceAktif.no+' terlampir di halaman terakhir.', 12, y+2); y += 7; }
 
     /* 9. Pengadaan & material (tanpa harga) */
-    y = bagian(6, 'Pengadaan dan Material');
+    y = bagian(6, 'Pengadaan dan Material', y+6);
     y = kartu4(y, [['Kedatangan material', String(D.materialDatang)], ['Tenaga kerja', D.pekerjaRata+' org/hari'], ['Hari kerja', String(D.hariKerja)], ['Temuan mutu terbuka', String(D.punchTerbuka), D.punchTerbuka?[252,228,228]:null, D.punchTerbuka?[192,57,43]:null]]);
     const matRows = [];
     (state.purchaseOrders||[]).forEach(function(po){ (po.items||[]).forEach(function(it){ const m = (state.materials||[]).find(function(x){ return x.id===it.materialId; }); const q = +it.qtyOrder||0, r = +it.qtyDiterima||0; matRows.push([m?m.nama:'Material', (m&&m.satuan)||'', String(+q.toFixed(2)), String(+r.toFixed(2)), r>=q&&q>0?'Sudah datang':(r>0?'Datang sebagian':'Dipesan'), po.tanggal||'']); }); });
@@ -14111,19 +14111,19 @@ async function exportOwnerPortalPdf(){
     else y = kosong(y, 'Belum ada pemesanan material yang tercatat.');
 
     /* 10. Kendala, risiko, K3 */
-    y = bagian(7, 'Kendala, Risiko dan K3');
+    y = bagian(7, 'Kendala, Risiko dan K3', y+6);
     const kend = D.kendala.map(function(l){ return l.tgl+': '+l.kendala; }).join('; ');
     const brs = [['Kendala', kend || 'Tidak ada kendala dicatat.'], ['Tindak lanjut', (D.catatan.tindakLanjut||'').trim() || '-'], ['Risiko 2-3 minggu', (D.catatan.risiko||'').trim() || '-'], ['Keselamatan (K3)', (D.catatan.k3||'').trim() || '-']];
     brs.forEach(function(r){ const L = doc.splitTextToSize(String(r[1]), W-24-34), h = Math.max(6, L.length*4.2+2.5); y = perlu(y, h); doc.setDrawColor.apply(doc, PDF.lightGray); doc.line(12,y+h,W-12,y+h); set(8.5,true,NAV); doc.text(r[0], 14, y+4.5); set(8.5,false,PDF.dark); doc.text(L, 48, y+4.5); y += h; });
 
     /* 11. Rencana pekerjaan berikutnya */
-    y = bagian(8, 'Rencana Pekerjaan Berikutnya');
+    y = bagian(8, 'Rencana Pekerjaan Berikutnya', y+6);
     if(D.rencanaDepan.length) y = pdfTable(doc, y, [{label:'No',w:.5,align:'center'},{label:'Pekerjaan',w:5},{label:'Divisi',w:2.5}], D.rencanaDepan.slice(0,15).map(function(r,i){ return [String(i+1), r.nama, r.div||'']; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
     else y = kosong(y, 'Tidak ada pekerjaan terjadwal untuk '+D.lblDepan+'.');
     const vos = D.voMenunggu.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Menunggu persetujuan']; }).concat(D.voSetuju.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Disetujui']; }));
     y = perlu(y+2, 24); set(9,true,[1,73,161]); doc.text('KEPUTUSAN & PERUBAHAN PEKERJAAN', 12, y); y += 3;
     if(String(D.catatan.keputusan||'').trim()) y = kotak(y, 'Mohon keputusan Owner: '+D.catatan.keputusan.trim(), [253,238,238], [240,196,196]);
-    if(vos.length) y = pdfTable(doc, y, [{label:'No. VO',w:1.2},{label:'Deskripsi',w:5},{label:'Status',w:1.8}], vos, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
+    if(vos.length){ y = perlu(y, 8+7*Math.min(vos.length,3)); } if(vos.length) y = pdfTable(doc, y, [{label:'No. VO',w:1.2},{label:'Deskripsi',w:5},{label:'Status',w:1.8}], vos, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
     else if(!String(D.catatan.keputusan||'').trim()) y = kosong(y, 'Tidak ada keputusan atau perubahan pekerjaan yang menunggu.');
 
     /* 12. Foto & persetujuan */
