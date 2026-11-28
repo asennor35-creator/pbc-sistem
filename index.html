@@ -1754,6 +1754,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
   <button class="nav-tab" data-tabkey="mrp" onclick="openMrpPage(event)">🧮 MRP</button>
   <button class="nav-tab" data-tabkey="gudang" onclick="openGudangPage(event)">🏬 Gudang</button>
   <button class="nav-tab" data-tabkey="owner-portal" onclick="openOwnerPortalPage(event)">👤 Owner Portal</button>
+  <button class="nav-tab" data-tabkey="akustik" onclick="location.href='akustik/'">🔊 Akustik &amp; Ukur Gema</button>
   <button class="nav-tab" data-tabkey="pengunjungdemo" onclick="openPengunjungDemoPage(event)">🧪 Pengunjung Demo</button>
 </div>
 
@@ -11781,9 +11782,9 @@ function hapusMaterial(id){ state.materials = state.materials.filter(function(m)
 /* ===== MODUL HAK AKSES & OWNER PORTAL ===== */
 let currentRole = 'direktur';
 const ROLE_TABS = {
-  direktur: ['dashboard','semuaproyek','boq','schedule','progress','opname','termin','rekap','keuangan','dokumen','purchasing','tenagakerja','vo','qc','mrp','gudang','owner-portal','pengunjungdemo'],
-  internal: ['dashboard','semuaproyek','boq','schedule','progress','opname','termin','rekap','dokumen','tenagakerja','vo','qc','owner-portal'],
-  lapangan: ['dashboard','progress','opname','tenagakerja','qc','gudang'],
+  direktur: ['dashboard','semuaproyek','boq','schedule','progress','opname','termin','rekap','keuangan','dokumen','purchasing','tenagakerja','vo','qc','mrp','gudang','owner-portal','akustik','pengunjungdemo'],
+  internal: ['dashboard','semuaproyek','boq','schedule','progress','opname','termin','rekap','dokumen','tenagakerja','vo','qc','owner-portal','akustik'],
+  lapangan: ['dashboard','progress','opname','tenagakerja','qc','gudang','akustik'],
   owner: ['owner-portal']
 };
 const OWNER_EXIT_PIN = '2024';
