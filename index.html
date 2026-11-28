@@ -2027,7 +2027,7 @@ input.tbl-input:focus{border-bottom-color:var(--gold);background:rgba(212,168,50
   <div class="toolbar">
     <select class="form-select" id="opnameSelect" style="width:auto;min-width:260px" onchange="pilihOpname(this.value)"></select>
     <button class="btn btn-blue" onclick="buatOpnameBaru()">+ Opname Baru</button>
-    <button class="btn btn-gold" onclick="cetakBeritaAcaraOpname()">🖨 Berita Acara Opname</button>
+    <button class="btn btn-gold" onclick="cetakBeritaAcaraOpname()">📄 PDF Opname</button>
   </div>
   <div id="opnameBody"><div class="empty">Memuat…</div></div>
 </div>
@@ -13817,6 +13817,25 @@ function renderOwnerPortal(){
       : '<div class="empty">Belum ada termin yang ditagih</div>')
     + '</div>';
   }
+  /* 8. material, tenaga, mutu */
+  h += '<div class="op-sec"><h3>'+sn()+'. Pengadaan, Material &amp; Tenaga Kerja</h3><div class="op-kpi" style="margin-top:0">'
+    + '<div class="op-k"><i>KEDATANGAN MATERIAL</i><b>'+D.materialDatang+'</b><small>pengiriman diterima '+D.lblIni+'</small></div>'
+    + '<div class="op-k"><i>TENAGA KERJA</i><b>'+D.pekerjaRata+' org</b><small>rata-rata hadir/hari · '+D.hariKerja+' hari kerja</small></div>'
+    + '<div class="op-k" style="border-color:'+(D.punchTerbuka?'#C0392B':'#1A8C7A')+'"><i>TEMUAN MUTU TERBUKA</i><b>'+D.punchTerbuka+'</b><small>'+(D.punchMajor?D.punchMajor+' perlu perhatian khusus':'dalam penyelesaian')+'</small></div></div></div>';
+  /* 7. kendala, risiko, K3 */
+  h += '<div class="op-sec"><h3>'+sn()+'. Kendala, Risiko &amp; Keselamatan</h3>'
+    + '<div style="font:700 12px Arial;color:#0E2A5A;margin-bottom:4px">Kendala yang tercatat di laporan harian '+D.lblIni+'</div>'
+    + (D.kendala.length ? '<ul style="margin:0 0 8px;padding-left:18px;font:12px/1.7 Arial;color:#1a1d24">'+D.kendala.map(function(l){ return '<li>'+pbcEsc(l.tgl)+': '+pbcEsc(l.kendala)+'</li>'; }).join('')+'</ul>' : '<div style="font:12px Arial;color:#6a7185;margin-bottom:8px">Tidak ada kendala dicatat.</div>')
+    + '<div style="font:700 12px Arial;color:#0E2A5A;margin-bottom:4px">Tindak lanjut / catatan kendala (diisi Direktur)</div><textarea class="op-in" rows="2" placeholder="Contoh: Kabel listrik terlambat 5 hari dari supplier — dialihkan ke supplier lokal, tiba 19 Okt." oninput="pbcSimpanCatatanOwner(\'tindakLanjut\',this.value)">'+pbcEsc(cat.tindakLanjut||'')+'</textarea>'
+    + '<div style="font:700 12px Arial;color:#0E2A5A;margin:10px 0 4px">Risiko 2–3 minggu ke depan</div><textarea class="op-in" rows="2" placeholder="Contoh: Pengecoran bergantung cuaca; material rockwool lead time 7 hari." oninput="pbcSimpanCatatanOwner(\'risiko\',this.value)">'+pbcEsc(cat.risiko||'')+'</textarea>'
+    + '<div style="font:700 12px Arial;color:#0E2A5A;margin:10px 0 4px">Keselamatan kerja (K3)</div><textarea class="op-in" rows="1" placeholder="Contoh: Nihil kecelakaan kerja." oninput="pbcSimpanCatatanOwner(\'k3\',this.value)">'+pbcEsc(cat.k3||'')+'</textarea>'
+    + '</div>';
+  /* 6. kegiatan */
+  h += '<div class="op-sec"><h3>'+sn()+'. Kegiatan '+pbcOpCap(D.lblIni)+' &amp; Rencana Berikutnya</h3>'
+    + (D.kegiatan.length ? '<div class="op-tw"><table class="op-t"><thead><tr><th>Tanggal</th><th>Pekerjaan</th><th>Uraian</th><th>Tenaga / Cuaca</th></tr></thead><tbody>'+D.kegiatan.map(function(l){ return '<tr><td style="white-space:nowrap">'+pbcEsc(l.tgl)+'</td><td>'+pbcEsc(l.div||'')+'</td><td>'+pbcEsc(l.ket||'')+'</td><td style="white-space:nowrap">'+(l.tk?pbcEsc(l.tk)+' org':'')+(l.cuaca?' · '+pbcEsc(l.cuaca):'')+'</td></tr>'; }).join('')+'</tbody></table></div>' : '<div class="empty">Belum ada laporan harian pada minggu ini</div>')
+    + '<div style="font:700 12px Arial;color:#0E2A5A;margin:12px 0 4px">Rencana '+pbcOpCap(D.lblDepan)+'</div>'
+    + (D.rencanaDepan.length ? '<ul style="margin:0;padding-left:18px;font:12px/1.7 Arial;color:#1a1d24">'+D.rencanaDepan.slice(0,8).map(function(r){ return '<li>'+pbcEsc(r.nama)+' <span style="color:#6a7185">('+pbcEsc(r.div)+')</span></li>'; }).join('')+'</ul>' : '<div style="font:12px Arial;color:#6a7185">Tidak ada pekerjaan terjadwal.</div>')
+    + '</div>';
   if(D.sec.keputusan){
   /* 5. keputusan & VO */
   h += '<div class="op-sec"><h3>'+sn()+'. Keputusan yang Ditunggu &amp; Perubahan Pekerjaan</h3>'
@@ -13827,27 +13846,8 @@ function renderOwnerPortal(){
     + (D.voSetuju.length ? D.voSetuju.map(function(v){ return '<div style="padding:6px 0;border-bottom:1px solid #e3e6ee;font:12px Arial"><b>'+pbcEsc(v.nomorVo)+'</b> — '+pbcEsc(v.deskripsiPerubahan)+(D.uang?' <b style="float:right">'+(v.nilaiPerubahan>=0?'+':'')+fmtRpPenuh(v.nilaiPerubahan)+'</b>':'')+'</div>'; }).join('') : '<div style="font:12px Arial;color:#6a7185">Belum ada perubahan lingkup pekerjaan.</div>')
     + '</div>';
   }
-  /* 6. kegiatan */
-  h += '<div class="op-sec"><h3>'+sn()+'. Kegiatan '+pbcOpCap(D.lblIni)+'</h3>'
-    + (D.kegiatan.length ? '<div class="op-tw"><table class="op-t"><thead><tr><th>Tanggal</th><th>Pekerjaan</th><th>Uraian</th><th>Tenaga / Cuaca</th></tr></thead><tbody>'+D.kegiatan.map(function(l){ return '<tr><td style="white-space:nowrap">'+pbcEsc(l.tgl)+'</td><td>'+pbcEsc(l.div||'')+'</td><td>'+pbcEsc(l.ket||'')+'</td><td style="white-space:nowrap">'+(l.tk?pbcEsc(l.tk)+' org':'')+(l.cuaca?' · '+pbcEsc(l.cuaca):'')+'</td></tr>'; }).join('')+'</tbody></table></div>' : '<div class="empty">Belum ada laporan harian pada minggu ini</div>')
-    + '<div style="font:700 12px Arial;color:#0E2A5A;margin:12px 0 4px">Rencana '+pbcOpCap(D.lblDepan)+'</div>'
-    + (D.rencanaDepan.length ? '<ul style="margin:0;padding-left:18px;font:12px/1.7 Arial;color:#1a1d24">'+D.rencanaDepan.slice(0,8).map(function(r){ return '<li>'+pbcEsc(r.nama)+' <span style="color:#6a7185">('+pbcEsc(r.div)+')</span></li>'; }).join('')+'</ul>' : '<div style="font:12px Arial;color:#6a7185">Tidak ada pekerjaan terjadwal.</div>')
-    + '</div>';
-  /* 7. kendala, risiko, K3 */
-  h += '<div class="op-sec"><h3>'+sn()+'. Kendala, Risiko &amp; Keselamatan</h3>'
-    + '<div style="font:700 12px Arial;color:#0E2A5A;margin-bottom:4px">Kendala yang tercatat di laporan harian '+D.lblIni+'</div>'
-    + (D.kendala.length ? '<ul style="margin:0 0 8px;padding-left:18px;font:12px/1.7 Arial;color:#1a1d24">'+D.kendala.map(function(l){ return '<li>'+pbcEsc(l.tgl)+': '+pbcEsc(l.kendala)+'</li>'; }).join('')+'</ul>' : '<div style="font:12px Arial;color:#6a7185;margin-bottom:8px">Tidak ada kendala dicatat.</div>')
-    + '<div style="font:700 12px Arial;color:#0E2A5A;margin-bottom:4px">Tindak lanjut / catatan kendala (diisi Direktur)</div><textarea class="op-in" rows="2" placeholder="Contoh: Kabel listrik terlambat 5 hari dari supplier — dialihkan ke supplier lokal, tiba 19 Okt." oninput="pbcSimpanCatatanOwner(\'tindakLanjut\',this.value)">'+pbcEsc(cat.tindakLanjut||'')+'</textarea>'
-    + '<div style="font:700 12px Arial;color:#0E2A5A;margin:10px 0 4px">Risiko 2–3 minggu ke depan</div><textarea class="op-in" rows="2" placeholder="Contoh: Pengecoran bergantung cuaca; material rockwool lead time 7 hari." oninput="pbcSimpanCatatanOwner(\'risiko\',this.value)">'+pbcEsc(cat.risiko||'')+'</textarea>'
-    + '<div style="font:700 12px Arial;color:#0E2A5A;margin:10px 0 4px">Keselamatan kerja (K3)</div><textarea class="op-in" rows="1" placeholder="Contoh: Nihil kecelakaan kerja." oninput="pbcSimpanCatatanOwner(\'k3\',this.value)">'+pbcEsc(cat.k3||'')+'</textarea>'
-    + '</div>';
-  /* 8. material, tenaga, mutu */
-  h += '<div class="op-sec"><h3>'+sn()+'. Material, Tenaga Kerja &amp; Mutu</h3><div class="op-kpi" style="margin-top:0">'
-    + '<div class="op-k"><i>KEDATANGAN MATERIAL</i><b>'+D.materialDatang+'</b><small>pengiriman diterima '+D.lblIni+'</small></div>'
-    + '<div class="op-k"><i>TENAGA KERJA</i><b>'+D.pekerjaRata+' org</b><small>rata-rata hadir/hari · '+D.hariKerja+' hari kerja</small></div>'
-    + '<div class="op-k" style="border-color:'+(D.punchTerbuka?'#C0392B':'#1A8C7A')+'"><i>TEMUAN MUTU TERBUKA</i><b>'+D.punchTerbuka+'</b><small>'+(D.punchMajor?D.punchMajor+' perlu perhatian khusus':'dalam penyelesaian')+'</small></div></div></div>';
   /* 9. foto */
-  h += '<div class="op-sec"><h3>'+sn()+'. Foto Progres</h3><div style="font:11px Arial;color:#6a7185;margin:-4px 0 8px">10 bingkai foto untuk owner. Ketuk bingkai untuk memilih foto, lalu tulis keterangan di bawahnya (misal "Keramik ruang tamu"). Keterangan bisa dihapus dan ditulis ulang.</div>'
+  h += '<div class="op-sec"><h3>'+sn()+'. Dokumentasi Foto</h3><div style="font:11px Arial;color:#6a7185;margin:-4px 0 8px">10 bingkai foto untuk owner. Ketuk bingkai untuk memilih foto, lalu tulis keterangan di bawahnya (misal "Keramik ruang tamu"). Keterangan bisa dihapus dan ditulis ulang.</div>'
     + '<div style="margin-bottom:8px"><button type="button" onclick="pbcOpIsiDariHarian()" style="padding:7px 10px;font:12px Arial;border:1px solid #1A8C7A;border-radius:6px;background:#fff;color:#0B6B58;cursor:pointer">📥 Isi bingkai kosong dari foto Progres Harian terbaru</button></div>'
     + '<input type="file" accept="image/*" id="opFotoInput" style="display:none" onchange="pbcOpFotoDipilih(this)">'
     + '<div id="opFotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div></div>';
@@ -14007,29 +14007,47 @@ async function exportOwnerPortalPdf(){
     const kotak = function(y, teks, bg, bd){ set(8.5,false,PDF.dark); const L = doc.splitTextToSize(teks, W-24-10), h = L.length*4.2+5; y = perlu(y, h); doc.setFillColor.apply(doc, bg); doc.setDrawColor.apply(doc, bd); doc.roundedRect(12,y,W-24,h,1.5,1.5,'FD'); set(8.5,false,PDF.dark); doc.text(L, 16, y+5); return y+h+4; };
     const stCol = function(st){ return st==='Selesai'?[26,140,122]:(st==='Terlambat'?[192,57,43]:(st==='Terlambat mulai'?[150,101,15]:[30,80,180])); };
 
-    /* ===== HALAMAN 1 — ringkasan & Kurva S ===== */
-    pdfHeader(doc, JUDUL);
-    let y = 33; let _sn = 0; const sn = function(){ return ++_sn; };
-    set(16,true,NAV); doc.text('LAPORAN KEMAJUAN '+D.modeNama.toUpperCase(), 12, y);
-    set(8.5,true,PDF.gold); doc.text('RENCANA VS REALISASI'+(D.mode==='mingguan' ? (D.mingguKe?'  |  MINGGU KE-'+D.mingguKe+' DARI '+D.totalMinggu:'') : '  |  '+D.periodeTxt.toUpperCase()), 12, y+5.5);
-    y += 11;
-    doc.setFillColor(244,247,251); doc.rect(12,y,W-24,U?22:16,'F'); doc.setFillColor(1,74,161); doc.rect(12,y,W-24,0.9,'F');
-    const info = [['Proyek',p.nama||'-'],['Owner',p.owner||'-'],['Lokasi',p.lokasi||'-'],['Periode',D.periodeTxt],['Tanggal Mulai',p.mulai||'-'],['Target Selesai',D.targetSelesai]];
-    if(U) info.splice(5,0,['Nilai Kontrak', pbcRpPdf(D.gt)]);
-    info.forEach(function(r,i){ const cx = 16+(i%2)*92, cy = y+6+Math.floor(i/2)*5.5; set(8,false,PDF.gray); doc.text(r[0]+':', cx, cy); set(8,true,PDF.dark); doc.text(String(r[1]), cx+26, cy, {maxWidth:62}); });
-    y += (U?22:16)+5;
-    const cards = [['RENCANA KUMULATIF', kd&&kd.plan!==null?P1(kd.plan):'-', U&&kd&&kd.plan!==null?pbcRpPdf(kd.plan*D.gt/100):'target hari ini', null],
-      ['REALISASI KUMULATIF', P1(D.aktualPct), U?pbcRpPdf(D.aktualPct*D.gt/100):'terpasang di lapangan', null],
-      ['DEVIASI', kd&&kd.dev!==null?sgn(kd.dev):'-', U&&kd&&kd.dev!==null?((kd.dev>=0?'+':'-')+pbcRpPdf(Math.abs(kd.dev)*D.gt/100)):'terhadap rencana', kd&&kd.dev!==null&&kd.dev<0?[192,57,43]:[26,140,122]],
-      ['SISA PEKERJAAN', P1(Math.max(0,100-D.aktualPct)), U?pbcRpPdf(Math.max(0,100-D.aktualPct)*D.gt/100):'belum terpasang', null]];
-    const cw = (W-24-9)/4;
-    cards.forEach(function(c,i){ const x = 12+i*(cw+3); doc.setFillColor(246,248,252); doc.roundedRect(x,y,cw,18,2,2,'F'); doc.setFillColor.apply(doc, c[3]||PDF.gold); doc.rect(x,y+2,1.2,14,'F');
-      set(6.5,false,PDF.gray); doc.text(c[0], x+4, y+5); let fs = 12; set(fs,true,c[3]||NAV); while(fs>6.5 && doc.getTextWidth(String(c[1])) > cw-7){ fs -= .5; doc.setFontSize(fs); } doc.text(String(c[1]), x+4, y+11.5);
-      set(6.5,false,PDF.gray); doc.text(doc.splitTextToSize(String(c[2]), cw-6)[0]||'', x+4, y+15.5); });
-    y += 23;
+    /* ===== LAPORAN OWNER 12 BAGIAN (gaya A) — tanpa keuangan internal PBC ===== */
+    const bagian = function(no, judul, lanjut){ let yy = lanjut ? perlu(lanjut, 40) : (no===1 ? 33 : baru()); if(no===1) pdfHeader(doc, JUDUL); return pdfSectionTitle(doc, yy, no+'. '+judul); };
+    const kartu4 = function(y, cs){ const cw = (W-24-9)/4; cs.forEach(function(c,i){ const x = 12+i*(cw+3); doc.setFillColor.apply(doc, c[2]||[238,244,253]); doc.roundedRect(x,y,cw,17,2,2,'F'); set(6.8,false,PDF.gray); doc.text(c[0], x+3.5, y+5); let fs = 14; set(fs,true,c[3]||[1,73,161]); while(fs>7 && doc.getTextWidth(String(c[1])) > cw-6){ fs -= .5; doc.setFontSize(fs); } doc.text(String(c[1]), x+3.5, y+12.5); }); return y+22; };
+    const batang = function(x, y, w, pct, rencana){ doc.setFillColor(230,233,239); doc.roundedRect(x,y,w,3.2,1.6,1.6,'F'); const v = Math.max(0,Math.min(100,pct||0)); if(v>0){ doc.setFillColor(1,73,161); doc.roundedRect(x,y,w*v/100,3.2,1.6,1.6,'F'); } if(rencana!=null){ doc.setFillColor(244,182,30); doc.rect(x+w*Math.max(0,Math.min(100,rencana))/100-0.4,y-1.2,0.8,5.6,'F'); } };
+    const kosong = function(y, t){ set(8.5,false,PDF.gray); doc.text(t, 12, y+3); return y+9; };
+    const gambar = async function(f, x, yy, bw, bh){
+      doc.setFillColor(233,237,245); doc.rect(x,yy,bw,bh,'F');
+      const src = fotoHarianCache[f.docId];
+      if(src){ const d = await pbcUkuranGambar(src); if(d){ const sc = Math.min(bw/d.w, bh/d.h), w = d.w*sc, h = d.h*sc; try{ doc.addImage(src, /^data:image\/png/i.test(src)?'PNG':'JPEG', x+(bw-w)/2, yy+(bh-h)/2, w, h); }catch(e){} } }
+      else { set(8,false,PDF.gray); doc.text('foto tidak tersedia', x+bw/2, yy+bh/2, {align:'center'}); }
+      set(8,true,PDF.dark); const kt = String(f.ket||'').trim(); if(kt) doc.text(doc.splitTextToSize(kt, bw).slice(0,2), x, yy+bh+4);
+    };
+
+    /* 1. Dashboard */
+    let y = bagian(1, 'Dashboard Progres Proyek');
+    set(8.5,false,PDF.gray); doc.text((p.nama||'-')+'  ·  Owner: '+(p.owner||'-')+'  ·  Lokasi: '+(p.lokasi||'-')+'  ·  '+D.periodeRow, 12, y-1, {maxWidth:W-24}); y += 4;
+    const devOk = !(kd && kd.dev!==null && kd.dev<0);
+    y = kartu4(y, [['Progres aktual', P1(D.aktualPct)], ['Rencana', kd&&kd.plan!==null?P1(kd.plan):'-', [255,246,221], [154,107,0]], ['Deviasi', kd&&kd.dev!==null?sgn(kd.dev):'-', devOk?[230,245,241]:[252,228,228], devOk?[26,140,122]:[192,57,43]], ['Sisa waktu', kd&&kd.sisa?String(kd.sisa):'-']]);
+    set(8.5,true,PDF.dark); doc.text('Progres keseluruhan', 12, y); if(kd){ set(7.5,true,devOk?[26,140,122]:[192,57,43]); doc.text(String(kd.status.t), W-12, y, {align:'right'}); }
+    batang(12, y+2.5, W-24, D.aktualPct, kd&&kd.plan!==null?kd.plan:null); set(6.8,false,PDF.gray); doc.text('Biru = progres aktual  ·  garis kuning = rencana', 12, y+10); y += 16;
+    set(9,true,[1,73,161]); doc.text('PROGRES PER DIVISI', 12, y); y += 5;
+    D.divisi.filter(function(d){ return d.bobot>0; }).forEach(function(d){ y = perlu(y, 6); set(8,false,PDF.dark); doc.text(doc.splitTextToSize(d.nama, 58)[0], 12, y+2.6); batang(74, y, W-12-74-16, d.pg); set(8,true,PDF.dark); doc.text(P1(d.pg), W-12, y+2.6, {align:'right'}); y += 6; });
+    y += 3;
+    const f3 = D.foto.slice(0,3);
+    if(f3.length){ y = perlu(y, 52); set(9,true,[1,73,161]); doc.text('FOTO '+D.lblIni.toUpperCase(), 12, y); y += 3; const fw = (W-24-8)/3; for(let i=0;i<f3.length;i++){ await gambar(f3[i], 12+i*(fw+4), y, fw, 36); } y += 46; }
+    y = perlu(y, 20); set(9,true,[1,73,161]); doc.text(pbcOpCap(D.lblIni).toUpperCase(), 12, y); y += 4.5; y = para(y, D.ringkasan, 12, W-24, 8.5, false, PDF.dark);
+
+    /* 2. Executive summary */
+    y = bagian(2, 'Ringkasan Eksekutif');
+    doc.setFillColor(238,244,253); doc.roundedRect(12,y,W-24,24,2,2,'F');
+    [['Proyek',p.nama||'-'],['Owner',p.owner||'-'],['Lokasi',p.lokasi||'-'],['Periode',D.periodeTxt],['Tanggal mulai',p.mulai||'-'],['Target selesai',D.targetSelesai]].forEach(function(r,i){ const cx = 16+(i%2)*92, cy = y+6+Math.floor(i/2)*6.2; set(8,false,PDF.gray); doc.text(r[0]+':', cx, cy); set(8,true,PDF.dark); doc.text(String(r[1]), cx+25, cy, {maxWidth:63}); });
+    y += 30;
+    y = kartu4(y, [['Status jadwal', kd?String(kd.status.t):'-', null, kd?pbcHexRgb2(kd.status.fg):null], ['Proyeksi selesai', kd?String(kd.proyeksi):'-'], ['Item selesai', D.divisi.reduce(function(a,d){ return a+d.items.filter(function(i){ return i.pg>=99.9; }).length; },0)+' / '+D.divisi.reduce(function(a,d){ return a+d.items.length; },0)], ['Keputusan ditunggu', String(D.catatan.keputusan||'').trim()?'Ada':'Tidak ada', [255,246,221], [154,107,0]]]);
     y = kotak(y, 'Ringkasan '+D.lblIni+'. '+D.ringkasan, [255,248,230], [236,217,163]);
-    y = perlu(y, 100);
-    y = pdfSectionTitle(doc, y+2, sn()+'. Kurva S - '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu'));
+    if(String(D.catatan.keputusan||'').trim()) y = kotak(y+2, 'Mohon keputusan Owner: '+D.catatan.keputusan.trim(), [253,238,238], [240,196,196]);
+    y = perlu(y+3, 30); set(9,true,[1,73,161]); doc.text('KEGIATAN '+D.lblIni.toUpperCase(), 12, y); y += 3;
+    if(D.kegiatan.length) y = pdfTable(doc, y, [{label:'Tanggal',w:1.2},{label:'Pekerjaan',w:1.6},{label:'Uraian',w:4.5},{label:'Tenaga / Cuaca',w:1.7}], D.kegiatan.map(function(l){ return [l.tgl, l.div||'', l.ket||'', (l.tk?l.tk+' org':'-')+(l.cuaca?' / '+l.cuaca:'')]; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, fontSize:7.5}) + 4;
+    else y = kosong(y+2, 'Belum ada laporan harian pada '+D.lblIni+'.');
+
+    /* 3. Kurva S & deviasi */
+    y = bagian(3, 'Kurva S dan Analisis Deviasi');
     if(kx){
       const ih = 186*kx.rasio; doc.addImage(kx.img,'PNG',12,y-2,186,ih); y += ih+3;
       const KK = kurvaLap2Data(kx.periode, kx.dataChart, D.aktualPct, kd, D.mode==='harian'?'Tanggal':(D.mode==='bulanan'?'Bulan':'Minggu'));
@@ -14060,99 +14078,65 @@ async function exportOwnerPortalPdf(){
       y += 24;
     } else { set(9,false,PDF.gray); doc.text('Belum ada data Kurva S (isi tanggal mulai dan BOQ).', 12, y+4); y += 10; }
 
-    /* ===== HALAMAN 2 — progres BOQ ===== */
-    if(D.sec.rekap){
-      y = baru(); y = pdfSectionTitle(doc, y, sn()+'. Rekap Progres per Minggu - '+D.periodeTxt);
-      if(D.rekapMinggu.length) y = pdfTable(doc, y, [{label:'Minggu',w:1.3},{label:'Tanggal',w:3},{label:'Rencana',w:1.2,align:'right'},{label:'Realisasi',w:1.2,align:'right'},{label:'Kum. Rencana',w:1.4,align:'right'},{label:'Kum. Realisasi',w:1.4,align:'right'}],
-        D.rekapMinggu.map(function(r){ return [r.label, r.tgl, P1(r.rencana), r.real===null?'-':P1(r.real), P1(r.kumRencana), r.kumReal===null?'-':P1(r.kumReal)]; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 6;
-      else { set(9,false,PDF.gray); doc.text('Belum ada data jadwal pada bulan ini.', 12, y+3); y += 10; }
-    }
-    if(D.sec.boq){
-    if(D.sec.rekap) y = perlu(y, 50); else y = baru();
-    y = pdfSectionTitle(doc, y, sn()+'. '+(D.boqRingkas?'Progres per Divisi Pekerjaan':'Progres Pekerjaan per Item (BOQ)'));
+    /* 4. Detail BOQ per divisi */
+    y = bagian(4, 'Detail Progres BOQ per Divisi');
     set(7.5,false,PDF.gray); doc.text('Bobot = kontribusi pekerjaan terhadap total proyek. Progres = volume terpasang / volume rencana.', 12, y-2.5); y += 2;
-    const bc = [{label:'Pekerjaan',w:U?3.3:4}, {label:'Sat',w:.7}, {label:'Vol',w:.8,align:'right'}, {label:'Terpasang',w:1,align:'right'}]
-      .concat(U ? [{label:'Harga Satuan',w:1.7,align:'right'},{label:'Jumlah',w:1.8,align:'right'}] : [])
-      .concat([{label:'Bobot',w:.9,align:'right'},{label:'Progres',w:1,align:'right'},{label:'Status',w:1.5}]);
-    const br = [], bs = [];
     D.divisi.forEach(function(d){
-      br.push([d.nama.toUpperCase(), '', '', ''].concat(U?['', pbcRpPdf(d.jumlah)]:[]).concat([P1(d.bobot), P1(d.pg), ''])); bs.push({fill:[223,233,247], bold:true});
-      if(!D.boqRingkas) d.items.forEach(function(i){ br.push([i.nama, i.sat, String(i.vol), String(+i.terpasang.toFixed(2))].concat(U?[pbcRpPdf(i.harga), pbcRpPdf(i.jumlah)]:[]).concat([P1(i.bobot), P1(i.pg), i.st])); bs.push({col:null, stIdx:true, st:i.st}); });
+      if(!d.items.length) return;
+      y = perlu(y, 24); set(9,true,[1,73,161]); doc.text(d.nama.toUpperCase(), 12, y); set(8,true,PDF.dark); doc.text('Bobot '+P1(d.bobot)+'  ·  Progres '+P1(d.pg), W-12, y, {align:'right'}); y += 2.5;
+      y = pdfTable(doc, y, [{label:'Pekerjaan',w:4},{label:'Sat',w:.7},{label:'Vol',w:.8,align:'right'},{label:'Terpasang',w:1,align:'right'},{label:'Bobot',w:.9,align:'right'},{label:'Progres',w:1,align:'right'},{label:'Status',w:1.5}],
+        d.items.map(function(i){ return [i.nama, i.sat, String(i.vol), String(+i.terpasang.toFixed(2)), P1(i.bobot), P1(i.pg), i.st]; }),
+        {onNewPage:function(dd){ pdfHeader(dd, JUDUL); }, topAfterBreak:32, fontSize:7, rowFn:function(row){ return {st: row[6]}; }}) + 5;
     });
-    br.push(['TOTAL PROYEK','','',''].concat(U?['',pbcRpPdf(D.gt)]:[]).concat(['100%', P1(D.aktualPct), ''])); bs.push({fill:[223,233,247], bold:true});
-    y = pdfTable(doc, y, bc, br, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, rowFn:function(row, ri){ return bs[ri]; }, fontSize:7}) + 6;
-    }
+    y = perlu(y, 10); set(9,true,PDF.dark); doc.text('TOTAL PROYEK — progres '+P1(D.aktualPct), 12, y);
 
-    /* ===== HALAMAN 3 — opname, termin, invoice, keputusan, VO ===== */
-    if(D.sec.opname){
-    y = baru();
-    y = pdfSectionTitle(doc, y, sn()+'. Opname & Termin Pembayaran');
+    /* 8. Opname & termin (tanpa nominal) */
+    y = bagian(5, 'Opname dan Termin');
     const opn = D.opname || {};
-    const oc = [['PROGRES SISTEM', P1(D.aktualPct), 'dari laporan harian lapangan'], ['OPNAME TERAKHIR', P1(opn.pct||0), (opn.tgl?('tgl '+opn.tgl):'belum ada opname')+(U&&D.opnameNilai!=null?' | '+pbcRpPdf(D.opnameNilai):'')]];
-    if(U){ oc.push(['TOTAL TERBAYAR', pbcRpPdf(D.terbayar), P1(D.gt?D.terbayar/D.gt*100:0)+' dari nilai kontrak']); oc.push(['SISA KEWAJIBAN', pbcRpPdf(Math.max(0,D.gt-D.terbayar)), 'belum dibayar']); }
-    const ow = (W-24-3*(oc.length-1))/oc.length;
-    oc.forEach(function(c,i){ const x = 12+i*(ow+3); doc.setFillColor(246,248,252); doc.roundedRect(x,y,ow,17,2,2,'F'); doc.setFillColor.apply(doc, PDF.gold); doc.rect(x,y+2,1.2,13,'F'); set(6.5,false,PDF.gray); doc.text(c[0], x+4, y+5);
-      let fs = 11; set(fs,true,NAV); while(fs>6.5 && doc.getTextWidth(c[1]) > ow-7){ fs -= .5; doc.setFontSize(fs); } doc.text(c[1], x+4, y+11); set(6.5,false,PDF.gray); doc.text(doc.splitTextToSize(c[2], ow-6)[0]||'', x+4, y+15); });
-    y += 22;
+    y = kartu4(y, [['Progres lapangan', P1(D.aktualPct)], ['Opname terakhir', P1(opn.pct||0)], ['Tanggal opname', opn.tgl||'-'], ['Termin lunas', D.termin.filter(function(t){ return t.status==='Lunas'; }).length+' / '+D.termin.length]]);
     if(D.termin.length){
-      const tc = [{label:'Termin',w:2},{label:'Syarat / Milestone',w:3},{label:'%',w:.7,align:'right'}].concat(U?[{label:'Nominal',w:1.8,align:'right'}]:[]).concat([{label:'Status',w:1.4}]);
-      y = pdfTable(doc, y, tc, D.termin.map(function(t){ return [t.nama, t.milestone, P1(t.pct)].concat(U?[pbcRpPdf(t.nilai)]:[]).concat([t.status]); }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
-      if(D.terminBerikut){ const tb = D.terminBerikut; y = kotak(y, tb.nama+' ('+tb.milestone+'): progres opname terakhir '+P1(opn.pct||0)+', progres sistem '+P1(D.aktualPct)+'.', [255,248,230], [236,217,163]); }
-    } else { set(9,false,PDF.gray); doc.text('Belum ada data termin.', 12, y+3); y += 8; }
-    y = perlu(y, 34); y = pdfSectionTitle(doc, y+2, sn()+'. Invoice / Tagihan');
-    if(D.invoice.length){
-      const ic = [{label:'No. Invoice',w:2},{label:'Untuk',w:3},{label:'Terbit',w:1.3},{label:'Jatuh Tempo',w:1.3}].concat(U?[{label:'Nominal',w:1.7,align:'right'}]:[]).concat([{label:'Status',w:1.8}]);
-      y = pdfTable(doc, y, ic, D.invoice.map(function(v){ return [v.no, v.nama+' - '+v.milestone, v.terbit, v.tempo].concat(U?[pbcRpPdf(v.nilai)]:[]).concat([v.status]); }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 3;
-      if(D.invoiceAktif){ set(7.5,false,PDF.gray); doc.text('Lampiran invoice '+D.invoiceAktif.no+' terdapat pada halaman terakhir laporan ini.', 12, y); y += 6; }
-    } else { set(9,false,PDF.gray); doc.text('Belum ada termin yang ditagih.', 12, y+3); y += 8; }
-    y = perlu(y, 40); y = pdfSectionTitle(doc, y+2, sn()+'. Keputusan yang Ditunggu & Perubahan Pekerjaan');
-    if(String(D.catatan.keputusan||'').trim()) y = kotak(y, 'Mohon keputusan Owner: '+D.catatan.keputusan.trim(), [253,238,238], [240,196,196]);
-    else { set(8.5,false,PDF.gray); doc.text('Tidak ada keputusan yang sedang ditunggu dari Owner.', 12, y); y += 7; }
-    const vos = D.voMenunggu.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Menunggu persetujuan'].concat(U?[(v.nilaiPerubahan>=0?'+':'-')+pbcRpPdf(Math.abs(v.nilaiPerubahan))]:[]); })
-      .concat(D.voSetuju.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Disetujui'].concat(U?[(v.nilaiPerubahan>=0?'+':'-')+pbcRpPdf(Math.abs(v.nilaiPerubahan))]:[]); }));
-    if(vos.length){ y = perlu(y, 24); y = pdfTable(doc, y, [{label:'No. VO',w:1},{label:'Deskripsi',w:4},{label:'Status',w:1.8}].concat(U?[{label:'Nilai',w:1.7,align:'right'}]:[]), vos, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4; }
-    else { set(8.5,false,PDF.gray); doc.text('Belum ada perubahan lingkup pekerjaan (Variation Order).', 12, y); y += 7; }
-    }
+      y = pdfTable(doc, y, [{label:'Termin',w:2},{label:'Syarat / Milestone',w:4},{label:'% Kontrak',w:1,align:'right'},{label:'Status',w:1.6}], D.termin.map(function(t){ return [t.nama, t.milestone, P1(t.pct), t.status]; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
+      if(D.terminBerikut){ const tb = D.terminBerikut; y = kotak(y, 'Termin berikutnya: '+tb.nama+' ('+tb.milestone+'). Progres opname terakhir '+P1(opn.pct||0)+', progres lapangan '+P1(D.aktualPct)+'.', [255,248,230], [236,217,163]); }
+    } else y = kosong(y, 'Belum ada data termin.');
+    if(D.sec.invoice && D.invoiceAktif){ set(7.5,false,PDF.gray); doc.text('Rincian tagihan '+D.invoiceAktif.no+' terlampir di halaman terakhir.', 12, y+2); y += 7; }
 
-    /* ===== HALAMAN 4 — lapangan ===== */
-    y = baru();
-    y = pdfSectionTitle(doc, y, sn()+'. Kegiatan '+pbcOpCap(D.lblIni));
-    if(D.kegiatan.length) y = pdfTable(doc, y, [{label:'Tanggal',w:1.2},{label:'Pekerjaan',w:1.6},{label:'Uraian',w:4.5},{label:'Tenaga / Cuaca',w:1.7}], D.kegiatan.map(function(l){ return [l.tgl, l.div||'', l.ket||'', (l.tk?l.tk+' org':'')+(l.cuaca?' / '+l.cuaca:'')]; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
-    else { set(8.5,false,PDF.gray); doc.text('Belum ada laporan harian pada '+D.lblIni+'.', 12, y); y += 7; }
-    y = perlu(y, 30); set(9,true,NAV); doc.text('Rencana '+D.lblDepan, 12, y); y += 5;
-    if(D.rencanaDepan.length){ D.rencanaDepan.slice(0,8).forEach(function(r){ y = perlu(y,5); set(8.5,false,PDF.dark); doc.text('- '+r.nama+(r.div?' ('+r.div+')':''), 14, y, {maxWidth:W-30}); y += 4.6; }); }
-    else { set(8.5,false,PDF.gray); doc.text('Tidak ada pekerjaan terjadwal.', 14, y); y += 5; }
-    y = perlu(y+4, 40); y = pdfSectionTitle(doc, y, sn()+'. Kendala, Risiko & Keselamatan');
+    /* 9. Pengadaan & material (tanpa harga) */
+    y = bagian(6, 'Pengadaan dan Material');
+    y = kartu4(y, [['Kedatangan material', String(D.materialDatang)], ['Tenaga kerja', D.pekerjaRata+' org/hari'], ['Hari kerja', String(D.hariKerja)], ['Temuan mutu terbuka', String(D.punchTerbuka), D.punchTerbuka?[252,228,228]:null, D.punchTerbuka?[192,57,43]:null]]);
+    const matRows = [];
+    (state.purchaseOrders||[]).forEach(function(po){ (po.items||[]).forEach(function(it){ const m = (state.materials||[]).find(function(x){ return x.id===it.materialId; }); const q = +it.qtyOrder||0, r = +it.qtyDiterima||0; matRows.push([m?m.nama:'Material', (m&&m.satuan)||'', String(+q.toFixed(2)), String(+r.toFixed(2)), r>=q&&q>0?'Sudah datang':(r>0?'Datang sebagian':'Dipesan'), po.tanggal||'']); }); });
+    if(matRows.length) y = pdfTable(doc, y, [{label:'Material',w:3.6},{label:'Sat',w:.8},{label:'Dipesan',w:1,align:'right'},{label:'Diterima',w:1,align:'right'},{label:'Status',w:1.6},{label:'Tgl pesan',w:1.3}], matRows.slice(-40), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, fontSize:7.5}) + 4;
+    else y = kosong(y, 'Belum ada pemesanan material yang tercatat.');
+
+    /* 10. Kendala, risiko, K3 */
+    y = bagian(7, 'Kendala, Risiko dan K3');
     const kend = D.kendala.map(function(l){ return l.tgl+': '+l.kendala; }).join('; ');
     const brs = [['Kendala', kend || 'Tidak ada kendala dicatat.'], ['Tindak lanjut', (D.catatan.tindakLanjut||'').trim() || '-'], ['Risiko 2-3 minggu', (D.catatan.risiko||'').trim() || '-'], ['Keselamatan (K3)', (D.catatan.k3||'').trim() || '-']];
     brs.forEach(function(r){ const L = doc.splitTextToSize(String(r[1]), W-24-34), h = Math.max(6, L.length*4.2+2.5); y = perlu(y, h); doc.setDrawColor.apply(doc, PDF.lightGray); doc.line(12,y+h,W-12,y+h); set(8.5,true,NAV); doc.text(r[0], 14, y+4.5); set(8.5,false,PDF.dark); doc.text(L, 48, y+4.5); y += h; });
-    y = perlu(y+8, 34); y = pdfSectionTitle(doc, y, sn()+'. Material, Tenaga Kerja & Mutu');
-    const mc = [['KEDATANGAN MATERIAL', String(D.materialDatang), 'pengiriman diterima '+D.lblIni], ['TENAGA KERJA', D.pekerjaRata+' org', 'rata-rata hadir / '+D.hariKerja+' hari kerja'], ['TEMUAN MUTU TERBUKA', String(D.punchTerbuka), D.punchMajor?(D.punchMajor+' perlu perhatian khusus'):'dalam penyelesaian']];
-    const mw = (W-24-6)/3; mc.forEach(function(c,i){ const x = 12+i*(mw+3); doc.setFillColor(246,248,252); doc.roundedRect(x,y,mw,16,2,2,'F'); doc.setFillColor.apply(doc, PDF.gold); doc.rect(x,y+2,1.2,12,'F'); set(6.5,false,PDF.gray); doc.text(c[0], x+4, y+5); set(11,true,NAV); doc.text(c[1], x+4, y+10.5); set(6.5,false,PDF.gray); doc.text(c[2], x+4, y+14, {maxWidth:mw-6}); });
-    y += 22;
-    y = perlu(y, 40); y = pdfSectionTitle(doc, y, 'Pengesahan');
+
+    /* 11. Rencana pekerjaan berikutnya */
+    y = bagian(8, 'Rencana Pekerjaan Berikutnya');
+    if(D.rencanaDepan.length) y = pdfTable(doc, y, [{label:'No',w:.5,align:'center'},{label:'Pekerjaan',w:5},{label:'Divisi',w:2.5}], D.rencanaDepan.slice(0,15).map(function(r,i){ return [String(i+1), r.nama, r.div||'']; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
+    else y = kosong(y, 'Tidak ada pekerjaan terjadwal untuk '+D.lblDepan+'.');
+    const vos = D.voMenunggu.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Menunggu persetujuan']; }).concat(D.voSetuju.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Disetujui']; }));
+    y = perlu(y+2, 24); set(9,true,[1,73,161]); doc.text('KEPUTUSAN & PERUBAHAN PEKERJAAN', 12, y); y += 3;
+    if(String(D.catatan.keputusan||'').trim()) y = kotak(y, 'Mohon keputusan Owner: '+D.catatan.keputusan.trim(), [253,238,238], [240,196,196]);
+    if(vos.length) y = pdfTable(doc, y, [{label:'No. VO',w:1.2},{label:'Deskripsi',w:5},{label:'Status',w:1.8}], vos, {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
+    else if(!String(D.catatan.keputusan||'').trim()) y = kosong(y, 'Tidak ada keputusan atau perubahan pekerjaan yang menunggu.');
+
+    /* 12. Foto & persetujuan */
+    y = bagian(9, 'Dokumentasi Foto dan Persetujuan');
+    if(!D.foto.length) y = kosong(y, 'Belum ada foto progres.');
+    const bw = (W-24-6)/2, bh = 52;
+    for(let i=0;i<D.foto.length;i++){
+      const col = i%2; if(col===0){ y = perlu(y, bh+12); }
+      await gambar(D.foto[i], 12+col*(bw+6), y, bw, bh);
+      if(col===1 || i===D.foto.length-1) y += bh+12;
+    }
+    y = perlu(y+2, 46); set(9,true,[1,73,161]); doc.text('PERSETUJUAN', 12, y); y += 4;
     const ttdNama = R.ttd || 'Direktur', jab = R.jabatan || 'Direktur Utama';
     try{ const tt = pbcTtdGambar(); if(tt){ const pr = doc.getImageProperties(tt), th = 21, tw = th*pr.width/pr.height; doc.addImage(tt, 'PNG', 12+10+30-tw/2, y+3, tw, th); } }catch(e){}
     [[12+10, 'Dibuat oleh,', ttdNama, jab+' PBC'], [12+100, 'Diterima / disetujui oleh,', p.owner||'Owner', 'Owner']].forEach(function(c){ set(8.5,false,PDF.dark); doc.text(c[1], c[0]+30, y+2, {align:'center'}); doc.setDrawColor.apply(doc, PDF.dark); doc.line(c[0], y+24, c[0]+60, y+24); set(8.5,true,PDF.dark); doc.text(c[2], c[0]+30, y+28, {align:'center'}); set(7.5,false,PDF.gray); doc.text(c[3], c[0]+30, y+32, {align:'center'}); });
-
-    /* ===== HALAMAN 5 — foto ===== */
-    y = baru();
-    y = pdfSectionTitle(doc, y, sn()+'. Foto Progres');
-    set(7.5,false,PDF.gray); doc.text('Dokumentasi foto progres pekerjaan di lapangan.', 12, y-2.5); y += 2;
-    const gambar = async function(f, x, yy, bw, bh){
-      doc.setFillColor(233,237,245); doc.rect(x,yy,bw,bh,'F');
-      const src = fotoHarianCache[f.docId];
-      if(src){ const d = await pbcUkuranGambar(src); if(d){ const sc = Math.min(bw/d.w, bh/d.h), w = d.w*sc, h = d.h*sc; try{ doc.addImage(src, /^data:image\/png/i.test(src)?'PNG':'JPEG', x+(bw-w)/2, yy+(bh-h)/2, w, h); }catch(e){} } }
-      else { set(8,false,PDF.gray); doc.text('foto tidak tersedia', x+bw/2, yy+bh/2, {align:'center'}); }
-      set(8,true,PDF.dark); const kt = String(f.ket||'').trim(); if(kt) doc.text(doc.splitTextToSize(kt, bw).slice(0,2), x, yy+bh+4);
-    };
-    if(!D.foto.length){ set(9,false,PDF.gray); doc.text('Belum ada foto progres.', 12, y+4); y += 10; }
-    const bw = (W-24-6)/2, bh = 56;
-    for(let i=0;i<D.foto.length;i++){
-      const col = i%2; if(col===0){ y = perlu(y, bh+14); }
-      await gambar(D.foto[i], 12+col*(bw+6), y, bw, bh);
-      if(col===1 || i===D.foto.length-1) y += bh+14;
-    }
 
     /* ===== LAMPIRAN INVOICE ===== */
     const iv = D.sec.invoice ? D.invoiceAktif : null;
@@ -14163,7 +14147,7 @@ async function exportOwnerPortalPdf(){
       set(9,false,PDF.dark); doc.text('No. '+iv.no, W-12, y+2, {align:'right'}); doc.text('Tanggal terbit: '+iv.terbit, W-12, y+7, {align:'right'}); set(9,true,PDF.dark); doc.text('Jatuh tempo: '+iv.tempo, W-12, y+12, {align:'right'});
       y += 20;
       const bx = (W-24-6)/2;
-      [[12,'Ditagihkan kepada',[p.owner||'-', p.nama||'-', p.lokasi||'-']],[12+bx+6,'Dari',['PT Pratama Build & Construction',(typeof PBC_DOK_DEFAULT!=='undefined'&&PBC_DOK_DEFAULT.alamat)||'Tabanan, Bali','WhatsApp 0857-4502-6574']]].forEach(function(b){
+      [[12,'Ditagihkan kepada',[p.owner||'-', p.nama||'-', p.lokasi||'-']],[12+bx+6,'Dari',['Pratama Build & Construction',(typeof PBC_DOK_DEFAULT!=='undefined'&&PBC_DOK_DEFAULT.alamat)||'Tabanan, Bali','WhatsApp 0857-4502-6574']]].forEach(function(b){
         doc.setFillColor(241,242,244); doc.roundedRect(b[0],y,bx,22,2,2,'F'); set(8.5,true,NAV); doc.text(b[1], b[0]+4, y+6); set(8.5,false,PDF.dark); b[2].forEach(function(t,i){ doc.text(String(t), b[0]+4, y+11+i*4.2, {maxWidth:bx-8}); }); });
       y += 28;
       const ppn = R.ppn>0 ? iv.nilai*R.ppn/100 : 0, total = iv.nilai - iv.retensi + ppn;
@@ -15816,8 +15800,8 @@ function _renderOpnameIsi(){
   if(op.status==='draft' && bisaIsi){ aksi.push('<button class="btn btn-blue" onclick="ajukanVerifikasiOpname()">📤 Ajukan Verifikasi</button>'); aksi.push('<button class="btn btn-red btn-sm" onclick="hapusOpnameDraft()">Hapus Draft</button>'); }
   if(op.status==='diverifikasi'){ if(currentRole==='direktur') aksi.push('<button class="btn btn-green" onclick="setujuiOpnameDirektur()">✔ Setujui (Direktur)</button>'); if(currentRole==='direktur'||currentRole==='internal') aksi.push('<button class="btn btn-gold btn-sm" onclick="kembalikanOpnameKeDraft()">↩ Kembalikan ke Draft</button>'); }
   if(op.status==='disetujui'){ if(currentRole==='direktur') aksi.push('<button class="btn btn-green" onclick="bukaModalOpnameTtd()">🖊 Tanda Tangan Bersama & Finalkan</button>'); if(currentRole==='direktur'||currentRole==='internal') aksi.push('<button class="btn btn-gold btn-sm" onclick="kembalikanOpnameKeDraft()">↩ Kembalikan ke Draft</button>'); }
-  if(op.status==='final'){ aksi.push('<button class="btn btn-green" onclick="cetakBeritaAcaraOpname()">📄 Unduh PDF Berita Acara</button>'); aksi.push('<span style="font-size:11px;color:#1A8C7A;font-weight:600">🔒 Final — dasar penagihan Termin</span>'); }
-  else aksi.push('<button class="btn btn-gold btn-sm" onclick="cetakBeritaAcaraOpname()">📄 PDF (draf)</button>');
+  if(op.status==='final'){ aksi.push('<button class="btn btn-green" onclick="cetakBeritaAcaraOpname()">📄 Unduh PDF Opname</button>'); aksi.push('<span style="font-size:11px;color:#1A8C7A;font-weight:600">🔒 Final — dasar penagihan Termin</span>'); }
+  else aksi.push('<button class="btn btn-gold btn-sm" onclick="cetakBeritaAcaraOpname()">📄 PDF Opname (draf)</button>');
   body.innerHTML =
       '<div class="panel" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px">'
     + '<div><div style="font-size:15px;font-weight:700;color:var(--white)">'+op.nomor+' &nbsp;'+badgeStatusOpname(op.status)+'</div><div style="font-size:10px;color:var(--muted2);margin-top:3px">Tanggal opname: '
