@@ -13696,6 +13696,81 @@ function kurvaKartu4(aktualPct, kd, gt, uang){
   out.push(['DEVIASI', dev===null ? '-' : ((dev>=0?'+':'-')+P(Math.abs(dev))), (uang && dev!==null) ? ((dev>=0?'+':'-')+rp(Math.abs(dev)*gt/100)) : '', dev===null ? null : (dev>=0 ? [26,140,122] : [192,57,43])]);
   return out;
 }
+/* Kurva S gaya D (format kontraktor Indonesia): tabel divisi + bobot + batang jadwal per periode,
+   kurva rencana & realisasi digambar di atas tabel, baris rencana/realisasi/deviasi kumulatif di bawah. */
+function pbcKurvaDGambar(periode, dataChart, D){
+  const n = periode.length; if(!n) return null;
+  const gt = grandTotal() || 1, sch = getCachedSchedule(), sMap = {}; sch.forEach(function(x){ sMap[x.item.id] = x; });
+  const awal = periode.map(function(r,i){ return i>0 ? periode[i-1].akhirHari+1 : Math.max(0, r.akhirHari - ((periode[1]?periode[1].akhirHari-r.akhirHari:7)) + 1); });
+  const idxHari = function(d){ for(let i=0;i<n;i++){ if(d<=periode[i].akhirHari) return i; } return n-1; };
+  const hariKini = D.kd ? D.kd.hari : null;   /* periode yang belum dimulai: realisasi dikosongkan */
+  dataChart = dataChart.map(function(d,i){ return (hariKini!=null && awal[i] > hariKini) ? Object.assign({}, d, { realisasi:null }) : d; });
+  const rows = state.divisi.map(function(dv){
+    const its = state.items.filter(function(i){ return i.divisiId===dv.id; }); if(!its.length) return null;
+    let bobot = 0, pg = 0, mn = Infinity, mx = -Infinity;
+    its.forEach(function(i){ const b = itemTotal(i)/gt*100; bobot += b; pg += b*itemPct(i)/100; const s = sMap[i.id]; if(s){ mn = Math.min(mn, s.startDay); mx = Math.max(mx, s.endDay); } });
+    if(bobot<=0) return null;
+    return { nama: dv.nama.replace(/^[A-Z]\.\s*/,''), bobot: bobot, pg: bobot ? pg/bobot*100 : 0, mn: mn, mx: mx };
+  }).filter(Boolean);
+  const W = 1800, hdr = 58, rh = rows.length > 10 ? 50 : 62, bh = 52, x0 = 470, cw = (W - x0 - 8)/n;
+  const tblH = rows.length*rh, H = hdr + tblH + bh*3 + 70;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+  dataChart = dataChart.slice();
+  const F = function(sz, b){ g.font = (b?'700 ':'400 ')+sz+'px Helvetica, Arial, sans-serif'; };
+  const fmt = function(v){ return String(+v.toFixed(1)).replace('.',','); };
+  g.fillStyle = '#fff'; g.fillRect(0,0,W,H);
+  g.fillStyle = '#0149A1'; g.fillRect(0,0,W,hdr); g.fillStyle = '#fff'; F(24,true); g.textBaseline = 'middle';
+  g.fillText('PEKERJAAN', 14, hdr/2); g.textAlign = 'right'; g.fillText('BOBOT', x0-18, hdr/2); g.textAlign = 'center';
+  const lbl = function(r,i){ const t = String(r.label); return /^Minggu/i.test(t) ? 'M'+(i+1) : t; };
+  const fsH = Math.max(13, Math.min(22, cw*0.36)), step = cw < 34 ? 2 : 1;
+  F(fsH,true); periode.forEach(function(r,i){ if(i%step===0) g.fillText(lbl(r,i), x0+cw*(i+.5), hdr/2); });
+  rows.forEach(function(r,i){
+    const y = hdr + i*rh; g.fillStyle = i%2 ? '#F5F8FC' : '#fff'; g.fillRect(0,y,W,rh);
+    g.textAlign = 'left'; g.fillStyle = '#1b2333'; F(rh>55?23:20,false); let nm = r.nama; while(g.measureText(nm).width > x0-170 && nm.length>4) nm = nm.slice(0,-2); if(nm!==r.nama) nm += '…'; g.fillText(nm, 14, y+rh/2);
+    g.textAlign = 'right'; g.fillStyle = '#0149A1'; F(rh>55?23:20,true); g.fillText(fmt(r.bobot)+'%', x0-18, y+rh/2);
+    if(isFinite(r.mn) && r.mx > awal[0] && r.mn <= periode[n-1].akhirHari){
+      const a = idxHari(Math.max(r.mn, awal[0])), b = idxHari(Math.max(r.mn, r.mx-0.01)), xa = x0+cw*a+5, wb = Math.max(8, cw*(b-a+1)-10), bt = rh*0.2;
+      g.fillStyle = '#9DB8E6'; pbcRRect(g, xa, y+rh*0.22, wb, bt, bt/2);
+      if(r.pg>0){ g.fillStyle = '#F4B61E'; pbcRRect(g, xa, y+rh*0.56, Math.max(bt, wb*Math.min(100,r.pg)/100), bt, bt/2); }
+    }
+  });
+  g.strokeStyle = '#DCE3EE'; g.lineWidth = 1.5; for(let i=0;i<=n;i++){ const x = x0+cw*i; g.beginPath(); g.moveTo(x, hdr); g.lineTo(x, hdr+tblH+bh*3); g.stroke(); }
+  /* baris rencana / realisasi / deviasi */
+  const rk = [['Rencana kumulatif','#0149A1','#EEF4FD', dataChart.map(function(d){ return d.rencana; }), '%'],
+              ['Realisasi kumulatif','#D9661F','#FFF4EA', dataChart.map(function(d){ return d.realisasi==null?null:d.realisasi; }), '%'],
+              ['Deviasi (poin)','#C0392B','#FCEDED', dataChart.map(function(d){ return d.realisasi==null?null:d.realisasi-d.rencana; }), '']];
+  const fsV = Math.max(12, Math.min(21, cw*0.3));
+  rk.forEach(function(r,k){
+    const y = hdr + tblH + k*bh; g.fillStyle = r[2]; g.fillRect(0,y,W,bh);
+    g.textAlign = 'left'; g.fillStyle = r[1]; F(21,true); g.fillText(r[0], 14, y+bh/2);
+    g.textAlign = 'center'; F(fsV,true);
+    r[3].forEach(function(v,i){ if(i%step!==0 && i!==n-1) return; let col = r[1]; if(k===2 && v!=null) col = v<0 ? '#C0392B' : '#1A8C7A'; g.fillStyle = col; g.fillText(v==null ? '–' : ((k===2&&v>0?'+':'')+fmt(v)+r[4]), x0+cw*(i+.5), y+bh/2); });
+  });
+  /* kurva di atas tabel */
+  const Y = function(v){ return hdr + tblH - tblH*Math.max(0,Math.min(100,v))/100; }, X = function(i){ return x0 + cw*(i+1); };
+  const kurva = function(pts, col, lw, titik){
+    if(pts.length<2) return; g.strokeStyle = col; g.lineWidth = lw; g.lineJoin = 'round'; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    const t = 0.18; for(let i=0;i<pts.length-1;i++){ const a = pts[i-1]||pts[i], b = pts[i], c = pts[i+1], e = pts[i+2]||c;
+      g.bezierCurveTo(b[0]+(c[0]-a[0])*t, b[1]+(c[1]-a[1])*t, c[0]-(e[0]-b[0])*t, c[1]-(e[1]-b[1])*t, c[0], c[1]); }
+    g.stroke(); if(titik) pts.slice(1).forEach(function(p){ g.fillStyle = col; g.beginPath(); g.arc(p[0],p[1],7,0,Math.PI*2); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.stroke(); });
+  };
+  const ren0 = Math.max(0, (dataChart[0].rencana||0) - (periode[0].bobot||0));
+  let real0 = 0; if(awal[0] > 0){ try{ const v = cariRealisasiPadaHari(awal[0]-1); real0 = v==null ? 0 : v; }catch(e){} }
+  kurva([[x0, Y(ren0)]].concat(dataChart.map(function(d,i){ return [X(i), Y(d.rencana)]; })), '#0149A1', 6, false);
+  const pa = [[x0, Y(real0)]]; dataChart.forEach(function(d,i){ if(d.realisasi!=null) pa.push([X(i), Y(d.realisasi)]); });
+  kurva(pa, '#E8782A', 6, true);
+  const hari = D.kd ? D.kd.hari : null;
+  if(hari!=null && hari>=awal[0] && hari<=periode[n-1].akhirHari){
+    const i = idxHari(hari), fr = (hari-awal[i]+1)/Math.max(1, periode[i].akhirHari-awal[i]+1), xh = x0+cw*i+cw*Math.min(1,fr);
+    g.strokeStyle = '#C0392B'; g.lineWidth = 3; g.setLineDash([12,9]); g.beginPath(); g.moveTo(xh, hdr); g.lineTo(xh, hdr+tblH); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#C0392B'; F(19,true); g.textAlign = xh > W-140 ? 'right' : 'left'; g.fillText('hari ini', xh + (xh > W-140 ? -10 : 10), hdr+tblH-16);
+  }
+  const ly = hdr + tblH + bh*3 + 36; g.textAlign = 'left'; F(20,false);
+  [['#9DB8E6','Jadwal rencana',0],['#F4B61E','Progres aktual pekerjaan',0],['#0149A1','Kurva rencana',1],['#E8782A','Kurva realisasi',1]].forEach(function(l,i){
+    const x = 14 + i*440; g.fillStyle = l[0]; if(l[2]) g.fillRect(x, ly-3, 40, 7); else pbcRRect(g, x, ly-8, 40, 16, 8); g.fillStyle = '#333'; g.fillText(l[1], x+52, ly); });
+  return { img: cv.toDataURL('image/png'), rasio: H/W };
+}
+function pbcRRect(g, x, y, w, h, r){ r = Math.min(r, h/2, w/2); g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fill(); }
 function pbcOwnerKurvaImg(D){
   if(typeof Chart==='undefined' || !D.adaJadwal) return null;
   const md = D.mode || 'mingguan';
@@ -13707,8 +13782,9 @@ function pbcOwnerKurvaImg(D){
     periode = all.slice(a, z+1).map(function(r){ const d = new Date(m0); d.setDate(d.getDate()+r.akhirHari); return Object.assign({}, r, { label: d.getDate()+'/'+(d.getMonth()+1)+'.' }); });
   }
   const dataChart = periode.map(function(row){ return { label:row.label, bobot:row.bobot, rencana:row.kumulatif, realisasi:cariRealisasiPadaHari(row.akhirHari) }; });
-  const g = kurvaLapGambar(periode, dataChart, D.aktualPct, D.uang, md);
-  return g ? { img:g.img, periode:periode, dataChart:dataChart, rasio:g.rasio } : null;
+  let g = null, dS = false; try{ g = pbcKurvaDGambar(periode, dataChart, D); dS = !!g; }catch(e){ console.error(e); }
+  if(!g) g = kurvaLapGambar(periode, dataChart, D.aktualPct, D.uang, md);
+  return g ? { img:g.img, periode:periode, dataChart:dataChart, rasio:g.rasio, dStyle:dS } : null;
 }
 
 function openOwnerPortalPage(e){
@@ -13773,7 +13849,7 @@ function renderOwnerPortal(){
   /* 2. kurva */
   const kx = pbcOwnerKurvaImg(D);
   const KK = kx ? kurvaLap2Data(kx.periode, kx.dataChart, D.aktualPct, D.kd, D.mode==='harian'?'Tanggal':(D.mode==='bulanan'?'Bulan':'Minggu')) : null;
-  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? kurvaLap2KartuHtml(KK)+'<img src="'+kx.img+'" style="width:100%;height:auto;display:block">'+kurvaLap2TabelHtml(KK)+kurvaLap2AnalisisHtml(KK)+kurvaLap2DivisiHtml(KK)+kurvaLap2CekHtml(KK) : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
+  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? kurvaLap2KartuHtml(KK)+'<img src="'+kx.img+'" style="width:100%;height:auto;display:block">'+(kx.dStyle?'':kurvaLap2TabelHtml(KK))+kurvaLap2AnalisisHtml(KK)+kurvaLap2DivisiHtml(KK)+kurvaLap2CekHtml(KK) : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
   if(D.sec.boq){
     /* rekap per minggu (bulanan) */
   if(D.sec.rekap){
@@ -14056,10 +14132,10 @@ async function exportOwnerPortalPdf(){
       const pp = function(v){ return v===null||v===undefined ? '-' : P1(v); };
       const tcol = [{label:KK.unit, w:1.1}, {label:'Rencana', w:1.2, align:'right'}, {label:'Realisasi', w:1.2, align:'right'}, {label:'Rencana Kum.', w:1.4, align:'right'}, {label:'Realisasi Kum.', w:1.5, align:'right'}, {label:'Deviasi', w:1.2, align:'right'}]
         .concat(U ? [{label:'Nilai Rencana (Rp)', w:2, align:'right'}, {label:'Nilai Realisasi (Rp)', w:2, align:'right'}] : []);
-      y = perlu(y, 30); set(9,true,NAV); doc.text('TABEL PROGRES '+(KK.unit==='Tanggal'?'HARIAN':(KK.unit==='Bulan'?'BULANAN':'MINGGUAN')), 12, y); y += 3;
+      if(!kx.dStyle){ y = perlu(y, 30); set(9,true,NAV); doc.text('TABEL PROGRES '+(KK.unit==='Tanggal'?'HARIAN':(KK.unit==='Bulan'?'BULANAN':'MINGGUAN')), 12, y); y += 3;
       y = pdfTable(doc, y, tcol, KK.rows.map(function(r){ return [r.label, pp(r.renD), pp(r.aktD), pp(r.kumR), pp(r.kumA), r.dev===null?'-':((r.dev>=0?'+':'-')+P1(Math.abs(r.dev)).replace('%',''))]
         .concat(U ? [String(Math.round(r.nilaiR)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'), r.nilaiA===null?'-':String(Math.round(r.nilaiA)).replace(/\B(?=(\d{3})+(?!\d))/g,'.')] : []); }),
-        {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, fontSize:7, rowFn:function(row, ri){ return KK.rows[ri].sekarang ? {fill:[255,243,209], bold:true} : null; }}) + 5;
+        {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, fontSize:7, rowFn:function(row, ri){ return KK.rows[ri].sekarang ? {fill:[255,243,209], bold:true} : null; }}) + 5; }
       const tn = KL_TONE[KK.analisis.tone] || KL_TONE.abu, tcol3 = pbcHexRgb2(tn[1]);
       y = perlu(y, 40); set(9,true,NAV); doc.text('ANALISIS PROGRES', 12, y); y += 3;
       set(10,true,tcol3); const jl = KK.analisis.judul, tl = doc.splitTextToSize(KK.analisis.teks, W-24-8); const hb = 9+tl.length*4.4;
