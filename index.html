@@ -15498,6 +15498,8 @@ function opnameSelisihPct(it){
 function opnameTemuanQc(itemId){
   return (state.punchList||[]).filter(function(p){ return p.itemBoqId===itemId && (p.status==='terbuka' || p.status==='dikerjakan'); });
 }
+function opnameCekPenuh(it){ it.cek = {}; OPNAME_CHECKS.forEach(function(c){ it.cek[c.k] = true; }); }
+function opnameCekKosong(it){ return !it.cek || !OPNAME_CHECKS.some(function(c){ return it.cek[c.k]; }); }
 function opnameCekLengkap(it){ return OPNAME_CHECKS.every(function(c){ return it.cek && it.cek[c.k]; }); }
 function opnameHitung(op){
   const gt = grandTotal();
@@ -15544,12 +15546,13 @@ function setOpnameVol(idx, val){
     if(isNaN(v) || v<0){ notif('Volume verifikasi harus angka ≥ 0','var(--red)'); renderOpname(); return; }
     it.volVerif = v;
     if(it.hasil!=='ditolak'){ it.hasil = Math.abs(opnameSelisihPct(it)) <= OPNAME_TOLERANSI ? 'sesuai' : 'selisih'; }
+    if(it.hasil==='sesuai' && opnameCekKosong(it)) opnameCekPenuh(it);
   }
   debounceSave(); renderOpname();
 }
 function samakanOpnameVol(idx){
   const op = getOpnameAktif(); const it = opnameItem(idx); if(!op || !it || !opnameBolehEdit(op)) return;
-  it.volVerif = it.volLapor; if(it.hasil!=='ditolak') it.hasil = 'sesuai';
+  it.volVerif = it.volLapor; if(it.hasil!=='ditolak'){ it.hasil = 'sesuai'; if(opnameCekKosong(it)) opnameCekPenuh(it); }
   debounceSave(); renderOpname();
 }
 function toggleOpnameCek(idx, key, on){
@@ -15560,8 +15563,20 @@ function setOpnameHasil(idx, hasil){
   const op = getOpnameAktif(); const it = opnameItem(idx); if(!op || !it || !opnameBolehEdit(op)) return;
   it.hasil = hasil;
   if(hasil==='sesuai' && (it.volVerif===null || it.volVerif===undefined)) it.volVerif = it.volLapor;
+  if(hasil==='sesuai') opnameCekPenuh(it);   /* pilih Sesuai = 4 poin langsung tercentang */
   if(hasil==='belum') it.volVerif = it.volVerif;
   debounceSave(); renderOpname();
+}
+function opnameSesuaiSemua(){
+  const op = getOpnameAktif(); if(!op || !opnameBolehEdit(op)) return;
+  let n = 0;
+  op.items.forEach(function(it){
+    if(it.hasil==='ditolak' || it.hasil==='selisih') return;   /* yang sudah ditandai bermasalah tidak ditimpa */
+    if(it.volVerif===null || it.volVerif===undefined) it.volVerif = it.volLapor;
+    it.hasil = 'sesuai'; opnameCekPenuh(it); n++;
+  });
+  debounceSave(); renderOpname();
+  notif(n+' item ditandai Sesuai & checklist lengkap. Ubah item yang tidak sesuai.');
 }
 function setOpnameCatatan(idx, val){
   const op = getOpnameAktif(); const it = opnameItem(idx); if(!op || !it || !opnameBolehEdit(op)) return;
@@ -15665,7 +15680,7 @@ function renderOpnameKpi(op){
 function renderOpnameTabel(op){
   const edit = opnameBolehEdit(op);
   const dis = edit ? '' : ' disabled';
-  let html = '<div style="overflow-x:auto"><table class="opn-table"><thead><tr><th class="no-cell">No</th><th style="min-width:210px">Item Pekerjaan</th><th>Sat</th><th>Vol Kontrak</th><th>Vol Laporan</th><th style="min-width:128px">Vol Verifikasi</th><th>Selisih</th><th style="min-width:190px">Checklist Pemeriksaan</th><th style="min-width:110px">Hasil</th><th style="min-width:170px">Catatan</th></tr></thead><tbody>';
+  let html = '<div class="opn-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="opn-table"><thead><tr><th class="no-cell">No</th><th style="min-width:210px">Item Pekerjaan</th><th>Sat</th><th>Vol Kontrak</th><th>Vol Laporan</th><th style="min-width:128px">Vol Verifikasi</th><th>Selisih</th><th style="min-width:190px">Checklist Pemeriksaan</th><th style="min-width:110px">Hasil</th><th style="min-width:170px">Catatan</th></tr></thead><tbody>';
   let no = 0, lastDiv = null;
   op.items.forEach(function(it, idx){
     if(it.divisiId !== lastDiv){
@@ -15681,19 +15696,19 @@ function renderOpnameTabel(op){
     const qcMajor = qc.some(function(p){ return p.tingkat==='major'; });
     const qcBadge = qc.length ? '<div><span class="opn-qc'+(qcMajor?' major':'')+'">QC: '+qc.length+' temuan terbuka'+(qcMajor?' (Major)':'')+'</span></div>' : '';
     const ceks = OPNAME_CHECKS.map(function(c){
-      return '<label class="opn-cek" title="'+c.l+'"><input type="checkbox"'+(it.cek && it.cek[c.k]?' checked':'')+dis+' onchange="toggleOpnameCek('+idx+',\''+c.k+'\',this.checked)"><span>'+c.s+'</span></label>';
+      return '<label class="opn-cek" title="'+c.l+'"><input type="checkbox" data-opn="c'+idx+c.k+'"'+(it.cek && it.cek[c.k]?' checked':'')+dis+' onchange="toggleOpnameCek('+idx+',\''+c.k+'\',this.checked)"><span>'+c.s+'</span></label>';
     }).join('');
     html += '<tr class="opn-row-'+it.hasil+'"><td class="no-cell">'+no+'</td>'
       + '<td><div style="font-weight:600;color:var(--white)">'+it.nama+'</div>'+qcBadge+'</td>'
       + '<td class="readonly">'+it.sat+'</td>'
       + '<td class="readonly" style="text-align:right">'+it.volKontrak.toLocaleString('id')+'</td>'
       + '<td class="readonly" style="text-align:right">'+it.volLapor.toLocaleString('id')+'</td>'
-      + '<td><div style="display:flex;gap:4px;align-items:center"><input type="number" class="form-input" style="width:84px;padding:5px 7px" step="any" min="0" value="'+(it.volVerif===null||it.volVerif===undefined?'':it.volVerif)+'"'+dis+' placeholder="ukur" onchange="setOpnameVol('+idx+',this.value)">'
+      + '<td><div style="display:flex;gap:4px;align-items:center"><input type="number" inputmode="decimal" data-opn="v'+idx+'" class="form-input" style="width:84px;padding:5px 7px" step="any" min="0" value="'+(it.volVerif===null||it.volVerif===undefined?'':it.volVerif)+'"'+dis+' placeholder="ukur" onchange="setOpnameVol('+idx+',this.value)">'
       + (edit?'<button class="btn btn-sm btn-gold" title="Samakan dengan volume laporan" style="padding:4px 7px" onclick="samakanOpnameVol('+idx+')">=</button>':'')+'</div></td>'
       + '<td style="text-align:right;font-weight:700;color:'+selCol+'">'+selTxt+'</td>'
       + '<td><div class="opn-ceks">'+ceks+'</div></td>'
-      + '<td><select class="form-select opn-hasil '+it.hasil+'"'+dis+' onchange="setOpnameHasil('+idx+',this.value)"><option value="belum"'+(it.hasil==='belum'?' selected':'')+'>— Pilih —</option><option value="sesuai"'+(it.hasil==='sesuai'?' selected':'')+'>Sesuai</option><option value="selisih"'+(it.hasil==='selisih'?' selected':'')+'>Selisih</option><option value="ditolak"'+(it.hasil==='ditolak'?' selected':'')+'>Ditolak</option></select></td>'
-      + '<td><input type="text" class="form-input" style="padding:5px 7px" value="'+String(it.catatan||'').replace(/"/g,'&quot;')+'"'+dis+' placeholder="'+(it.hasil==='selisih'||it.hasil==='ditolak'?'wajib diisi':'opsional')+'" onchange="setOpnameCatatan('+idx+',this.value)"></td></tr>';
+      + '<td><select data-opn="h'+idx+'" class="form-select opn-hasil '+it.hasil+'"'+dis+' onchange="setOpnameHasil('+idx+',this.value)"><option value="belum"'+(it.hasil==='belum'?' selected':'')+'>— Pilih —</option><option value="sesuai"'+(it.hasil==='sesuai'?' selected':'')+'>Sesuai</option><option value="selisih"'+(it.hasil==='selisih'?' selected':'')+'>Selisih</option><option value="ditolak"'+(it.hasil==='ditolak'?' selected':'')+'>Ditolak</option></select></td>'
+      + '<td><input type="text" data-opn="t'+idx+'" class="form-input" style="padding:5px 7px" value="'+String(it.catatan||'').replace(/"/g,'&quot;')+'"'+dis+' placeholder="'+(it.hasil==='selisih'||it.hasil==='ditolak'?'wajib diisi':'opsional')+'" onchange="setOpnameCatatan('+idx+',this.value)"></td></tr>';
   });
   html += '</tbody></table></div>';
   return html;
@@ -15755,6 +15770,15 @@ function renderOpnameChart(op){
   });
 }
 function renderOpname(){
+  /* simpan posisi geser tabel, posisi halaman & kotak yang sedang diisi — supaya tidak loncat kembali */
+  const _wrap = document.querySelector('#opnameBody .opn-wrap'), _sl = _wrap ? _wrap.scrollLeft : 0, _sy = window.scrollY;
+  const _ae = document.activeElement, _fk = _ae && _ae.dataset ? _ae.dataset.opn : null;
+  _renderOpnameIsi();
+  const _w2 = document.querySelector('#opnameBody .opn-wrap'); if(_w2) _w2.scrollLeft = _sl;
+  if(Math.abs(window.scrollY-_sy)>2) window.scrollTo(0,_sy);
+  if(_fk){ const f = document.querySelector('#opnameBody [data-opn="'+_fk+'"]'); if(f){ try{ f.focus({preventScroll:true}); }catch(e){ f.focus(); } } }
+}
+function _renderOpnameIsi(){
   const tgl = document.getElementById('opnameTodayValue'); if(tgl) tgl.textContent = todayFormatted();
   const list = getOpnameList();
   const sel = document.getElementById('opnameSelect');
@@ -15778,7 +15802,8 @@ function renderOpname(){
   if(op.status==='draft' && bisaIsi){ aksi.push('<button class="btn btn-blue" onclick="ajukanVerifikasiOpname()">📤 Ajukan Verifikasi</button>'); aksi.push('<button class="btn btn-red btn-sm" onclick="hapusOpnameDraft()">Hapus Draft</button>'); }
   if(op.status==='diverifikasi'){ if(currentRole==='direktur') aksi.push('<button class="btn btn-green" onclick="setujuiOpnameDirektur()">✔ Setujui (Direktur)</button>'); if(currentRole==='direktur'||currentRole==='internal') aksi.push('<button class="btn btn-gold btn-sm" onclick="kembalikanOpnameKeDraft()">↩ Kembalikan ke Draft</button>'); }
   if(op.status==='disetujui'){ if(currentRole==='direktur') aksi.push('<button class="btn btn-green" onclick="bukaModalOpnameTtd()">🖊 Tanda Tangan Bersama & Finalkan</button>'); if(currentRole==='direktur'||currentRole==='internal') aksi.push('<button class="btn btn-gold btn-sm" onclick="kembalikanOpnameKeDraft()">↩ Kembalikan ke Draft</button>'); }
-  if(op.status==='final'){ aksi.push('<span style="font-size:11px;color:#1A8C7A;font-weight:600">🔒 Opname final — menjadi dasar penagihan Termin</span>'); }
+  if(op.status==='final'){ aksi.push('<button class="btn btn-green" onclick="cetakBeritaAcaraOpname()">📄 Unduh PDF Berita Acara</button>'); aksi.push('<span style="font-size:11px;color:#1A8C7A;font-weight:600">🔒 Final — dasar penagihan Termin</span>'); }
+  else aksi.push('<button class="btn btn-gold btn-sm" onclick="cetakBeritaAcaraOpname()">📄 PDF (draf)</button>');
   body.innerHTML =
       '<div class="panel" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px">'
     + '<div><div style="font-size:15px;font-weight:700;color:var(--white)">'+op.nomor+' &nbsp;'+badgeStatusOpname(op.status)+'</div><div style="font-size:10px;color:var(--muted2);margin-top:3px">Tanggal opname: '
@@ -15786,7 +15811,10 @@ function renderOpname(){
     + ' · dibuat oleh '+(op.dibuatOleh||'—')+'</div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+aksi.join('')+'</div></div>'
     + renderOpnameStepper(op)+'</div>'
     + renderOpnameKpi(op)
-    + '<div class="panel" style="margin:18px 0"><div class="panel-title">Daftar Pemeriksaan Item — toleransi selisih ±'+OPNAME_TOLERANSI+'%</div>'+renderOpnameTabel(op)+'</div>'
+    + '<div class="panel" style="margin:18px 0"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div class="panel-title" style="margin:0">Daftar Pemeriksaan Item — toleransi selisih ±'+OPNAME_TOLERANSI+'%</div>'
+    + (opnameBolehEdit(op)?'<button class="btn btn-green" onclick="opnameSesuaiSemua()">✅ Sesuai Semua</button>':'')+'</div>'
+    + (opnameBolehEdit(op)?'<div style="font-size:10px;color:var(--muted2);margin-bottom:8px">Ketuk <b>Sesuai Semua</b> → semua item hijau &amp; 4 poin tercentang. Lalu ubah hanya item yang tidak sesuai.</div>':'')
+    + renderOpnameTabel(op)+'</div>'
     + '<div class="grid2" style="margin-bottom:18px"><div class="panel">'+renderOpnameKontrol(op)+'</div><div class="panel"><div class="panel-title">Laporan Lapangan vs Terverifikasi per Divisi</div><div id="opnameChartHost"></div></div></div>'
     + '<div class="panel"><div class="panel-title">Riwayat Opname</div>'+renderOpnameRiwayat()+'</div>';
   renderOpnameChart(op);
@@ -15811,9 +15839,10 @@ async function cetakBeritaAcaraOpname(){
       + '<td style="text-align:right">'+(s===null?'—':((s>=0?'+':'')+s.toFixed(1)+'%'))+'</td><td style="text-align:center">'+cek+'/4</td><td style="font-weight:600">'+lbl+'</td></tr>';
   });
   function ttd(judul, d){ return '<div style="flex:1;text-align:center;font-size:11px;color:#555">'+judul+'<div style="border-top:1px solid #999;margin-top:56px;padding-top:6px;color:#111">'+(d?(d.nama+(d.peran?' ('+d.peran+')':'')):'(.....................)')+'<br><span style="font-size:9px;color:#777">'+(d?d.tgl:'')+'</span></div></div>'; }
-  wrap.innerHTML = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;border-bottom:2px solid #D4A832;padding-bottom:12px">'
+  wrap.className = 'bao-cetak';
+  wrap.innerHTML = '<style>.bao-cetak th,.bao-cetak thead{position:static!important;top:auto!important;transform:none!important}.bao-cetak th{color:#1A1D24!important;font-size:9.5px}</style><div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;border-bottom:2px solid #D4A832;padding-bottom:12px">'
     + (logoSrc?('<img src="'+logoSrc+'" style="height:42px">'):'')
-    + '<div><div style="font-size:16px;font-weight:700;color:#96650F">BERITA ACARA OPNAME PEKERJAAN</div><div style="font-size:10px;color:#666">Pratama Build & Construction · '+op.nomor+' · '+op.tanggal+'</div></div></div>'
+    + '<div><div style="font-size:16px;font-weight:700;color:#96650F">BERITA ACARA OPNAME PEKERJAAN</div><div style="font-size:10px;color:#666">Pratama Build &amp; Construction · Banjar Anyar, Kediri, Tabanan, Bali · +62 857-4502-6574</div><div style="font-size:10px;color:#666">'+op.nomor+' · '+op.tanggal+'</div></div></div>'
     + '<div style="font-size:11px;margin-bottom:12px">Proyek: <strong>'+state.proyek.nama+'</strong> · Owner: '+(state.proyek.owner||'—')+'<br>Lokasi: '+(state.proyek.lokasi||'—')+' · Status: <strong>'+({draft:'Draft',diverifikasi:'Terverifikasi',disetujui:'Disetujui',final:'Final'}[op.status])+'</strong></div>'
     + '<table style="width:100%;border-collapse:collapse;font-size:10px" border="1" cellpadding="5"><thead><tr style="background:#F0F3FA"><th>No</th><th style="text-align:left">Item Pekerjaan</th><th>Sat</th><th>Vol Kontrak</th><th>Vol Laporan</th><th>Vol Verifikasi</th><th>Selisih</th><th>Checklist</th><th>Hasil</th></tr></thead><tbody>'+rows+'</tbody></table>'
     + '<div style="display:flex;gap:14px;margin-top:14px;font-size:11px"><div style="flex:1;border:1px solid #ddd;padding:10px">Progres terverifikasi<br><strong style="font-size:16px">'+h.pct.toFixed(1)+'%</strong></div>'
