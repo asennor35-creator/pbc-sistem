@@ -10311,6 +10311,7 @@ function renderChartSCurve(){
   canvas.parentNode.style.height = (window.innerWidth<600 ? 360 : 460)+'px';
   if(_chartSCurveInstance) _chartSCurveInstance.destroy();
   _chartSCurveInstance = new Chart(canvas.getContext('2d'), built.config);
+  try{ const wrap = canvas.parentNode, host = wrap.parentNode; if(!document.getElementById('dashKurvaD')){ const d = document.createElement('div'); d.id = 'dashKurvaD'; host.insertBefore(d, wrap); } pbcKurvaDTampil('dashKurvaD', periode, dataChart, aktualPct, wrap); }catch(e){}
   const K2 = kurvaLap2Data(periode, dataChart, aktualPct);
   dashHosts([kurvaLap2KartuHtml(K2), kurvaLap2TabelHtml(K2)+kurvaLap2AnalisisHtml(K2)+kurvaLap2DivisiHtml(K2), kurvaLap2CekHtml(K2)]);
 }
@@ -13770,6 +13771,18 @@ function pbcKurvaDGambar(periode, dataChart, D){
     const x = 14 + i*440; g.fillStyle = l[0]; if(l[2]) g.fillRect(x, ly-3, 40, 7); else pbcRRect(g, x, ly-8, 40, 16, 8); g.fillStyle = '#333'; g.fillText(l[1], x+52, ly); });
   return { img: cv.toDataURL('image/png'), rasio: H/W };
 }
+function pbcKurvaDTampil(hostId, periode, dataChart, aktualPct, sembunyikan){
+  const host = document.getElementById(hostId); if(!host) return false;
+  let kd = null; try{ kd = kurvaKpiData(aktualPct); }catch(e){}
+  let g = null; try{ g = pbcKurvaDGambar(periode, dataChart, { kd:kd }); }catch(e){ console.error(e); }
+  let box = host.querySelector('.kurva-d-box');
+  if(!g){ if(box) box.remove(); if(sembunyikan) sembunyikan.style.display = ''; return false; }
+  if(!box){ box = document.createElement('div'); box.className = 'kurva-d-box'; box.style.cssText = 'overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border-radius:8px;margin-bottom:8px'; host.insertBefore(box, host.firstChild); }
+  box.innerHTML = '<img src="'+g.img+'" alt="Kurva S" style="width:100%;min-width:880px;height:auto;display:block">'
+    + (window.innerWidth<700 ? '<div style="font-size:10px;color:var(--muted2);padding:4px 2px">← geser untuk melihat semua minggu →</div>' : '');
+  if(sembunyikan) sembunyikan.style.display = 'none';
+  return true;
+}
 function pbcRRect(g, x, y, w, h, r){ r = Math.min(r, h/2, w/2); g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fill(); }
 function pbcOwnerKurvaImg(D){
   if(typeof Chart==='undefined' || !D.adaJadwal) return null;
@@ -13849,7 +13862,7 @@ function renderOwnerPortal(){
   /* 2. kurva */
   const kx = pbcOwnerKurvaImg(D);
   const KK = kx ? kurvaLap2Data(kx.periode, kx.dataChart, D.aktualPct, D.kd, D.mode==='harian'?'Tanggal':(D.mode==='bulanan'?'Bulan':'Minggu')) : null;
-  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? kurvaLap2KartuHtml(KK)+'<img src="'+kx.img+'" style="width:100%;height:auto;display:block">'+(kx.dStyle?'':kurvaLap2TabelHtml(KK))+kurvaLap2AnalisisHtml(KK)+kurvaLap2DivisiHtml(KK)+kurvaLap2CekHtml(KK) : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
+  h += '<div class="op-sec"><h3>'+sn()+'. Kurva S — '+(D.mode==='harian'?'14 Hari (Harian)':D.mode==='bulanan'?'Per Bulan':'Per Minggu')+'</h3>'+(kx ? kurvaLap2KartuHtml(KK)+(kx.dStyle?'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><img src="'+kx.img+'" style="width:100%;min-width:880px;height:auto;display:block"></div>':'<img src="'+kx.img+'" style="width:100%;height:auto;display:block">')+(kx.dStyle?'':kurvaLap2TabelHtml(KK))+kurvaLap2AnalisisHtml(KK)+kurvaLap2DivisiHtml(KK)+kurvaLap2CekHtml(KK) : '<div class="empty">Belum ada data Kurva S (isi tanggal mulai & BOQ)</div>')+'</div>';
   if(D.sec.boq){
     /* rekap per minggu (bulanan) */
   if(D.sec.rekap){
@@ -13894,11 +13907,6 @@ function renderOwnerPortal(){
       : '<div class="empty">Belum ada termin yang ditagih</div>')
     + '</div>';
   }
-  /* 8. material, tenaga, mutu */
-  h += '<div class="op-sec"><h3>'+sn()+'. Pengadaan, Material &amp; Tenaga Kerja</h3><div class="op-kpi" style="margin-top:0">'
-    + '<div class="op-k"><i>KEDATANGAN MATERIAL</i><b>'+D.materialDatang+'</b><small>pengiriman diterima '+D.lblIni+'</small></div>'
-    + '<div class="op-k"><i>TENAGA KERJA</i><b>'+D.pekerjaRata+' org</b><small>rata-rata hadir/hari · '+D.hariKerja+' hari kerja</small></div>'
-    + '<div class="op-k" style="border-color:'+(D.punchTerbuka?'#C0392B':'#1A8C7A')+'"><i>TEMUAN MUTU TERBUKA</i><b>'+D.punchTerbuka+'</b><small>'+(D.punchMajor?D.punchMajor+' perlu perhatian khusus':'dalam penyelesaian')+'</small></div></div></div>';
   /* 7. kendala, risiko, K3 */
   h += '<div class="op-sec"><h3>'+sn()+'. Kendala, Risiko &amp; Keselamatan</h3>'
     + '<div style="font:700 12px Arial;color:#0E2A5A;margin-bottom:4px">Kendala yang tercatat di laporan harian '+D.lblIni+'</div>'
@@ -14178,22 +14186,14 @@ async function exportOwnerPortalPdf(){
     } else y = kosong(y, 'Belum ada data termin.');
     if(D.sec.invoice && D.invoiceAktif){ set(7.5,false,PDF.gray); doc.text('Rincian tagihan '+D.invoiceAktif.no+' terlampir di halaman terakhir.', 12, y+2); y += 7; }
 
-    /* 9. Pengadaan & material (tanpa harga) */
-    y = bagian(6, 'Pengadaan dan Material', y+6);
-    y = kartu4(y, [['Kedatangan material', String(D.materialDatang)], ['Tenaga kerja', D.pekerjaRata+' org/hari'], ['Hari kerja', String(D.hariKerja)], ['Temuan mutu terbuka', String(D.punchTerbuka), D.punchTerbuka?[252,228,228]:null, D.punchTerbuka?[192,57,43]:null]]);
-    const matRows = [];
-    (state.purchaseOrders||[]).forEach(function(po){ (po.items||[]).forEach(function(it){ const m = (state.materials||[]).find(function(x){ return x.id===it.materialId; }); const q = +it.qtyOrder||0, r = +it.qtyDiterima||0; matRows.push([m?m.nama:'Material', (m&&m.satuan)||'', String(+q.toFixed(2)), String(+r.toFixed(2)), r>=q&&q>0?'Sudah datang':(r>0?'Datang sebagian':'Dipesan'), po.tanggal||'']); }); });
-    if(matRows.length) y = pdfTable(doc, y, [{label:'Material',w:3.6},{label:'Sat',w:.8},{label:'Dipesan',w:1,align:'right'},{label:'Diterima',w:1,align:'right'},{label:'Status',w:1.6},{label:'Tgl pesan',w:1.3}], matRows.slice(-40), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32, fontSize:7.5}) + 4;
-    else y = kosong(y, 'Belum ada pemesanan material yang tercatat.');
-
     /* 10. Kendala, risiko, K3 */
-    y = bagian(7, 'Kendala, Risiko dan K3', y+6);
+    y = bagian(6, 'Kendala, Risiko dan K3', y+6);
     const kend = D.kendala.map(function(l){ return l.tgl+': '+l.kendala; }).join('; ');
     const brs = [['Kendala', kend || 'Tidak ada kendala dicatat.'], ['Tindak lanjut', (D.catatan.tindakLanjut||'').trim() || '-'], ['Risiko 2-3 minggu', (D.catatan.risiko||'').trim() || '-'], ['Keselamatan (K3)', (D.catatan.k3||'').trim() || '-']];
     brs.forEach(function(r){ const L = doc.splitTextToSize(String(r[1]), W-24-34), h = Math.max(6, L.length*4.2+2.5); y = perlu(y, h); doc.setDrawColor.apply(doc, PDF.lightGray); doc.line(12,y+h,W-12,y+h); set(8.5,true,NAV); doc.text(r[0], 14, y+4.5); set(8.5,false,PDF.dark); doc.text(L, 48, y+4.5); y += h; });
 
     /* 11. Rencana pekerjaan berikutnya */
-    y = bagian(8, 'Rencana Pekerjaan Berikutnya', y+6);
+    y = bagian(7, 'Rencana Pekerjaan Berikutnya', y+6);
     if(D.rencanaDepan.length) y = pdfTable(doc, y, [{label:'No',w:.5,align:'center'},{label:'Pekerjaan',w:5},{label:'Divisi',w:2.5}], D.rencanaDepan.slice(0,15).map(function(r,i){ return [String(i+1), r.nama, r.div||'']; }), {onNewPage:function(d){ pdfHeader(d, JUDUL); }, topAfterBreak:32}) + 4;
     else y = kosong(y, 'Tidak ada pekerjaan terjadwal untuk '+D.lblDepan+'.');
     const vos = D.voMenunggu.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Menunggu persetujuan']; }).concat(D.voSetuju.map(function(v){ return [v.nomorVo, v.deskripsiPerubahan||'', 'Disetujui']; }));
@@ -14203,7 +14203,7 @@ async function exportOwnerPortalPdf(){
     else if(!String(D.catatan.keputusan||'').trim()) y = kosong(y, 'Tidak ada keputusan atau perubahan pekerjaan yang menunggu.');
 
     /* 12. Foto & persetujuan */
-    y = bagian(9, 'Dokumentasi Foto dan Persetujuan');
+    y = bagian(8, 'Dokumentasi Foto dan Persetujuan');
     if(!D.foto.length) y = kosong(y, 'Belum ada foto progres.');
     const bw = (W-24-6)/2, bh = 52;
     for(let i=0;i<D.foto.length;i++){
@@ -15272,6 +15272,7 @@ function renderKurvaChartsPro(periode, dataChart, aktualPct){
   if(_kcMain){ _kcMain.destroy(); _kcMain=null; }
   const built = PBC_UANG_TERBUKA() ? kurvaLaporanConfig(periode, dataChart, aktualPct) : kurvaMainConfig(periode, dataChart, aktualPct, false);
   _kcMain = new Chart(cv.getContext('2d'), built.config);
+  try{ pbcKurvaDTampil('kurvaChart', periode, dataChart, aktualPct, cv.parentNode); }catch(e){}
   const labels = built.labels, aktual = built.aktual;
 
   /* Deviasi per periode */
