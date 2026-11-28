@@ -15567,6 +15567,16 @@ function setOpnameHasil(idx, hasil){
   if(hasil==='belum') it.volVerif = it.volVerif;
   debounceSave(); renderOpname();
 }
+function opnameCekKolom(key, on){   /* centang satu bagian (atau semua bagian bila key='semua') untuk semua item */
+  const op = getOpnameAktif(); if(!op || !opnameBolehEdit(op)) return;
+  const keys = key==='semua' ? OPNAME_CHECKS.map(function(c){ return c.k; }) : [key];
+  op.items.forEach(function(it){ if(it.hasil==='ditolak') return; it.cek = it.cek || {}; keys.forEach(function(k){ it.cek[k] = !!on; }); });
+  debounceSave(); renderOpname();
+}
+function opnameKolomPenuh(op, key){
+  const its = op.items.filter(function(i){ return i.hasil!=='ditolak'; }); if(!its.length) return false;
+  return its.every(function(i){ return key==='semua' ? opnameCekLengkap(i) : (i.cek && i.cek[key]); });
+}
 function opnameSesuaiSemua(){
   const op = getOpnameAktif(); if(!op || !opnameBolehEdit(op)) return;
   let n = 0;
@@ -15680,7 +15690,11 @@ function renderOpnameKpi(op){
 function renderOpnameTabel(op){
   const edit = opnameBolehEdit(op);
   const dis = edit ? '' : ' disabled';
-  let html = '<div class="opn-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="opn-table"><thead><tr><th class="no-cell">No</th><th style="min-width:210px">Item Pekerjaan</th><th>Sat</th><th>Vol Kontrak</th><th>Vol Laporan</th><th style="min-width:128px">Vol Verifikasi</th><th>Selisih</th><th style="min-width:190px">Checklist Pemeriksaan</th><th style="min-width:110px">Hasil</th><th style="min-width:170px">Catatan</th></tr></thead><tbody>';
+  let html = '<div class="opn-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="opn-table"><thead><tr><th class="no-cell">No</th><th style="min-width:210px">Item Pekerjaan</th><th>Sat</th><th>Vol Kontrak</th><th>Vol Laporan</th><th style="min-width:128px">Vol Verifikasi</th><th>Selisih</th><th style="min-width:230px">Checklist Pemeriksaan'
+    + (edit ? ('<div class="opn-ceks" style="margin-top:6px;flex-wrap:wrap;gap:4px">'
+      + [{k:'semua',s:'Semua'}].concat(OPNAME_CHECKS).map(function(c){ return '<label class="opn-cek" style="background:rgba(26,140,122,.12);border-radius:6px;padding:2px 5px" title="Centang '+c.s+' untuk semua item"><input type="checkbox" data-opn="k'+c.k+'"'+(opnameKolomPenuh(op,c.k)?' checked':'')+' onchange="opnameCekKolom(\''+c.k+'\',this.checked)"><span>'+c.s+'</span></label>'; }).join('')
+      + '</div>') : '')
+    + '</th><th style="min-width:110px">Hasil</th><th style="min-width:170px">Catatan</th></tr></thead><tbody>';
   let no = 0, lastDiv = null;
   op.items.forEach(function(it, idx){
     if(it.divisiId !== lastDiv){
